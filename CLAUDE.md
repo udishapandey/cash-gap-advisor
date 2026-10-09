@@ -4,8 +4,16 @@ Concept prototype for the Razorpay x ISB AI PM challenge. Not affiliated with Ra
 
 ## Spec summary
 
-> TODO: `docs/SPEC.md` was missing when Phase 0 was built. Add the file, then replace this
-> section with a short summary of the locked spec. `docs/SPEC.md` is the source of truth.
+Locked spec: `docs/SPEC.md` (source of truth; read it before building any feature).
+
+- **Product:** the founder forwards a supplier bill they can't fully pay, and gets the cheapest way to pay it, which is sometimes not borrowing at all.
+- **User:** founders of small D2C brands (₹10–50L/month on Razorpay) with no finance team. Demo: a ₹5L pre-Diwali invoice, due in 10 days, with a ₹2–2.5L gap. Diwali is the demo, not the product.
+- **Journey:** forward invoice → AI extracts, founder confirms → cash gap as a range (COD in transit, RTO, "low confidence" label) → all options compared by true cost, no fixed ranking → what-if slider (-10/-20/-30%) plus typed question → call script for "ask for more time" → one approval screen with the loan section separate and the RBI KFS shown first → post-season results.
+- **Split of work:** plain code does all money maths; simple statistics on synthetic data do the estimates; the LLM reads invoices, judges dead-stock risk, explains trade-offs and writes the call script.
+- **Real:** AI invoice reading, cost calculator, slider, what-if answers, call script (optionally one Razorpay test-mode call). **Simulated (label in UI):** sales and COD data, loan approval, biometric tap, post-season results.
+- **Trust:** founder approves every credit action, no auto-drawdowns; loans go to the founder's own bank account, then they pay the supplier separately; invoice data used only for this decision; recommend non-Razorpay options when cheaper; no dark patterns (no pre-selected loan, no urgency timers, all-in costs side by side).
+- **Build tiers:** Must (Saturday): upload → extract → confirm → gap → options → slider → approval. Should (Sunday): typed what-if agent, call script, results screen. Nice: Razorpay test-mode API call.
+- **Out of scope:** real courier integration, RazorpayX bill detection, standing rules/autonomy, offline/kirana merchants.
 
 ## Stack
 

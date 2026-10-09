@@ -1,33 +1,7 @@
-# Build Log
+## Day 1 — Fri 9 Oct / Sat 10 Oct
 
-One entry per day. Copy the template below, paste it under the latest entry, and fill it in.
+**What AI did:** Claude Code set up the Next.js project, the AI gateway (lib/ai.ts) that switches between Gemini and Claude, and a test API route. Gemini replied through my own server.
 
-## Template
+**What went wrong:** .env.local and the docs folder weren't created; I created them manually. VS Code was in Restricted Mode; I trusted the folder.
 
-### YYYY-MM-DD (Day N)
-
-**What AI did**
--
-
-**What went wrong**
--
-
-**What I decided**
--
-
----
-
-## 2026-10-10 (Day 1: Phase 0)
-
-**What AI did**
-- Scaffolded the Next.js + TypeScript app with a Razorpay-inspired dashboard look and the required footer.
-- Wrote `CLAUDE.md` with the project rules.
-- Wrote `lib/ai.ts` (Gemini default, Claude switchable via `AI_PROVIDER`) and the `/api/hello` route.
-- Checked the free-tier Gemini Flash model name against Google's pricing page: `gemini-3.8-flash`.
-
-**What went wrong**
-- `docs/SPEC.md` was missing when Phase 0 started, so the spec summary in `CLAUDE.md` is a TODO.
-- First test of `/api/hello` crashed: `export const dynamic` isn't allowed in this Next.js version (`cacheComponents` is on). Removed the line.
-
-**What I decided**
--
+**What I decided:** Started on Gemini's free tier; kept one AI gateway so I can compare providers later; stored the spec in the repo; labelled all simulated data in the UI.

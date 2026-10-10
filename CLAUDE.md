@@ -17,7 +17,9 @@ Locked spec: `docs/SPEC.md` (source of truth; read it before building any featur
 
 ## Stack
 
-Next.js (App Router) + TypeScript + Tailwind. Run with `npm run dev`.
+Next.js (App Router) + TypeScript + Tailwind. Run with `npm run dev`. Tests: `npm test` (Vitest).
+
+Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate lives in `config.ts`). Simulated data: `lib/data/`. Every assumption is listed in `docs/ASSUMPTIONS.md`; update it whenever an assumption changes.
 
 ## Rules
 

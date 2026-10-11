@@ -33,13 +33,17 @@ Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate live
 
 Design tokens come from Razorpay's open-source Blade design system (MIT): `@razorpay/blade` is a dev dependency used ONLY to read token values. They live in `app/globals.css` (token path beside each value), and `lib/design-tokens.test.ts` checks them against the package. Don't use Blade components or providers, don't add hex colours, and don't add the Razorpay logo or wordmark. `.npmrc` sets `legacy-peer-deps=true` so Blade's React Native peers are not installed.
 
+## Screens
+
+Every screen answers first (one headline, one number, one button) and puts the working in a collapsed "See how we worked this out" (`components/Disclosure.tsx`). Use the plain words in `lib/plain.ts` for anything the founder reads (never "early settlement", "peak shortfall", "funding cost", "standby", "annualised"); engine identifiers keep their names. Show one headline saving, on one basis (`SAVING_BASIS`), and one day count per plan. Never show a negative cost.
+
 ## Rules
 
 1. **Secrets only in `.env.local`.** Never hard-code keys, never commit them, never print them.
 2. **`.env.local` stays in `.gitignore`.**
 3. **All money calculations are plain code, never the LLM.** The LLM may explain or phrase results; it must never compute amounts, totals, gaps or dates.
 4. **Every LLM call goes through `lib/ai.ts`.** No other file imports an AI SDK or calls an AI API.
-5. **Label simulated data as simulated in the UI.** Any fake number, transaction or customer must be visibly marked "Simulated".
+5. **Label simulated data as simulated in the UI.** One banner at the top of every page says "Concept prototype · all merchant data is simulated" (a product decision: it replaced the per-item "Simulated" badges). Keep that banner on every page.
 6. **Invoice files are private.** Process them in memory only. Never save one to disk, and never log or echo its contents or file name (including in error messages). The AI only reads printed values: it returns null for anything missing, quotes its evidence, and never calculates amounts or dates.
 7. **Live AI calls only to verify, and only on Flash-Lite.** Tests use mocks; for development use `AI_MOCK=true`. To verify a change against the real model (`npm run smoke:ai`, `npm run try:extract`, `npm run eval:extract`, which makes exactly 5 calls), up to 10 live Flash-Lite calls per verification are pre-approved (its free limit is 500 a day); ask before using more. Never use the larger Flash fallback model for testing (about 20 requests a day): `smoke:ai` switches it off. Don't make live calls for any other reason.
 8. **Credit is separate and never pre-selected.** Credit is shown apart from non-credit actions, with a Key Fact Statement before approval. No plan, consent box or approval is ever pre-chosen, and the founder approves every credit action.

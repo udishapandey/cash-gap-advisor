@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { merchant } from "./data/merchant";
 import { sampleInvoice } from "./data/invoice";
 import { runEngine, type EngineInput } from "./engine";
+import { OPTION_LABEL } from "./plain";
 import { explainPlanTemplate } from "./explain";
 import { formatINR } from "./format";
 
@@ -26,11 +27,11 @@ describe("Why this plan (plain-text template)", () => {
     const view = r.views.keepFull;
     const lines = explainPlanTemplate(view, r.stock);
     for (const step of view.recommended.plan.steps) {
-      expect(text(lines)).toContain(`${step.name}: ${formatINR(step.amount)} × `);
+      expect(text(lines)).toContain(`${OPTION_LABEL[step.optionId]}: ${formatINR(step.amount)} × `);
       expect(text(lines)).toContain(`= ${formatINR(step.cost)}`);
     }
-    expect(text(lines)).toContain(`Total cost ${formatINR(view.recommended.plan.totalCost)}`);
-    expect(text(lines)).toContain(`total ${formatINR(view.recommended.plan.borrowed)}`);
+    expect(text(lines)).toContain(`Total interest and fees ${formatINR(view.recommended.plan.totalCost)}`);
+    expect(text(lines)).toContain(`totals ${formatINR(view.recommended.plan.borrowed)}`);
     expect(text(lines)).toContain("cheapest first");
     expect(text(lines)).toContain("(a loan)");
   });
@@ -38,20 +39,20 @@ describe("Why this plan (plain-text template)", () => {
   it("says why an option was not used", () => {
     const r = run({}, dueDateInvoice);
     const out = text(explainPlanTemplate(r.views.keepFull, r.stock));
-    expect(out).toContain("Not used: Split the order");
+    expect(out).toContain("Not used: Deliver some pairs later");
     expect(out).toContain("left out because you keep the full order");
-    expect(out).toContain("Not used: Credit line");
+    expect(out).toContain("Not used: Razorpay credit line");
     expect(out).toContain("cheaper sources covered the gap");
   });
 
   it("explains a right-sized order: pairs, share unsold, cash saved, lost margin", () => {
     const r = run({ salesDropPercent: 30 }, dueDateInvoice);
     const out = text(explainPlanTemplate(r.views.rightSized, r.stock, { salesDropPercent: 30 }));
-    expect(out).toContain("Order right-sized");
+    expect(out).toContain("Ordering fewer pairs");
     expect(out).toContain("364 of 500 pairs");
     expect(out).toContain("136 pairs (27%)");
     expect(out).toContain("saves ₹1,36,000");
-    expect(out).toContain("expected lost margin of ₹0");
+    expect(out).toContain("expected lost profit of ₹0");
     expect(out).toContain("30% lower");
   });
 
@@ -69,7 +70,7 @@ describe("Why this plan (plain-text template)", () => {
     expect(view.recommended.timing).toBe("pay_early_for_discount");
     const out = text(explainPlanTemplate(view, r.stock));
     expect(out).toContain("Paying by day 7 earns the 2% discount of ₹10,000");
-    expect(out).toContain(`a net saving of ${formatINR(view.discount.netSaving)}`);
+    expect(out).toContain(`${formatINR(view.discount.netSaving)} better off than paying on the due date`);
     expect(out).toContain("Cash needed by day 7");
   });
 
@@ -81,7 +82,7 @@ describe("Why this plan (plain-text template)", () => {
     expect(view.discount.extraFundingCost).toBeLessThan(0);
     const out = text(explainPlanTemplate(view, r.stock, { salesDropPercent: 10 }));
     expect(out).toContain(`funding it costs ${formatINR(-view.discount.extraFundingCost)} less`);
-    expect(out).toContain(`a net saving of ${formatINR(view.discount.netSaving)}`);
+    expect(out).toContain(`${formatINR(view.discount.netSaving)} better off than paying on the due date`);
     expect(out).not.toContain("₹-");
   });
 
@@ -94,7 +95,7 @@ describe("Why this plan (plain-text template)", () => {
 
   it("says when paying early is not worth it", () => {
     const r = run({}, dueDateInvoice);
-    expect(text(explainPlanTemplate(r.views.keepFull, r.stock))).toContain("so it is not worth it");
+    expect(text(explainPlanTemplate(r.views.keepFull, r.stock))).toContain("worse off than paying on the due date: not worth it");
   });
 
   it("mentions cash available elsewhere only when there is some", () => {

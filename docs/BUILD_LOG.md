@@ -24,3 +24,13 @@
 - AI writes words, never numbers: a grounding check rejects any AI explanation containing a number not in the engine's output. I deliberately broke each safeguard to confirm the tests catch it (mutation testing).
 - Out-of-range what-ifs are rejected, not silently adjusted: changing the user's question would be misleading.
 - Automated checks catch false numbers; only human review catches unhelpful wording. I restructured the output into "Do this / Why it's cheapest / Watch out", and made the cost sentence include the extra cost of paying early so it adds up.
+
+
+## Day 3 — Mon 12 Oct: Plain-language redesign
+
+**What AI did:** Claude Code restructured all five screens. Redesigned for progressive disclosure and plain language after self-review: screens showed all the working at once and used finance jargon a founder wouldn't use. Each screen now answers first (one headline, one number, one button) with the proof in collapsed "See how we worked this out" sections; finance terms were renamed on screen only, and the engine, its tests and its numbers were left unchanged.
+
+**What went wrong:** The self-review found real inconsistencies, not just clutter: option cards said loans were out for 30 days while the plan said 33 (₹1,968 against ₹2,164 for the same money); Options said "₹9,107 net saving" while Results said "₹11,310 better off" because they used different comparison bases; and a "your plan cost −₹7,942" line showed a cost as a negative number. A bug of the redesign itself was only caught by looking at the screen: the new headline saving came out as ₹0 because of a spread-order mistake, and the unit test had missed it because it passed a simplified input.
+
+**What I decided:** One headline saving on one stated basis (against the usual way: Razorpay credit line, then your bank's overdraft, paid on the due date, no discount); one day count per plan; a cost is never shown as negative; one top banner replaces the per-item "Simulated" badges; the sidebar is only the app name and Dashboard.
+

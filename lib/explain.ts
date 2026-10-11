@@ -6,6 +6,7 @@ import { CONFIG } from "./engine/config";
 import { expectedLostMargin, type RightSizing } from "./engine/stock";
 import { formatINR, formatPct } from "./format";
 import { earlyPayDay } from "./journey";
+import { OPTION_LABEL } from "./plain";
 
 /** One line per fact, in the order a person would check them. */
 export function explainPlanTemplate(
@@ -60,7 +61,7 @@ export function explainPlanTemplate(
       const option = options.find((o) => o.id === step.optionId);
       const rate = option ? formatPct(option.costRate * 100) : formatPct((step.cost / step.amount) * 100);
       lines.push(
-        `  • ${step.name}: ${formatINR(step.amount)} × ${rate} = ${formatINR(step.cost)}${step.isBorrowing ? " (a loan)" : ""}.`,
+        `  • ${OPTION_LABEL[step.optionId]}: ${formatINR(step.amount)} × ${rate} = ${formatINR(step.cost)}${step.isBorrowing ? " (a loan)" : ""}.`,
       );
     }
     const usedIds = new Set(plan.steps.map((st) => st.optionId));
@@ -72,15 +73,15 @@ export function explainPlanTemplate(
           : plan.fullyCovered
             ? "not needed, cheaper sources covered the gap"
             : "not available";
-      lines.push(`  • Not used: ${option.name} (${formatPct(option.costRate * 100)} per rupee): ${why}.`);
+      lines.push(`  • Not used: ${OPTION_LABEL[option.id]} (${formatPct(option.costRate * 100)} per rupee): ${why}.`);
     }
     lines.push(
-      `Total cost ${formatINR(plan.totalCost)}. Loans (credit line and overdraft) total ${formatINR(plan.borrowed)}.`,
+      `Total interest and fees ${formatINR(plan.totalCost)}. Borrowing (Razorpay credit line and your bank's overdraft) totals ${formatINR(plan.borrowed)}.`,
     );
   }
   if (!plan.fullyCovered) {
     lines.push(
-      `Warning: the confirmed sources cover only ${formatINR(plan.covered)} of the gap. ${formatINR(plan.uncovered)} is not covered.`,
+      `Warning: the confirmed sources cover only ${formatINR(plan.covered)} of what you could be short. ${formatINR(plan.uncovered)} is not covered.`,
     );
   }
 
@@ -94,7 +95,7 @@ export function explainPlanTemplate(
       demandUnits: demand,
     }).expectedLostMargin;
     lines.push(
-      `Order right-sized: the forecast says about ${Math.floor(demand)} of ${stock.fullUnits} pairs will sell, so ${unitsCut} pairs (${Math.round(stock.unsoldShare * 100)}%) would stay unsold. Ordering ${view.units} saves ${formatINR(stock.cashSaved)}, with an expected lost margin of ${formatINR(lost)}.`,
+      `Ordering fewer pairs: the forecast says about ${Math.floor(demand)} of ${stock.fullUnits} pairs will sell, so ${unitsCut} pairs (${Math.round(stock.unsoldShare * 100)}%) would stay unsold. Ordering ${view.units} saves ${formatINR(stock.cashSaved)}, with an expected lost profit of ${formatINR(lost)}.`,
     );
   } else if (view.id === "keep_full" && stock.unitsCut > 0) {
     lines.push(
@@ -108,12 +109,12 @@ export function explainPlanTemplate(
     const funding = `${formatINR(Math.abs(d.extraFundingCost))} ${d.extraFundingCost >= 0 ? "more" : "less"}`;
     if (early) {
       lines.push(
-        `Paying by day ${earlyPayDay(view.invoice)} earns the ${view.invoice.earlyPayDiscountPct}% discount of ${formatINR(d.discountAmount)}, and funding it costs ${funding}: a net saving of ${formatINR(d.netSaving)}.`,
+        `Paying by day ${earlyPayDay(view.invoice)} earns the ${view.invoice.earlyPayDiscountPct}% discount of ${formatINR(d.discountAmount)}, and funding it costs ${funding}: so you are ${formatINR(d.netSaving)} better off than paying on the due date.`,
       );
     } else {
       lines.push(
         d.affordable
-          ? `Paying early would save ${formatINR(d.discountAmount)} but funding it costs ${funding}: a net ${formatINR(d.netSaving)}, so it is not worth it.`
+          ? `Paying early would save ${formatINR(d.discountAmount)} but funding it costs ${funding}, so you would be ${formatINR(Math.abs(d.netSaving))} worse off than paying on the due date: not worth it.`
           : `Paying early would save ${formatINR(d.discountAmount)}, but the confirmed sources can't cover the larger early gap.`,
       );
     }

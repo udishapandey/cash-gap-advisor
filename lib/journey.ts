@@ -186,7 +186,7 @@ export function overdraftFirstNote(args: { options: FundingOption[]; steps: Plan
   const sameAmount = odStep.amount;
   const odCost = Math.round(sameAmount * od.costRate);
   const creditCost = Math.round(sameAmount * credit.costRate);
-  return `Your own bank overdraft (${formatINR(sameAmount)} at ${od.annualisedPct}%) is used before Razorpay's credit line (${credit.annualisedPct}%) because it costs less for the ${loanDays} days needed: ${formatINR(odCost)} against ${formatINR(creditCost)} on the same ${formatINR(sameAmount)}.`;
+  return `Your bank's overdraft (${formatINR(sameAmount)} at ${od.annualisedPct}% a year) is used before the Razorpay credit line (${credit.annualisedPct}%) because it costs less for the ${loanDays} days needed: ${formatINR(odCost)} against ${formatINR(creditCost)} on the same ${formatINR(sameAmount)}.`;
 }
 
 /** How many days the money from this option is out: early settlement only brings money forward a few days. */
@@ -269,15 +269,15 @@ export function splitPlan(view: ViewResult, fullUnits: number): PlanSections {
       nonCredit.push({
         id: step.optionId,
         text: `Have ${pairs} pairs delivered later`,
-        detail: `Frees ${formatINR(step.amount)} now. Expected lost margin ${formatINR(step.cost)}.`,
+        detail: `Frees ${formatINR(step.amount)} now. Expected lost profit ${formatINR(step.cost)}.`,
         amount: step.amount,
         cost: step.cost,
       });
     } else {
       nonCredit.push({
         id: step.optionId,
-        text: `Settle ${formatINR(step.amount)} of your own sales early`,
-        detail: `Fee ${formatINR(step.cost)}. This is your money, not a loan.`,
+        text: `Get ${formatINR(step.amount)} of your Razorpay sales money early`,
+        detail: `Fee ${formatINR(step.cost)}. This is your own money, not a loan.`,
         amount: step.amount,
         cost: step.cost,
       });

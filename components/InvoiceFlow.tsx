@@ -19,6 +19,7 @@ import {
   type InvoiceExtraction,
 } from "@/lib/invoice-extraction";
 import { ACCEPTED_EXTENSIONS, MAX_INVOICE_BYTES } from "@/lib/invoice-upload";
+import Disclosure from "./Disclosure";
 import { useJourney } from "./JourneyProvider";
 
 const STORAGE_KEY = "cga.confirmedInvoice.v1";
@@ -66,7 +67,17 @@ function Spinner() {
   );
 }
 
+/** The fields the founder cares about first. The rest sit under "More details". */
+const MAIN_FIELDS = [
+  "totalAmount",
+  "dueDate",
+  "earlyPaymentDiscountPercent",
+  "earlyPaymentDiscountDays",
+  "lateFeePercentPerMonth",
+] as const;
+
 export default function InvoiceFlow() {
+  const [moreOpen, setMoreOpen] = useState(false);
   const journey = useJourney();
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -471,14 +482,18 @@ export default function InvoiceFlow() {
             </button>
           </div>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            {FIELDS.map((meta) => {
+          {(() => {
+            const checkNeeded = (key: FieldKey) =>
+              source !== "manual" && !edited[key] && (extraction[key].confidence !== "high" || extraction[key].value === null);
+
+            /** One field: its label, the input, and a one-line status. The AI's quote is a small icon with a tooltip. */
+            const renderField = (meta: (typeof FIELDS)[number], big: boolean) => {
               const f = extraction[meta.key];
               const isEdited = edited[meta.key];
-              const needsCheck =
-                source !== "manual" && !isEdited && (f.confidence !== "high" || f.value === null);
+              const needsCheck = checkNeeded(meta.key);
               const id = `field-${meta.key}`;
               const err = formErrors[meta.key];
+              const unclear = f.confidence !== "high";
               return (
                 <div
                   key={meta.key}
@@ -487,14 +502,12 @@ export default function InvoiceFlow() {
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <label htmlFor={id} className="text-sm font-medium">
+                    <label htmlFor={id} className={big ? "text-sm font-semibold" : "text-sm font-medium"}>
                       {meta.label}
                       {meta.required && <span className="text-red-600"> *</span>}
                     </label>
                     {needsCheck && (
-                      <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-medium text-amber-900">
-                        Please check
-                      </span>
+                      <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-medium text-amber-900">Please check</span>
                     )}
                   </div>
                   <input
@@ -504,10 +517,10 @@ export default function InvoiceFlow() {
                     value={values[meta.key]}
                     onChange={(e) => setValue(meta.key, e.target.value)}
                     aria-invalid={err ? true : undefined}
-                    className="mt-2 w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-brand"
+                    className={`mt-2 w-full rounded-md border border-line bg-white px-3 py-2 outline-none focus:border-brand ${big ? "text-base font-semibold" : "text-sm"}`}
                   />
                   {err && <p className="mt-1 text-xs text-red-700">{err}</p>}
-                  <p className="mt-2 text-xs text-muted">
+                  <p className="mt-2 flex items-center gap-1.5 text-xs text-muted">
                     {isEdited ? (
                       "Edited by you."
                     ) : source === "manual" ? (
@@ -515,17 +528,42 @@ export default function InvoiceFlow() {
                     ) : f.value === null ? (
                       <>Not found on the invoice. {meta.hint}</>
                     ) : f.evidence ? (
-                      <>
-                        Evidence: <span className="italic">“{f.evidence}”</span> ({f.confidence} confidence)
-                      </>
+                      <span
+                        tabIndex={0}
+                        title={`${unclear ? "Unclear, please check. " : ""}The AI read this from your invoice: “${f.evidence}”`}
+                        aria-label={`${unclear ? "Unclear, please check. " : ""}The AI read this from your invoice: ${f.evidence}`}
+                        className={`inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full text-[11px] font-bold ${
+                          unclear ? "bg-amber-200 text-amber-900" : "bg-green-100 text-green-800"
+                        }`}
+                      >
+                        {unclear ? "!" : "✓"}
+                      </span>
                     ) : (
-                      "The AI quoted no evidence for this value."
+                      "The AI quoted nothing for this value."
                     )}
                   </p>
                 </div>
               );
-            })}
-          </div>
+            };
+
+            const main = MAIN_FIELDS.map((key) => FIELDS.find((m) => m.key === key)!);
+            const more = FIELDS.filter((m) => !(MAIN_FIELDS as readonly FieldKey[]).includes(m.key));
+            const moreNeedsLook = more.some((m) => formErrors[m.key] || checkNeeded(m.key));
+            return (
+              <>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">{main.map((m) => renderField(m, true))}</div>
+                <Disclosure
+                  title="More details"
+                  hint="supplier, invoice number, date, pairs, price"
+                  open={moreOpen || moreNeedsLook}
+                  onOpenChange={setMoreOpen}
+                  className="mt-4"
+                >
+                  <div className="grid gap-4 sm:grid-cols-2">{more.map((m) => renderField(m, false))}</div>
+                </Disclosure>
+              </>
+            );
+          })()}
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <button

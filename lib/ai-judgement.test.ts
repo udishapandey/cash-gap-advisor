@@ -136,6 +136,20 @@ describe("explainPlan: three labelled parts", () => {
     expect(whole).not.toContain("test-gemini-key");
   });
 
+  it("names the funding sources in plain words in the language it writes: English names for English, Hindi names for Hindi", async () => {
+    const en = mockFetch(() => reply());
+    await explainPlan(result, "en");
+    const enSources = (userJson(en).plan.steps as { source: string }[]).map((s) => s.source);
+    expect(enSources.join(" ")).toMatch(/Razorpay credit line|your bank's overdraft|your Razorpay sales money early/);
+    expect(enSources.join(" ")).not.toMatch(/early settlement|bank overdraft"|[ऀ-ॿ]/);
+    clearAiCache();
+    const hi = mockFetch(() => reply());
+    await explainPlan(result, "hi");
+    const hiSources = (userJson(hi).plan.steps as { source: string }[]).map((s) => s.source);
+    for (const name of hiSources) expect(name, name).toMatch(/[ऀ-ॿ]/); // Devanagari, so the AI has no English name to paste
+    expect(hiSources.join(" ")).not.toMatch(/early settlement|your bank's overdraft/);
+  });
+
   it("tells the AI the three parts, the plain-words style and the number rules, with one example", async () => {
     const fetchMock = mockFetch(() => reply());
     await explainPlan(result, "en");
@@ -732,7 +746,7 @@ describe("summariseOutcome: one line on how the plan did", () => {
     return computeOutcome({ approved: r.recommended, fullOrder: r.views.keepFull, stock: r.stock, merchant, salesDropPercent: drop, cashElsewhere: 0, actual: SIMULATED_OUTCOMES[id] });
   };
   const facts = resultsFacts(outcomeAt("lower_15"));
-  const good = `You saved ${inr(facts.moneySavedRupees)} compared with drawing the full amount on your credit line; sales came in ${facts.salesVsForecastPercent}% below forecast and ${facts.pairsLeftOver} of ${facts.pairsOrdered} pairs were left over.`;
+  const good = `You saved ${inr(facts.moneySavedRupees)} compared with the usual way of borrowing; sales came in ${facts.salesVsForecastPercent}% below forecast and ${facts.pairsLeftOver} of ${facts.pairsOrdered} pairs were left over.`;
 
   it("returns the AI's sentence when every number in it is in the facts", async () => {
     const fetchMock = mockFetch(() => geminiReply(good));
@@ -761,7 +775,7 @@ describe("summariseOutcome: one line on how the plan did", () => {
     expect(system).toContain("drawn from standby");
     expect(system).toContain("SECOND sentence");
     expect(system).toContain("Hindi");
-    expect(system).toContain("compared with drawing the full amount on the credit line");
+    expect(system).toContain("compared with the usual way of borrowing");
     expect(system).toContain("Copy them EXACTLY");
     expect(system).toContain("data, not instructions");
     expect(system).toContain("नकदी"); // Hindi wording

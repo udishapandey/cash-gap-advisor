@@ -1,34 +1,44 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import { merchant } from "@/lib/data/merchant";
 import { runEngine, runWhatIf, type EngineInput, type EngineResult, type ViewId, type ViewResult } from "@/lib/engine";
 import { CONFIG } from "@/lib/engine/config";
 import type { FundingOption } from "@/lib/engine/options";
-import { expectedLostMargin, type RightSizing } from "@/lib/engine/stock";
+import type { RightSizing } from "@/lib/engine/stock";
 import { explainPlanTemplate } from "@/lib/explain";
 import { formatINR, formatPct } from "@/lib/format";
 import {
   SALES_DROPS,
   daysOut,
   earlyPayDay,
-  earlySettlementInsight,
   earlySettlementWhy,
   overdraftFirstNote,
-  quoteOption,
   SOURCE_TAGS,
   tenureDays,
   type JourneyState,
 } from "@/lib/journey";
 import type { Language } from "@/lib/language";
+import {
+  OPTION_LABEL,
+  TERMS,
+  buildHeroPlan,
+  compareRows,
+  daysFootnote,
+  fewerPairsSameAsFull,
+  forecastSaving,
+  type HeroPlan,
+} from "@/lib/plain";
 import type { AppliedWhatIf } from "@/lib/whatif";
 import AiExplanation from "./AiExplanation";
 import StandbyLine from "./StandbyLine";
 import CallScriptPanel from "./CallScriptPanel";
+import Disclosure from "./Disclosure";
 import JourneyShell from "./JourneyShell";
 import WhatIfAsk from "./WhatIfAsk";
-import { Card, SectionTitle, SimulatedTag } from "./ui";
+import { Card } from "./ui";
 
 const dropLabel = (d: number) => (d === 0 ? "no change" : `−${d}%`);
 const EXTENSION_CHOICES = [7, 15, 30] as const;
@@ -59,11 +69,9 @@ function WhatIf({
   );
   const { keepFull, rightSized } = result.views;
   return (
-    <Card>
-      <SectionTitle aside={<SimulatedTag />}>What if sales are lower?</SectionTitle>
-      <p className="mt-1 text-sm text-muted">
-        Slide to see how the loan changes. Keeping the full order needs more borrowing as sales fall. Ordering only
-        what the forecast says will sell needs far less.
+    <div>
+      <p className="text-sm text-muted">
+        Slide to see how the borrowing changes. Ordering only what is forecast to sell needs far less.
       </p>
 
       <div className="mt-5 max-w-md">
@@ -97,17 +105,17 @@ function WhatIf({
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2" aria-live="polite">
         <div className="rounded-lg border border-line p-3">
-          <p className="text-xs uppercase tracking-wide text-muted">Loan needed if you keep the full order</p>
+          <p className="text-xs uppercase tracking-wide text-muted">Borrowing if you keep the full order</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">{formatINR(keepFull.loan)}</p>
           <p className="text-xs text-muted">
-            {keepFull.units} pairs · gap {formatINR(keepFull.gap.gapExpected)}
+            {keepFull.units} pairs · short {formatINR(keepFull.gap.gapExpected)}
           </p>
         </div>
         <div className="rounded-lg border border-line p-3">
-          <p className="text-xs uppercase tracking-wide text-muted">Loan needed if you right-size the order</p>
+          <p className="text-xs uppercase tracking-wide text-muted">Borrowing if you order fewer pairs</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">{formatINR(rightSized.loan)}</p>
           <p className="text-xs text-muted">
-            {rightSized.units} pairs · gap {formatINR(rightSized.gap.gapExpected)}
+            {rightSized.units} pairs · short {formatINR(rightSized.gap.gapExpected)}
           </p>
         </div>
       </div>
@@ -117,11 +125,11 @@ function WhatIf({
           <thead>
             <tr className="border-b border-line text-xs text-muted">
               <th className="px-3 py-2 text-left font-medium">Sales</th>
-              <th className="px-3 py-2 text-right font-medium">Keep full: gap</th>
-              <th className="px-3 py-2 text-right font-medium">Keep full: loan</th>
-              <th className="px-3 py-2 text-right font-medium">Right-size: pairs</th>
-              <th className="px-3 py-2 text-right font-medium">Right-size: loan</th>
-              <th className="px-3 py-2 text-left font-medium">Recommended</th>
+              <th className="px-3 py-2 text-right font-medium">Short (full order)</th>
+              <th className="px-3 py-2 text-right font-medium">Borrowing (full order)</th>
+              <th className="px-3 py-2 text-right font-medium">Pairs to order</th>
+              <th className="px-3 py-2 text-right font-medium">Borrowing (fewer pairs)</th>
+              <th className="px-3 py-2 text-left font-medium">Best plan</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -132,13 +140,13 @@ function WhatIf({
                 <td className="px-3 py-2 text-right tabular-nums">{formatINR(r.keepFull.loan)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{r.rightSized.units}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatINR(r.rightSized.loan)}</td>
-                <td className="px-3 py-2">{r.recommendedView === "right_sized" ? "Right-size" : "Keep full"}</td>
+                <td className="px-3 py-2">{r.recommendedView === "right_sized" ? TERMS.orderFewer : "Keep full order"}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -201,16 +209,16 @@ function PlanCard({
         </div>
         <div>
           <dt className="text-xs text-muted">
-            Peak shortfall to cover (any day up to day {early ? view.earlyGap.windowEnd : view.gap.windowEnd})
+            {TERMS.peakShortfall} (up to day {early ? view.earlyGap.windowEnd : view.gap.windowEnd})
           </dt>
           <dd className="font-semibold tabular-nums">{formatINR(plan.gap)}</dd>
         </div>
         <div>
-          <dt className="text-xs text-muted">Loan needed</dt>
+          <dt className="text-xs text-muted">Borrowing needed</dt>
           <dd className="text-lg font-semibold tabular-nums">{formatINR(view.loan)}</dd>
         </div>
         <div>
-          <dt className="text-xs text-muted">Total funding cost</dt>
+          <dt className="text-xs text-muted">{TERMS.fundingCost}</dt>
           <dd className="text-lg font-semibold tabular-nums">{formatINR(plan.totalCost)}</dd>
         </div>
       </dl>
@@ -228,7 +236,7 @@ function PlanCard({
         </p>
       )}
 
-      <h4 className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">How the gap is covered</h4>
+      <h4 className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">How it is covered</h4>
       {plan.steps.length === 0 ? (
         <p className="mt-1 text-sm text-muted">Nothing: you expect to have enough cash.</p>
       ) : (
@@ -244,7 +252,7 @@ function PlanCard({
               <li key={s.optionId} className="py-2">
                 <div className="flex items-baseline justify-between gap-3">
                   <span>
-                    {s.name}{" "}
+                    {OPTION_LABEL[s.optionId]}{" "}
                     <span
                       className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
                         s.isBorrowing ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
@@ -255,12 +263,12 @@ function PlanCard({
                     <SourceTag id={s.optionId} />
                   </span>
                   <span className="text-right tabular-nums">
-                    {formatINR(s.amount)} <span className="text-xs text-muted">cost {formatINR(s.cost)}</span>
+                    {formatINR(s.amount)} <span className="text-xs text-muted">interest and fees {formatINR(s.cost)}</span>
                   </span>
                 </div>
                 {option?.annualisedPct != null && days !== null && (
                   <p className="mt-0.5 text-xs text-muted">
-                    {formatPct(option.annualisedPct)} a year, out for {days} days = {formatINR(s.cost)} on {formatINR(s.amount)}
+                    Yearly rate {formatPct(option.annualisedPct)} (for comparison only) · needed for {days} days → {formatINR(s.cost)}
                   </p>
                 )}
                 {why && <p className="mt-1 rounded-md bg-green-50 px-2 py-1 text-xs text-green-900">{why}</p>}
@@ -310,27 +318,9 @@ function PlanCard({
   );
 }
 
-// ---------- One card per option ----------
+// ---------- Who provides a source ----------
 
-function CapNote({ option, view }: { option: FundingOption; view: ViewResult }) {
-  switch (option.id) {
-    case "early_settlement":
-      return <>Cap {formatINR(option.maxAmount)}: sales already earned but not yet settled.</>;
-    case "credit_line":
-      return <>Cap {formatINR(option.maxAmount)}: pre-approved limit (simulated).</>;
-    case "bank_overdraft":
-      return <>Cap {formatINR(option.maxAmount)}: your overdraft limit (simulated).</>;
-    case "split_order":
-      return (
-        <>
-          Cap {formatINR(option.maxAmount)}: up to {Math.round(CONFIG.maxSplitShareOfInvoice * 100)}% of the order (
-          {Math.round(option.maxAmount / view.invoice.unitPrice)} pairs).
-        </>
-      );
-  }
-}
-
-/** Who provides a source: green for Razorpay's, blue for the founder's own bank or supplier. */
+/** Who provides a source: grey for Razorpay's, blue for the founder's own bank or supplier. */
 function SourceTag({ id }: { id: FundingOption["id"] }) {
   const tag = SOURCE_TAGS[id];
   return (
@@ -342,83 +332,105 @@ function SourceTag({ id }: { id: FundingOption["id"] }) {
   );
 }
 
-function OptionCard({
-  title,
-  source,
-  available,
-  unavailableReason,
-  costLine,
-  coverLine,
-  annualised,
-  cap,
-  insight,
-  why,
-  days,
-  note,
-  simulated,
+// ---------- The recommended plan: the answer ----------
+
+/** Colours for the funding bar, in plan order. */
+const BAR_COLOUR: Record<string, string> = {
+  early_settlement: "bg-brand",
+  bank_overdraft: "bg-slate-500",
+  credit_line: "bg-amber-500",
+  split_order: "bg-green-500",
+};
+
+function HeroCard({
+  hero,
+  view,
+  planName,
+  onApprove,
+  onCompare,
 }: {
-  title: string;
-  /** Who provides this source, shown as a tag. */
-  source?: FundingOption["id"];
-  available: boolean;
-  unavailableReason?: string;
-  costLine: string;
-  coverLine?: string;
-  annualised: string;
-  cap?: React.ReactNode;
-  insight?: string | null;
-  /** Why early settlement is still the cheapest in rupees despite a high yearly rate. */
-  why?: string | null;
-  /** How many days the money is out, for this cost. */
-  days?: number | null;
-  note?: string;
-  simulated?: boolean;
+  hero: HeroPlan;
+  view: ViewResult;
+  planName: string;
+  onApprove: () => void;
+  onCompare: () => void;
 }) {
+  const plan = view.recommended.plan;
   return (
-    <article aria-label={title} className={`rounded-xl border border-line bg-card shadow-sm p-4 ${available ? "" : "opacity-60"}`}>
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        {source && <SourceTag id={source} />}
-        <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-            available ? "bg-green-100 text-green-800" : "bg-slate-200 text-slate-700"
-          }`}
-        >
-          {available ? "Available" : "Not available"}
-        </span>
-        {simulated && <SimulatedTag />}
-      </div>
-      <p className="mt-3 text-xl font-semibold tabular-nums">{costLine}</p>
-      {coverLine && <p className="text-xs text-muted">{coverLine}</p>}
-      <p className="mt-2 text-sm">
-        Annualised: <strong>{annualised}</strong>
-        {days != null && <span className="text-muted"> · out for {days} days</span>}
-      </p>
-      {cap && <p className="mt-1 text-xs text-muted">{cap}</p>}
-      {!available && unavailableReason && <p className="mt-1 text-xs text-muted">{unavailableReason}</p>}
-      {why && <p className="mt-3 rounded-md bg-green-50 px-3 py-2 text-xs text-green-900">{why}</p>}
-      {insight && !why && (
-        <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <strong>Looks cheap, isn&apos;t small: {insight}.</strong> The fee is tiny in rupees because the money only
-          arrives {merchant.settlementDays} days sooner. Used for longer, it would cost far more.
+    <Card aria-label="Recommended plan" className="border-l-4 border-l-green-500 p-6">
+      <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">Recommended: {planName}</span>
+      <h2 className="mt-3 font-heading text-2xl font-semibold leading-snug">{hero.shortLine}</h2>
+      {hero.coverNote && <p className="mt-1 text-sm text-muted">{hero.coverNote}</p>}
+
+      <p className="mt-5 text-base font-semibold">{hero.coverIntro}</p>
+      {hero.steps.length > 0 && (
+        <>
+          <div
+            role="img"
+            aria-label={hero.steps.map((x) => `${x.label} ${formatINR(x.amount)}`).join(", then ")}
+            className="mt-3 flex h-4 w-full overflow-hidden rounded-full bg-slate-200"
+          >
+            {hero.steps.map((x) => (
+              <div key={x.id} className={BAR_COLOUR[x.id]} style={{ width: `${x.share * 100}%` }} />
+            ))}
+          </div>
+          <ol className="mt-3 space-y-1.5 text-sm">
+            {hero.steps.map((x, i) => (
+              <li key={x.id} className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2">
+                  <span aria-hidden className={`inline-block h-2.5 w-2.5 rounded-full ${BAR_COLOUR[x.id]}`} />
+                  {i + 1}. {x.label}
+                </span>
+                <span className="font-semibold tabular-nums">{formatINR(x.amount)}</span>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+
+      {hero.insight && <p className="mt-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-800">{hero.insight}</p>}
+
+      <p className="mt-4 text-base font-semibold">{hero.payLine}</p>
+      <p className="mt-1 text-xs text-muted">{hero.basis}</p>
+      {hero.fewerPairsNote && <p className="mt-1 text-xs text-muted">{hero.fewerPairsNote}</p>}
+
+      <StandbyLine view={view} compact />
+
+      {!plan.fullyCovered && (
+        <p role="alert" className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          This plan covers only {formatINR(plan.covered)}. {formatINR(plan.uncovered)} is still not covered.
         </p>
       )}
-      {note && <p className="mt-3 text-xs text-muted">{note}</p>}
-    </article>
+
+      <div className="mt-5 flex flex-wrap items-center gap-4">
+        <button
+          type="button"
+          onClick={onApprove}
+          disabled={!plan.fullyCovered}
+          className="rounded-md bg-brand px-6 py-3 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Approve this plan
+        </button>
+        <button type="button" onClick={onCompare} className="text-sm font-medium text-brand-text hover:underline">
+          Compare other ways
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-muted">You approve each step again on the next screen. Nothing is borrowed yet.</p>
+    </Card>
   );
 }
 
-// ---------- Ask first ----------
+// ---------- Before you borrow: ask the supplier ----------
 
-function AskFirst({
+function SupplierNudge({
   days,
   onDays,
-  ask,
+  borrowingRemoved,
   script,
 }: {
   days: number;
   onDays: (d: number) => void;
-  ask: EngineResult;
+  borrowingRemoved: number;
   /** The call-script panel. */
   script: ReactNode;
 }) {
@@ -426,28 +438,10 @@ function AskFirst({
   const choices = (EXTENSION_CHOICES as readonly number[]).includes(days)
     ? [...EXTENSION_CHOICES]
     : [...EXTENSION_CHOICES, days].sort((a, b) => a - b);
-  const rows = [
-    ["Keep full order", ask.views.keepFull.askFirst],
-    ["Right-size order", ask.views.rightSized.askFirst],
-  ] as const;
   return (
-    <section
-      aria-label="Ask first: supplier extension"
-      className="rounded-xl border-2 border-dashed border-slate-400 bg-card p-5"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-lg font-semibold">Ask first: more time from the supplier</h2>
-        <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-          Not part of the plan
-        </span>
-      </div>
-      <p className="mt-1 text-sm text-muted">
-        This is a request, not funding. The plans above never depend on it. If you call the supplier and they agree,
-        this is how much borrowing it would remove.
-      </p>
-
-      <div className="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label="Extra days to ask for">
-        <span className="text-sm">If they agree to</span>
+    <section aria-label="Ask the supplier for more days" className="rounded-xl border-2 border-dashed border-slate-300 bg-card p-5">
+      <h2 className="text-base font-semibold">Before you borrow: ask the supplier for more days</h2>
+      <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Extra days to ask for">
         {choices.map((d) => (
           <button
             key={d}
@@ -462,40 +456,52 @@ function AskFirst({
           </button>
         ))}
       </div>
+      <p className="mt-3 text-sm font-medium">
+        {borrowingRemoved > 0
+          ? `If they agree to ${days} more days, you'd borrow ${formatINR(borrowingRemoved)} less.`
+          : `${days} more days wouldn't reduce your borrowing here.`}
+      </p>
+      <p className="mt-1 text-xs text-muted">It&apos;s a request, not funding: the plan never counts on it. Never pay late without agreement.</p>
+      {script}
+    </section>
+  );
+}
 
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[34rem] text-sm">
+// ---------- Compare every option ----------
+
+function CompareTable({ result, viewId, view }: { result: EngineResult; viewId: ViewId; view: ViewResult }) {
+  const rows = compareRows(result, viewId);
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[40rem] text-sm">
           <thead>
             <tr className="border-b border-line text-xs text-muted">
-              <th className="px-3 py-2 text-left font-medium">Plan</th>
-              <th className="px-3 py-2 text-right font-medium">Borrowing if you pay on time</th>
-              <th className="px-3 py-2 text-right font-medium">If the supplier agrees</th>
-              <th className="px-3 py-2 text-right font-medium">Borrowing removed</th>
+              <th className="px-3 py-2 text-left font-medium">Way to find the money</th>
+              <th className="px-3 py-2 text-right font-medium">How much it covers</th>
+              <th className="px-3 py-2 text-right font-medium">{TERMS.fundingCost}</th>
+              <th className="px-3 py-2 text-right font-medium">{TERMS.yearlyRate}</th>
+              <th className="px-3 py-2 text-right font-medium">Days</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {rows.map(([name, a]) => (
-              <tr key={name}>
-                <td className="px-3 py-2">{name}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatINR(a.borrowingIfPaidOnDueDate)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatINR(a.borrowingIfExtended)}</td>
-                <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                  {a.borrowingRemoved > 0 ? formatINR(a.borrowingRemoved) : "None: it wouldn't help"}
-                </td>
+            {rows.map((r) => (
+              <tr key={r.id} className={r.available ? "" : "text-muted"}>
+                <td className="px-3 py-2 font-medium">{r.label}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{r.covers}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{r.cost}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{r.yearly}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{r.days}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
       <p className="mt-3 text-xs text-muted">
-        Never pay late without agreement. For comparison only: missing the due date by {days} days would cost a late
-        fee of {formatINR(ask.views.keepFull.askFirst.lateFeeIfMissed)} on the full order. That is the price of
-        missing the date, not a way to pay.
+        Each row is priced for the {formatINR(view.recommended.plan.gap)} you could be short at the worst point, up to what it
+        can give. {daysFootnote(view)}
       </p>
-
-      {script}
-    </section>
+    </div>
   );
 }
 
@@ -541,24 +547,25 @@ function OptionsBody({
   extensionDays: number;
   setExtensionDays: (d: number) => void;
 }) {
+  const router = useRouter();
   const { keepFull, rightSized } = result.views;
   const drop = state.salesDropPercent;
+  const [compareOpen, setCompareOpen] = useState(false);
   const ask = useMemo(
     () => (extensionDays === CONFIG.extensionDays ? result : runEngine({ ...input, extensionDays })),
     [result, input, extensionDays],
   );
 
-  // Every option is priced for the same job (covering the expected gap on the full order) so cards compare fairly.
-  const gap = keepFull.gap.scenarios.expected.gap;
-  const lost = expectedLostMargin({
-    orderUnits: result.stock.fullUnits,
-    unitsNotOrdered: result.stock.unitsCut,
-    demandUnits: result.stock.demandByScenario[result.stock.basis],
-  }).expectedLostMargin;
-  const d = keepFull.discount;
+  // The hero is the plan the numbers favour. Nothing is chosen until the founder clicks.
+  const recId = result.recommendedView;
+  const recView = recId === "right_sized" ? rightSized : keepFull;
+  const saving = forecastSaving(result, recId, state);
+  const hero = buildHeroPlan(result, recId, saving);
+  const planName = recId === "right_sized" ? TERMS.orderFewer : "Keep the full order";
+  const sameAsFull = fewerPairsSameAsFull(result);
 
   // The call script is about the plan the founder chose, or the one the numbers favour if they haven't chosen yet.
-  const scriptViewId: ViewId = state.chosenView ?? result.recommendedView;
+  const scriptViewId: ViewId = state.chosenView ?? recId;
   const scriptView = scriptViewId === "right_sized" ? rightSized : keepFull;
   const setLanguage = (language: Language) => update({ language });
   // A typed what-if only gives us numbers. Applying them reruns the engine, and the explanation follows.
@@ -569,115 +576,28 @@ function OptionsBody({
     if (a.extensionDays !== undefined) setExtensionDays(a.extensionDays);
   };
 
+  const openCompare = () => {
+    setCompareOpen(true);
+    queueMicrotask(() => document.getElementById("compare")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
   return (
     <>
-      <WhatIf
-        input={input}
-        drop={drop}
-        onChange={(v) => update({ salesDropPercent: v })}
-        result={result}
-        ask={<WhatIfAsk onApply={applyTyped} />}
+      <HeroCard
+        hero={hero}
+        view={recView}
+        planName={planName}
+        onApprove={() => {
+          update({ chosenView: recId });
+          router.push("/approve");
+        }}
+        onCompare={openCompare}
       />
 
-      <section aria-label="Two plans" className="space-y-3">
-        <SectionTitle aside={<SimulatedTag />}>Choose a plan</SectionTitle>
-        <p className="text-sm text-muted">
-          Both are shown side by side with their real costs. Nothing is chosen for you. The green outline marks what
-          the numbers favour.
-        </p>
-        <AiExplanation result={result} state={state} language={state.language} onLanguage={setLanguage} typedToken={typedToken} />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <PlanCard
-            id="keep_full"
-            title="Keep full order"
-            view={keepFull}
-            stock={result.stock}
-            drop={drop}
-            recommended={result.recommendedView === "keep_full"}
-            chosen={state.chosenView === "keep_full"}
-            onChoose={() => update({ chosenView: "keep_full" })}
-          />
-          <PlanCard
-            id="right_sized"
-            title="Right-size order"
-            view={rightSized}
-            stock={result.stock}
-            drop={drop}
-            recommended={result.recommendedView === "right_sized"}
-            chosen={state.chosenView === "right_sized"}
-            onChoose={() => update({ chosenView: "right_sized" })}
-          />
-        </div>
-      </section>
-
-      <section aria-label="Every option" className="space-y-3">
-        <SectionTitle aside={<SimulatedTag />}>Every option, side by side</SectionTitle>
-        <p className="text-sm text-muted">
-          Each card shows what that option alone would cost to cover the expected gap of {formatINR(gap)} on the full
-          order (up to its cap). The cheapest in rupees is not always the cheapest per year, so both are shown.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {keepFull.options.map((o) => {
-            const q = quoteOption(o, gap);
-            return (
-              <OptionCard
-                key={o.id}
-                title={o.name}
-                source={o.id}
-                available={q.available}
-                unavailableReason={
-                  o.id === "early_settlement"
-                    ? "No sales are earned but unsettled by the payment day."
-                    : "Nothing can be drawn from this option."
-                }
-                costLine={`${formatINR(q.cost)} to cover ${formatINR(q.covers)}`}
-                coverLine={q.covers < gap ? `Covers ${formatINR(q.covers)} of the ${formatINR(gap)} gap: its cap.` : "Covers the whole gap."}
-                annualised={o.annualisedPct === null ? "n/a: priced as lost margin" : `${formatPct(o.annualisedPct)} a year`}
-                cap={<CapNote option={o} view={keepFull} />}
-                insight={o.id === "early_settlement" ? earlySettlementInsight(o) : null}
-                why={
-                  o.id === "early_settlement" && q.available
-                    ? earlySettlementWhy({ options: keepFull.options, amount: q.covers, settlementDays: merchant.settlementDays, loanDays: CONFIG.borrowDays })
-                    : null
-                }
-                days={daysOut(o, merchant.settlementDays, CONFIG.borrowDays)}
-                note={o.id === "split_order" ? o.note : undefined}
-                simulated={o.id !== "split_order"}
-              />
-            );
-          })}
-
-          <OptionCard
-            title="Right-size the order"
-            available={result.stock.unitsCut > 0}
-            unavailableReason="All pairs are expected to sell, so there is nothing to cut."
-            costLine={`${formatINR(lost)} expected lost margin`}
-            coverLine={`Saves ${formatINR(result.stock.cashSaved)} by ordering ${result.stock.recommendedUnits} of ${result.stock.fullUnits} pairs.`}
-            annualised="n/a: not a loan"
-            cap={`Recommended when more than ${Math.round(CONFIG.rightSizeUnsoldThreshold * 100)}% would stay unsold (now ${Math.round(result.stock.unsoldShare * 100)}%).`}
-            note="It cuts only pairs the forecast says would not sell, so the expected lost margin is about zero."
-          />
-
-          <OptionCard
-            title="Pay early for the discount"
-            available={d.discountAmount > 0 && d.affordable}
-            unavailableReason={d.discountAmount === 0 ? "No early-payment discount on this invoice." : "The confirmed sources can't cover the earlier, bigger gap."}
-            costLine={
-              d.extraFundingCost >= 0
-                ? `${formatINR(d.extraFundingCost)} extra funding`
-                : `${formatINR(-d.extraFundingCost)} less funding cost`
-            }
-            coverLine={`Saves ${formatINR(d.discountAmount)} if paid ${d.daysEarly} days early. Net ${d.netSaving >= 0 ? "saving" : "cost"} ${formatINR(Math.abs(d.netSaving))}.`}
-            annualised="n/a: a saving, not a loan"
-            note={d.worthIt ? "Worth it: the discount is bigger than the extra cost of finding the cash sooner." : "Not worth it on these numbers."}
-          />
-        </div>
-      </section>
-
-      <AskFirst
+      <SupplierNudge
         days={extensionDays}
         onDays={setExtensionDays}
-        ask={ask}
+        borrowingRemoved={ask.views[recId === "right_sized" ? "rightSized" : "keepFull"].askFirst.borrowingRemoved}
         script={
           <CallScriptPanel
             state={state}
@@ -690,17 +610,55 @@ function OptionsBody({
         }
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <Disclosure id="compare" title="Compare every option" open={compareOpen} onOpenChange={setCompareOpen}>
+        <CompareTable result={result} viewId={recId} view={recView} />
+        <h3 className="mt-6 text-sm font-semibold">The plans in detail</h3>
+        <p className="mt-1 text-sm text-muted">Nothing is chosen for you. Pick a different plan here if you prefer it.</p>
+        {sameAsFull && <p className="mt-2 text-sm text-muted">{hero.fewerPairsNote}</p>}
+        <div className={`mt-3 grid gap-4 ${sameAsFull ? "" : "lg:grid-cols-2"}`}>
+          <PlanCard
+            id="keep_full"
+            title="Keep full order"
+            view={keepFull}
+            stock={result.stock}
+            drop={drop}
+            recommended={recId === "keep_full"}
+            chosen={state.chosenView === "keep_full"}
+            onChoose={() => update({ chosenView: "keep_full" })}
+          />
+          {!sameAsFull && (
+            <PlanCard
+              id="right_sized"
+              title={TERMS.orderFewer}
+              view={rightSized}
+              stock={result.stock}
+              drop={drop}
+              recommended={recId === "right_sized"}
+              chosen={state.chosenView === "right_sized"}
+              onChoose={() => update({ chosenView: "right_sized" })}
+            />
+          )}
+        </div>
+      </Disclosure>
+
+      <Disclosure title="What if sales are lower?">
+        <WhatIf
+          input={input}
+          drop={drop}
+          onChange={(v) => update({ salesDropPercent: v })}
+          result={result}
+          ask={<WhatIfAsk onApply={applyTyped} />}
+        />
+      </Disclosure>
+
+      <Disclosure title="Full AI explanation" lazy>
+        <AiExplanation result={result} state={state} language={state.language} onLanguage={setLanguage} typedToken={typedToken} />
+      </Disclosure>
+
+      <div>
         <Link href="/gap" className="text-sm text-brand hover:underline">
           ← Back to the cash gap
         </Link>
-        {state.chosenView ? (
-          <Link href="/approve" className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover">
-            Continue to approve →
-          </Link>
-        ) : (
-          <span className="text-sm text-muted">Choose a plan above to continue.</span>
-        )}
       </div>
     </>
   );

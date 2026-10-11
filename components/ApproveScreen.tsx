@@ -33,7 +33,7 @@ export default function ApproveScreen() {
 function ApproveBody({ state, result, update, reset }: ShellContext) {
   const router = useRouter();
   const view = state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull;
-  const planName = state.chosenView === "right_sized" ? "Right-size order" : "Keep full order";
+  const planName = state.chosenView === "right_sized" ? "Order fewer pairs" : "Keep full order";
   const plan = view.recommended.plan;
   const sections = splitPlan(view, result.stock.fullUnits);
   const blockers = approvalBlockers(view);
@@ -92,7 +92,7 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
             )}
             {sections.overdraft && (
               <li>
-                Draw <strong>{formatINR(sections.overdraft.amount)}</strong> from your own bank overdraft yourself. We
+                Draw <strong>{formatINR(sections.overdraft.amount)}</strong> from your own bank&apos;s overdraft yourself. We
                 can&apos;t do this for you.
               </li>
             )}
@@ -146,7 +146,7 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
             <dd className="text-lg font-semibold tabular-nums">{formatINR(view.loan)}</dd>
           </div>
           <div>
-            <dt className="text-xs text-muted">Total funding cost</dt>
+            <dt className="text-xs text-muted">Total interest and fees</dt>
             <dd className="text-lg font-semibold tabular-nums">{formatINR(plan.totalCost)}</dd>
           </div>
         </dl>
@@ -190,7 +190,7 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
         {sections.overdraft && (
           <div className="mt-4 rounded-lg border border-line p-4">
             <h3 className="text-sm font-semibold">
-              Your own bank overdraft: {formatINR(sections.overdraft.amount)}{" "}
+              Your bank&apos;s overdraft: {formatINR(sections.overdraft.amount)}{" "}
               <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-800">
                 {SOURCE_TAGS.bank_overdraft.label}
               </span>
@@ -207,7 +207,7 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
           <div className="mt-4 space-y-4">
             <div>
               <h3 className="text-sm font-semibold">
-                Credit line from {kfs.lender}{" "}
+                Razorpay credit line, from {kfs.lender}{" "}
                 <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
                   {SOURCE_TAGS.credit_line.label}
                 </span>
@@ -298,7 +298,7 @@ function Success({
           <dd className="tabular-nums">{formatINR(view.loan)}</dd>
         </div>
         <div className="flex justify-between py-2">
-          <dt className="text-muted">Total funding cost</dt>
+          <dt className="text-muted">Total interest and fees</dt>
           <dd className="tabular-nums">{formatINR(plan.totalCost)}</dd>
         </div>
         {kfs && (

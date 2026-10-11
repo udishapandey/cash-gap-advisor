@@ -146,7 +146,7 @@ Variables (all in `.env.local`, which is git-ignored; never commit a key):
 | `AI_MOCK` | `true` makes every AI feature return a built-in answer after a short pause, with **no API call and no key needed**. Mock answers go through the same grounding check and show a "Mock AI" badge. Use it for development and demos without a quota. **It must never be on in production.** |
 
 ```bash
-npm test                     # 739 tests across 28 files; AI is always mocked, no network
+npm test                     # 788 tests across 30 files; AI is always mocked, no network
 npm run build                # production build
 npm run smoke:ai             # LIVE: calls the real model once per feature. Run sparingly (free-tier quota).
 npm run smoke:ai -- 2 explain-hi   # cap the calls, and run just one step
@@ -186,6 +186,10 @@ Five sample invoices (all synthetic, with different layouts, languages and fine 
 - A native-speaker review of the Hindi, and more languages.
 - Learn from many seasons instead of one; show forecast error over time.
 - A real partner-lender integration with a genuine Key Fact Statement, and the Razorpay test-mode call.
+
+## Designed for a founder, not a finance person
+
+Each screen answers first: **how short am I, what should I do, what does it cost or save me**, in a headline, one number and one button, with the working in a collapsed "See how we worked this out". Finance words are translated ("Get your Razorpay sales money early", "Most you'll be short on any day", "Backup if sales are slow"), a cost is never shown as a negative number, and there is one headline saving on one stated basis. Before and after screenshots of Options and Results are in [`docs/redesign/`](docs/redesign/).
 
 ## Visual style
 

@@ -14,10 +14,10 @@ import { formatINR, formatPct } from "./format";
 import { earlyPayDay, tenureDays } from "./journey";
 
 const SOURCE_NAMES: Record<OptionId, string> = {
-  early_settlement: "early settlement",
-  credit_line: "credit line",
-  bank_overdraft: "bank overdraft",
-  split_order: "split order",
+  early_settlement: "your Razorpay sales money early",
+  credit_line: "Razorpay credit line",
+  bank_overdraft: "your bank's overdraft",
+  split_order: "delivering some pairs later",
 };
 
 export interface StepFacts {
@@ -335,4 +335,10 @@ export function resultsFacts(o: OutcomeResult): ResultsFacts {
     codAssumedPercent: o.learned.codReturnRate.assumedPercent,
     codObservedPercent: o.learned.codReturnRate.observedPercent,
   };
+}
+
+/** The same facts with each funding source named in another language, so the AI copies a name in the language it writes. */
+export function withSourceNames(f: ExplainFacts, name: (source: string) => string): ExplainFacts {
+  const view = (v: ViewFacts): ViewFacts => ({ ...v, steps: v.steps.map((s) => ({ ...s, source: name(s.source) })) });
+  return { ...f, keepFull: view(f.keepFull), rightSized: view(f.rightSized) };
 }

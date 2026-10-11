@@ -62,7 +62,8 @@ describe("the explanation template (also the mock AI answer and the fallback)", 
     const hi = templateExplanationParts(facts, "hi").doThis;
     expect(hi).toContain(`पूरे ${facts.pairsOrdered} जोड़ी का ऑर्डर मंगवाएँ`);
     expect(hi).toContain(`दिन ${v.payByDay} तक`);
-    expect(hi).toContain(`अर्ली सेटलमेंट ${inr(v.steps[0].amountRupees)}`);
+    expect(hi).toContain(`Razorpay की बिक्री का पैसा जल्दी ${inr(v.steps[0].amountRupees)}`);
+    expect(hi).toContain(`आपके बैंक का ओवरड्राफ्ट ${inr(v.steps[1].amountRupees)}`);
   });
 
   it("why cheapest: funding cost against the discount, and the net result", () => {
@@ -155,7 +156,7 @@ describe("the explanation template (also the mock AI answer and the fallback)", 
     expect(facts.recommendedPlan).toBe("keep_full");
     const text = templateExplanation(facts, "en");
     expect(text).not.toContain("of 500 pairs now");
-    expect(text).toContain("early settlement");
+    expect(text).toContain("Razorpay sales money early");
   });
 
   it("says no borrowing is needed when cash covers the invoice", () => {
@@ -285,7 +286,7 @@ describe("the results summary template (also the mock AI answer and the fallback
   it("leads with the money, then sales against forecast, then pairs left over", () => {
     const f = factsAt("lower_15");
     const text = templateSummary(f, "en");
-    expect(text).toContain(`You saved ${inr(f.moneySavedRupees)} compared with drawing the full amount on your credit line`);
+    expect(text).toContain(`You saved ${inr(f.moneySavedRupees)} compared with the usual way of borrowing`);
     expect(text).toContain("sales came in 15% below forecast");
     expect(text).toContain(`${f.pairsLeftOver} of ${f.pairsOrdered} pairs were left over`);
     expect(text.indexOf("saved")).toBeLessThan(text.indexOf("sales came in"));
@@ -298,11 +299,11 @@ describe("the results summary template (also the mock AI answer and the fallback
     expect(text).toContain("all 500 pairs sold");
   });
 
-  it("adds a second sentence only when cash would have been drawn from standby, and says it that way", () => {
+  it("adds a second sentence only when cash would have been drawn from your backup, and says it that way", () => {
     const short = factsAt("lower_15");
     expect(short.drawnFromStandbyRupees).toBeGreaterThan(0);
     const text = templateSummary(short, "en");
-    expect(text).toContain(`${inr(short.drawnFromStandbyRupees)} of the extra cash needed would have been drawn from standby`);
+    expect(text).toContain(`${inr(short.drawnFromStandbyRupees)} of the extra cash needed would have been drawn from your backup`);
     expect(text).not.toContain("uncovered");
     const fine = factsAt("as_forecast");
     expect(fine.drawnFromStandbyRupees).toBe(0);
@@ -311,7 +312,7 @@ describe("the results summary template (also the mock AI answer and the fallback
 
   it("also says how much was beyond what standby could cover", () => {
     const f = { ...factsAt("lower_15"), beyondStandbyRupees: 12_345 };
-    expect(templateSummary(f, "en")).toContain(`A further ${inr(12_345)} was more than the standby could cover`);
+    expect(templateSummary(f, "en")).toContain(`A further ${inr(12_345)} was more than your backup could cover`);
     expect(templateSummary(f, "hi")).toContain(inr(12_345));
     expect(checkGrounding(templateSummary(f, "en"), f).ok).toBe(true);
     expect(checkGrounding(templateSummary(f, "hi"), f).ok).toBe(true);
@@ -319,7 +320,7 @@ describe("the results summary template (also the mock AI answer and the fallback
 
   it("is honest when the plan cost more", () => {
     const f = { ...factsAt("as_forecast"), moneyDirection: "cost more" as const, moneySavedRupees: 450 };
-    expect(templateSummary(f, "en")).toContain("The plan cost ₹450 more than drawing the full amount on your credit line");
+    expect(templateSummary(f, "en")).toContain("The plan cost ₹450 more than the usual way of borrowing");
     expect(checkGrounding(templateSummary(f, "en"), f).ok).toBe(true);
   });
 

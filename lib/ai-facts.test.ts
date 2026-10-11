@@ -48,10 +48,10 @@ describe("the facts the AI is given about a plan", () => {
     const allowedWords = new Set([
       "keep_full",
       "right_sized",
-      "early settlement",
-      "credit line",
-      "bank overdraft",
-      "split order",
+      "your Razorpay sales money early",
+      "Razorpay credit line",
+      "your bank's overdraft",
+      "delivering some pairs later",
     ]);
     const leaves: unknown[] = [];
     const walk = (v: unknown) => {

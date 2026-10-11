@@ -4,7 +4,8 @@ import Link from "next/link";
 import { merchant } from "@/lib/data/merchant";
 import { CONFIG } from "@/lib/engine/config";
 import type { ScenarioResult } from "@/lib/engine/gap";
-import { formatINR } from "@/lib/format";
+import { formatCompactINR, formatINR } from "@/lib/format";
+import Disclosure from "./Disclosure";
 import JourneyShell from "./JourneyShell";
 import NumberField from "./NumberField";
 import RangeBar from "./RangeBar";
@@ -39,11 +40,21 @@ export default function GapScreen() {
         return (
           <>
             <Card>
-              <SectionTitle aside={<SimulatedTag />}>Your cash gap</SectionTitle>
-              <p className="mt-1 text-sm text-muted">
-                {invoice.supplier}: {formatINR(invoice.amount)} for {invoice.units} pairs, due in {invoice.dueInDays}{" "}
-                days. This is the most you could be short on any single day until then.
+              <p className="text-sm text-muted">
+                {invoice.supplier}: {formatINR(invoice.amount)} for {invoice.units} pairs, due in {invoice.dueInDays} days.
               </p>
+              {gap.gapMax === 0 ? (
+                <h2 className="mt-2 font-heading text-3xl font-semibold">You have enough cash.</h2>
+              ) : (
+                <>
+                  <h2 className="mt-2 font-heading text-3xl font-semibold">
+                    You may be short about {formatCompactINR(gap.gapExpected)}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted">
+                    Depending on sales, it could be {formatCompactINR(gap.gapMin)} to {formatCompactINR(gap.gapMax)}.
+                  </p>
+                </>
+              )}
 
               <div className="mt-5">
                 {gap.gapMax === 0 ? (
@@ -68,8 +79,7 @@ export default function GapScreen() {
               </p>
             </Card>
 
-            <Card>
-              <SectionTitle aside={<SimulatedTag />}>Where the cash comes from</SectionTitle>
+            <Disclosure title="See how we worked this out" hint="where the cash comes from">
               <p className="mt-1 text-sm text-muted">
                 Cash expected by day {gap.byDay}, in each sales scenario. Sales, COD payouts and the bank balance
                 are made up for {merchant.name}.
@@ -155,7 +165,7 @@ export default function GapScreen() {
                   </tbody>
                 </table>
               </div>
-            </Card>
+            </Disclosure>
 
             <Card>
               <SectionTitle>Tell us what you know</SectionTitle>

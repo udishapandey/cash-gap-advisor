@@ -17,6 +17,8 @@ import WhatIfAsk, { isWhatIfOutcome } from "./WhatIfAsk";
 const noop = () => {};
 const result = runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: 30 });
 const explanation = templateExplanation(planFacts(result), "en");
+/** What renderToStaticMarkup does to text: it escapes &, < and quotes. */
+const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/'/g, "&#x27;").replace(/"/g, "&quot;");
 const view = result.views.keepFull;
 const script = templateScript(scriptFacts(view.invoice, view.duePlan, { extensionDays: 15, borrowingRemovedRupees: 0 }), "en");
 
@@ -61,7 +63,7 @@ describe("the AI explanation on the Options screen", () => {
       <AiExplanationView status="stale" text={explanation} mock={false} language="en" onLanguage={noop} onExplain={noop} />,
     );
     expect(html).toContain("Explain this plan");
-    expect(html).toContain(explanation);
+    expect(html).toContain(esc(explanation));
     expect(html).not.toContain(VERIFIED_LABEL);
   });
 
@@ -74,7 +76,7 @@ describe("the AI explanation on the Options screen", () => {
       <AiExplanationView status="verified" text="" parts={parts} mock={false} language={language} onLanguage={noop} />,
     );
     for (const label of labels) expect(html).toContain(label);
-    for (const text of Object.values(parts)) expect(html).toContain(text.replace(/&/g, "&amp;"));
+    for (const text of Object.values(parts)) expect(html).toContain(esc(text));
     expect(html).toContain(VERIFIED_LABEL);
     expect(html.indexOf(labels[0])).toBeLessThan(html.indexOf(labels[1]));
     expect(html.indexOf(labels[1])).toBeLessThan(html.indexOf(labels[2]));
@@ -167,7 +169,7 @@ describe("the language toggle", () => {
 });
 
 describe("the results summary view", () => {
-  const text = "You saved ₹11,310 compared with drawing the full amount on your credit line.";
+  const text = "You saved ₹11,310 compared with the usual way of borrowing.";
   it("shows the checked sentence with the verified label", () => {
     const html = renderToStaticMarkup(<ResultsSummaryView status="verified" text={text} mock={false} language="en" onLanguage={noop} />);
     expect(html).toContain(VERIFIED_LABEL);
@@ -195,15 +197,15 @@ describe("the results summary view", () => {
 describe("the Standby line", () => {
   const covered = runEngine({ merchant, invoice: sampleInvoice }).views.keepFull;
   const short = runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: 30 }).views.keepFull;
-  it("shows the amount, the day and the headroom, and says ₹0 cost unless drawn", () => {
+  it("shows the amount, the day and the credit limit left, and says ₹0 cost unless used", () => {
     const sb = standbyFor(covered);
     const html = renderToStaticMarkup(<StandbyLine view={covered} />);
-    expect(html).toContain("Standby:");
+    expect(html).toContain("Backup if sales are slow:");
     expect(html).toContain(formatINR(sb.amount));
     expect(html).toContain(`around day ${sb.day}`);
-    expect(html).toContain(`headroom (${formatINR(sb.headroom)}) covers it`);
-    expect(html).toContain("₹0 cost unless drawn");
-    expect(html).toContain("Never drawn automatically");
+    expect(html).toContain(`unused Razorpay credit limit (${formatINR(sb.headroom)}) covers it`);
+    expect(html).toContain("₹0 cost unless used");
+    expect(html).toContain("Never used automatically");
     expect(html).not.toContain("Warning");
   });
   it("shows a warning when unused headroom cannot cover it", () => {
@@ -213,13 +215,30 @@ describe("the Standby line", () => {
     expect(html).toContain("Warning");
     expect(html).toContain(`${formatINR(sb.shortBy)} short`);
     expect(html).toContain('role="alert"');
-    expect(html).toContain("for the part the headroom covers");
-    expect(html).not.toContain("if drawn in full");
+    expect(html).toContain("for the part the limit covers");
+    expect(html).not.toContain("if used in full");
   });
   it("says none is needed when the plan covers even low sales", () => {
     const rich = runEngine({ merchant, invoice: sampleInvoice, cashElsewhere: 5_000_000 }).views.keepFull;
     const html = renderToStaticMarkup(<StandbyLine view={rich} />);
     expect(html).toContain("none needed");
     expect(html).not.toContain("Warning");
+  });
+});
+
+describe("the Backup line, short version (the Options headline card)", () => {
+  const view = runEngine({ merchant, invoice: sampleInvoice }).views.keepFull;
+  it("is two short sentences with compact amounts", () => {
+    const html = renderToStaticMarkup(<StandbyLine view={view} compact />);
+    expect(html).toContain("Backup if sales are slow:");
+    expect(html).toContain("up to ₹1.05L more may be needed around day 10");
+    expect(html).toContain("₹0 cost unless you use it");
+    expect(html).not.toContain("Never used automatically");
+  });
+  it("still warns when the unused credit limit falls short", () => {
+    const short = runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: 30 }).views.keepFull;
+    const html = renderToStaticMarkup(<StandbyLine view={short} compact />);
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("short of this backup");
   });
 });

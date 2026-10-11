@@ -447,8 +447,8 @@ describe("who provides each source, and why the founder's own overdraft goes fir
     expect(steps[iOd].amount).toBe(merchant.overdraftLimit);
     expect(steps[iOd].amount).toBe(100_000);
     const note = overdraftFirstNote(planOf(view))!;
-    expect(note).toContain("Your own bank overdraft (₹1,00,000 at 14%)");
-    expect(note).toContain("Razorpay's credit line (18%)");
+    expect(note).toContain("Your bank's overdraft (₹1,00,000 at 14% a year)");
+    expect(note).toContain("the Razorpay credit line (18%)");
     expect(note).toContain("costs less for the 33 days needed");
     // The two costs it quotes are real: the overdraft's own step cost, and the credit line's rate on the same amount.
     expect(note).toContain(formatINR(steps[iOd].cost));

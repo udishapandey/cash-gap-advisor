@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 
-/** Marks anything that comes from made-up data. Used throughout, as the spec requires. */
-export function SimulatedTag({ children = "Simulated" }: { children?: ReactNode }) {
-  return (
-    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
-      {children}
-    </span>
-  );
+/**
+ * Retired: every screen used to mark each made-up number "Simulated". One banner at the top of the page now says it for the
+ * whole prototype ("Concept prototype · all merchant data is simulated"), so this renders nothing. Kept so the call sites
+ * and the rule in CLAUDE.md stay easy to find.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function SimulatedTag(_props: { children?: ReactNode }) {
+  return null;
 }
 
 export function Card({

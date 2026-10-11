@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { merchant } from "./data/merchant";
 import { sampleInvoice } from "./data/invoice";
+import { preReadSampleExtraction, PRE_READ_SAMPLE_LABEL } from "./data/sample-extraction";
 import { runEngine } from "./engine";
 import {
   daysBetween,
@@ -282,5 +283,31 @@ describe("mapping the confirmed invoice into the engine", () => {
     const r = map({}, "2026-10-21");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toContain("no cash gap left to plan");
+  });
+});
+
+describe("the pre-read sample (fallback when the AI is slow or down)", () => {
+  it("is labelled as pre-read", () => {
+    expect(PRE_READ_SAMPLE_LABEL).toBe("Pre-read sample");
+  });
+
+  it("passes the same validation as a live AI answer, with nothing changed", () => {
+    const r = parseExtraction(preReadSampleExtraction);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data).toEqual(preReadSampleExtraction);
+  });
+
+  it("matches what the AI reads from the clean sample invoice", () => {
+    expect(preReadSampleExtraction).toEqual(parseOk(cleanAnswer()));
+  });
+
+  it("goes through the form and the engine to the same gap as the built-in invoice", () => {
+    const confirmed = parseConfirmed(toFormValues(preReadSampleExtraction));
+    if (!confirmed.ok) throw new Error("the pre-read sample should be a valid form");
+    const mapped = toEngineInvoice(confirmed.data);
+    if (!mapped.ok) throw new Error(mapped.error);
+    const gap = runEngine({ merchant, invoice: mapped.invoice }).views.keepFull.gap;
+    expect(gap.gapExpected).toBe(227_621);
+    expect(mapped.notes).toEqual([]);
   });
 });

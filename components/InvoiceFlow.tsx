@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Invoice } from "@/lib/data/invoice";
 import { merchant, SIMULATED_LABEL } from "@/lib/data/merchant";
+import { preReadSampleExtraction } from "@/lib/data/sample-extraction";
 import { runEngine } from "@/lib/engine";
 import { formatINR } from "@/lib/format";
 import {
@@ -20,8 +21,14 @@ import { ACCEPTED_EXTENSIONS, MAX_INVOICE_BYTES } from "@/lib/invoice-upload";
 
 const STORAGE_KEY = "cga.confirmedInvoice.v1";
 const SAMPLE_URL = "/samples/invoice-clean.pdf";
+// The server gives up after 45 seconds; the page waits a little longer so it can show the server's message.
+const CLIENT_TIMEOUT_MS = 50_000;
+// Offer the pre-read sample when a read is taking this long.
+const OFFER_FALLBACK_AFTER_S = 10;
+const SLOW_AFTER_S = 15;
 
 type Phase = "idle" | "reading" | "review";
+type Source = "live" | "pre-read";
 type Edited = Partial<Record<FieldKey, boolean>>;
 
 interface Confirmed {
@@ -47,6 +54,9 @@ export default function InvoiceFlow() {
   const [formErrors, setFormErrors] = useState<FieldErrors>({});
   const [confirmed, setConfirmed] = useState<Confirmed | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [source, setSource] = useState<Source>("live");
+  const [elapsed, setElapsed] = useState(0);
+  const abortRef = useRef<AbortController | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Restore a confirmed invoice from this browser tab's session, if there is one.
@@ -65,6 +75,7 @@ export default function InvoiceFlow() {
         setExtraction(restored.data);
         setValues(saved.values);
         setEdited(saved.edited ?? {});
+        setSource(saved.source === "pre-read" ? "pre-read" : "live");
         setConfirmed({ invoice: mapped.invoice, notes: mapped.notes });
         setPhase("review");
       } catch {
@@ -93,18 +104,26 @@ export default function InvoiceFlow() {
       return;
     }
 
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setPhase("reading");
+    setElapsed(0);
     setConfirmed(null);
     try {
       const body = new FormData();
       body.append("file", file);
-      const res = await fetch("/api/parse-invoice", { method: "POST", body });
+      const res = await fetch("/api/parse-invoice", {
+        method: "POST",
+        body,
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(CLIENT_TIMEOUT_MS)]),
+      });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) {
         const wait = res.headers.get("Retry-After");
         setError(
           (data?.error ?? "Something went wrong reading the invoice. Please try again.") +
-            (res.status === 429 && wait ? ` (Try again in about ${wait} seconds.)` : ""),
+            (res.status === 429 && wait && Number(wait) <= 120 ? ` (Try again in about ${wait} seconds.)` : ""),
         );
         setPhase(extraction ? "review" : "idle");
         return;
@@ -119,16 +138,38 @@ export default function InvoiceFlow() {
       setValues(toFormValues(parsed.data));
       setEdited({});
       setFormErrors({});
+      setSource("live");
       try {
         sessionStorage.removeItem(STORAGE_KEY);
       } catch {}
       setPhase("review");
-    } catch {
-      setError("Couldn't reach the server. Please check your connection and try again.");
+    } catch (e) {
+      if (controller.signal.aborted) return; // the founder chose the pre-read sample instead
+      setError(
+        e instanceof Error && e.name === "TimeoutError"
+          ? "The AI took too long to respond. Please try again, or continue with the pre-read sample."
+          : "Couldn't reach the server. Please check your connection and try again.",
+      );
       setPhase(extraction ? "review" : "idle");
     } finally {
       if (fileInput.current) fileInput.current.value = "";
     }
+  }
+
+  /** Skip the AI: use values saved from an earlier reading of the synthetic sample invoice. */
+  function usePreReadSample() {
+    abortRef.current?.abort();
+    setError(null);
+    setExtraction(preReadSampleExtraction);
+    setValues(toFormValues(preReadSampleExtraction));
+    setEdited({});
+    setFormErrors({});
+    setConfirmed(null);
+    setSource("pre-read");
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch {}
+    setPhase("review");
   }
 
   async function useSample() {
@@ -167,13 +208,14 @@ export default function InvoiceFlow() {
     setFormErrors({});
     setConfirmed({ invoice: mapped.invoice, notes: mapped.notes });
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ extraction, values, edited }));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ extraction, values, edited, source }));
     } catch {
       // Storage unavailable (for example a private window). The summary still shows.
     }
   }
 
   function startOver() {
+    abortRef.current?.abort();
     setPhase("idle");
     setExtraction(null);
     setValues(null);
@@ -187,6 +229,14 @@ export default function InvoiceFlow() {
   }
 
   const reading = phase === "reading";
+
+  // Count the seconds while reading, so a slow read is visible rather than silent.
+  useEffect(() => {
+    if (!reading) return;
+    const started = Date.now();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [reading]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -247,14 +297,34 @@ export default function InvoiceFlow() {
 
         <div aria-live="polite" className="mt-4">
           {reading && (
-            <p className="flex items-center gap-2 text-sm text-muted">
-              <Spinner /> Reading the invoice… this usually takes 5 to 30 seconds.
-            </p>
+            <div className="space-y-1">
+              <p className="flex items-center gap-2 text-sm text-muted">
+                <Spinner /> Reading your invoice… this can take up to 45 seconds. ({elapsed}s)
+              </p>
+              {elapsed >= SLOW_AFTER_S && (
+                <p className="text-sm text-amber-700">Still working. The AI is slower than usual right now.</p>
+              )}
+            </div>
           )}
           {error && (
             <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
             </p>
+          )}
+          {(error || (reading && elapsed >= OFFER_FALLBACK_AFTER_S)) && (
+            <div className="mt-3 rounded-md border border-line px-3 py-3">
+              <button
+                type="button"
+                onClick={usePreReadSample}
+                className="rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-blue-50"
+              >
+                Continue with pre-read sample
+              </button>
+              <p className="mt-2 text-xs text-muted">
+                Uses values saved from an earlier reading of the synthetic sample invoice. The AI will not read a
+                file this time.
+              </p>
+            </div>
           )}
         </div>
       </section>
@@ -263,10 +333,18 @@ export default function InvoiceFlow() {
         <section className="rounded-xl border border-line bg-card p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">Check what the AI read</h2>
+              <h2 className="text-lg font-semibold">
+                {source === "pre-read" ? "Check the pre-read sample" : "Check what the AI read"}
+              </h2>
               <p className="mt-1 text-sm text-muted">
                 Edit anything that is wrong. Fields marked in amber were unclear or missing.
               </p>
+              {source === "pre-read" && (
+                <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Pre-read sample: these values were saved from an earlier reading of the synthetic sample invoice.
+                  The AI did not read a file just now.
+                </p>
+              )}
             </div>
             <button type="button" onClick={startOver} className="shrink-0 text-sm text-brand hover:underline">
               Start over

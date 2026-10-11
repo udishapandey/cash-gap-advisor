@@ -21,6 +21,8 @@ Next.js (App Router) + TypeScript + Tailwind. Run with `npm run dev`. Tests: `np
 
 Invoice reading: `extractInvoice` in `lib/ai.ts` (the only AI call that sees a file), `lib/invoice-extraction.ts` (zod schema, form parsing, mapping into the engine), route `app/api/parse-invoice`, page `/invoice`. Sample invoices are in `public/samples/` (synthetic).
 
+Check the AI reader against a real file: `npm run try:extract` (clean sample) or `npm run try:extract -- path/to/file.png`. It times the call and prints the provider's real error if it fails. Each call uses the free quota (20 a day per model on `gemini-3.8-flash`), so don't loop it.
+
 Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate lives in `config.ts`). Simulated data: `lib/data/`. Every assumption is listed in `docs/ASSUMPTIONS.md`; update it whenever an assumption changes.
 
 ## Rules
@@ -35,4 +37,5 @@ Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate live
 ## AI provider
 
 `lib/ai.ts` reads `AI_PROVIDER` (`gemini` default, or `claude`). Optional overrides: `GEMINI_MODEL`
-(default `gemini-3.8-flash`), `CLAUDE_MODEL`. Keys: `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`.
+(default `gemini-3.8-flash`), `GEMINI_FALLBACK_MODEL` (default `gemini-3.5-flash-lite`, or `off`), `CLAUDE_MODEL`.
+Keys: `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`. Invoice reading waits at most 45 seconds with at most one retry.

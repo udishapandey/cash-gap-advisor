@@ -1,4 +1,4 @@
-import { extractInvoice, type ExtractInvoiceFailure } from "@/lib/ai";
+import { describeFailure, extractInvoice, type ExtractInvoiceFailure } from "@/lib/ai";
 import { MAX_INVOICE_BYTES, sniffMimeType } from "@/lib/invoice-upload";
 
 // Privacy: the uploaded invoice is processed in memory only. It is never written to disk,
@@ -45,8 +45,8 @@ export async function POST(request: Request) {
 
   const result = await extractInvoice({ data, mimeType });
   if (!result.ok) {
-    // Log only the kind of failure, never anything from the invoice.
-    console.error(`[parse-invoice] ${result.kind}`);
+    // Log why it failed (HTTP status, provider error type and message, each attempt), never the invoice.
+    console.error(`[parse-invoice] ${describeFailure(result)}`);
     return json(
       { ok: false, kind: result.kind, error: result.message },
       STATUS[result.kind],

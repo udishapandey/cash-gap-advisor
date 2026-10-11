@@ -4,7 +4,11 @@ import { cleanAnswer, JPEG_HEADER, PDF_HEADER, PNG_HEADER } from "@/lib/invoice-
 import { sniffMimeType } from "@/lib/invoice-upload";
 
 // The AI is mocked: no live calls.
-vi.mock("@/lib/ai", () => ({ extractInvoice: vi.fn() }));
+// Only the AI call is replaced. The real describeFailure (the log line) is kept so it is tested too.
+vi.mock("@/lib/ai", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ai")>()),
+  extractInvoice: vi.fn(),
+}));
 import { extractInvoice } from "@/lib/ai";
 import { POST } from "./route";
 
@@ -23,7 +27,7 @@ function upload(content: Uint8Array | string, name = "invoice.pdf", type = "appl
 
 beforeEach(() => {
   mocked.mockReset();
-  mocked.mockResolvedValue({ ok: true, data: cleanAnswerParsed() });
+  mocked.mockResolvedValue({ ok: true, data: cleanAnswerParsed(), model: "gemini-3.8-flash", attempts: 1 });
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -134,19 +138,40 @@ describe("privacy: nothing from the invoice is kept or logged", () => {
   const SECRET = "SECRET-INVOICE-TEXT-98765";
   const NAME = "secret-supplier-invoice.pdf";
 
-  it("logs nothing that contains the file's contents or name, on success or failure", async () => {
+  it("logs the real reason for a failure, but nothing from the file", async () => {
     const spies = (["log", "info", "warn", "error", "debug"] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
     const content = new Uint8Array([...PDF_HEADER, ...new TextEncoder().encode(SECRET)]);
 
-    await POST(upload(content, NAME)); // success
-    mocked.mockResolvedValue({ ok: false, kind: "provider_error", message: "friendly" });
+    await POST(upload(content, NAME)); // success: logs nothing
+    mocked.mockResolvedValue({
+      ok: false,
+      kind: "provider_error",
+      message: "friendly",
+      detail: {
+        status: 503,
+        providerStatus: "UNAVAILABLE",
+        providerMessage: "This model is currently experiencing high demand.",
+        model: "gemini-3.5-flash-lite",
+        attempts: [
+          { model: "gemini-3.8-flash", status: 503, providerStatus: "UNAVAILABLE", elapsedMs: 1200 },
+          { model: "gemini-3.5-flash-lite", status: 503, providerStatus: "UNAVAILABLE", elapsedMs: 900 },
+        ],
+        elapsedMs: 2100,
+      },
+    });
     await POST(upload(content, NAME)); // failure
     await POST(upload(SECRET, NAME)); // rejected file type
 
     const logged = spies.flatMap((s) => s.mock.calls).flat().map(String).join(" ");
     expect(logged).not.toContain(SECRET);
     expect(logged).not.toContain(NAME);
-    expect(logged).toContain("provider_error"); // only the kind of failure is logged
+    // What helps debugging: kind, HTTP status, the provider's error type and message, each attempt.
+    expect(logged).toContain("kind=provider_error");
+    expect(logged).toContain("http=503");
+    expect(logged).toContain("type=UNAVAILABLE");
+    expect(logged).toContain("high demand");
+    expect(logged).toContain("gemini-3.8-flash:503:UNAVAILABLE");
+    expect(logged).toContain("total=2100ms");
   });
 
   it("never echoes the file's name or contents back in an error", async () => {

@@ -291,10 +291,13 @@ function Success({
         )}
       </dl>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <Link href="/results" className="rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-white hover:opacity-90">
+          See how the plan did →
+        </Link>
         <button
           type="button"
           onClick={onAgain}
-          className="rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
+          className="rounded-md border border-line px-5 py-2.5 text-sm font-medium hover:bg-background"
         >
           Start another invoice
         </button>

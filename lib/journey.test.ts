@@ -5,6 +5,7 @@ import { sampleInvoice } from "./data/invoice";
 import { runEngine, type EngineInput } from "./engine";
 import {
   DEFAULT_JOURNEY,
+  STEPS,
   approvalBlockers,
   approvalStage,
   buildKfs,
@@ -94,6 +95,21 @@ describe("which steps can be opened", () => {
     expect(locked.reachable).toBe(false);
     expect(locked.reason).toContain("Choose a plan");
     expect(stepAccess(withInvoice({ chosenView: "keep_full" }), "approve").reachable).toBe(true);
+  });
+
+  it("Results is the last step, and only opens once the supplier has been paid", () => {
+    expect(STEPS.map((x) => x.id)).toEqual(["invoice", "gap", "options", "approve", "results"]);
+    expect(STEPS[STEPS.length - 1]).toMatchObject({ label: "Results", href: "/results" });
+    for (const s of [DEFAULT_JOURNEY, withInvoice(), withInvoice({ chosenView: "keep_full" }), withInvoice({ chosenView: "keep_full", approved: true })]) {
+      expect(stepAccess(s, "results").reachable).toBe(false);
+    }
+    expect(stepAccess(withInvoice({ chosenView: "keep_full", approved: true }), "results").reason).toContain("pay the supplier");
+    const paid = withInvoice({ chosenView: "keep_full", approved: true, paid: true });
+    expect(stepAccess(paid, "results").reachable).toBe(true);
+    expect(stepStatus(paid, "results", "approve")).toBe("upcoming");
+    expect(stepStatus(paid, "results", "results")).toBe("current");
+    expect(stepStatus(withInvoice(), "results", "options")).toBe("locked");
+    expect(stepComplete(paid, "results")).toBe(false);
   });
 
   it("labels steps as done, current, upcoming or locked", () => {

@@ -5,7 +5,7 @@
 // Every number comes straight from the facts. Nothing is calculated here. (The Hindi wording was drafted
 // by an AI assistant: have a native speaker review it before real use.)
 
-import type { ExplainFacts, ScriptFacts } from "./ai-facts";
+import type { ExplainFacts, ResultsFacts, ScriptFacts } from "./ai-facts";
 import { formatINR } from "./format";
 import type { Language } from "./language";
 
@@ -169,4 +169,40 @@ export function templateScript(f: ScriptFacts, language: Language): string {
       : "- Thank them, agree on a clear date, and confirm it in writing (message or email) after the call.",
   );
   return lines.join("\n");
+}
+
+/** One plain sentence on how the plan did (two if it left part of the real need uncovered). Same facts in both languages. */
+export function templateSummary(f: ResultsFacts, language: Language): string {
+  const hi = language === "hi";
+  const money = hi
+    ? f.moneyDirection === "saved"
+      ? `क्रेडिट लाइन से पूरी रकम निकालने की तुलना में आपने ${inr(f.moneySavedRupees)} बचाए`
+      : f.moneyDirection === "cost more"
+        ? `प्लान पर क्रेडिट लाइन से पूरी रकम निकालने से ${inr(f.moneySavedRupees)} ज़्यादा खर्च आया`
+        : "प्लान का खर्च क्रेडिट लाइन से पूरी रकम निकालने जितना ही रहा"
+    : f.moneyDirection === "saved"
+      ? `You saved ${inr(f.moneySavedRupees)} compared with drawing the full amount on your credit line`
+      : f.moneyDirection === "cost more"
+        ? `The plan cost ${inr(f.moneySavedRupees)} more than drawing the full amount on your credit line`
+        : "The plan cost the same as drawing the full amount on your credit line";
+  const sales = hi
+    ? f.salesDirection === "in line"
+      ? "बिक्री अनुमान के मुताबिक रही"
+      : `बिक्री अनुमान से ${f.salesVsForecastPercent}% ${f.salesDirection === "below" ? "कम" : "ज़्यादा"} रही`
+    : f.salesDirection === "in line"
+      ? "sales came in as forecast"
+      : `sales came in ${f.salesVsForecastPercent}% ${f.salesDirection} forecast`;
+  const stock = hi
+    ? f.pairsLeftOver > 0
+      ? `${f.pairsOrdered} में से ${f.pairsLeftOver} जोड़ी बच गईं`
+      : `सभी ${f.pairsOrdered} जोड़ी बिक गईं`
+    : f.pairsLeftOver > 0
+      ? `${f.pairsLeftOver} of ${f.pairsOrdered} pairs were left over`
+      : `all ${f.pairsOrdered} pairs sold`;
+  const main = hi ? `${money}; ${sales} और ${stock}।` : `${money}; ${sales} and ${stock}.`;
+  if (f.uncoveredNeedRupees <= 0) return main;
+  const warn = hi
+    ? ` असली नकदी की ज़रूरत का ${inr(f.uncoveredNeedRupees)} प्लान में कवर नहीं था, इसलिए उतना और उधार लेना पड़ता।`
+    : ` The plan left ${inr(f.uncoveredNeedRupees)} of the real cash need uncovered, so it would have needed a top-up.`;
+  return main + warn;
 }

@@ -5,6 +5,7 @@ import { sampleInvoice } from "@/lib/data/invoice";
 import { planFacts, scriptFacts } from "@/lib/ai-facts";
 import { templateExplanation, templateExplanationParts, templateScript } from "@/lib/ai-templates";
 import { runEngine } from "@/lib/engine";
+import { ResultsSummaryView } from "./ResultsSummary";
 import { AiExplanationView, UNAVAILABLE_NOTE, VERIFIED_LABEL, isExplainOutcome, isVerifiedTextOutcome } from "./AiExplanation";
 import { CallScriptView, SCRIPT_UNAVAILABLE_NOTE, SCRIPT_VERIFIED_LABEL } from "./CallScriptPanel";
 import LanguageToggle from "./LanguageToggle";
@@ -159,5 +160,31 @@ describe("the language toggle", () => {
   it("offers exactly English and Hindi", () => {
     const html = renderToStaticMarkup(<LanguageToggle value="en" onChange={noop} />);
     expect((html.match(/<button/g) ?? []).length).toBe(2);
+  });
+});
+
+describe("the results summary view", () => {
+  const text = "You saved ₹11,310 compared with drawing the full amount on your credit line.";
+  it("shows the checked sentence with the verified label", () => {
+    const html = renderToStaticMarkup(<ResultsSummaryView status="verified" text={text} mock={false} language="en" onLanguage={noop} />);
+    expect(html).toContain(VERIFIED_LABEL);
+    expect(html).toContain(text);
+    expect(html).not.toContain("Mock AI");
+    expect(html).not.toContain(UNAVAILABLE_NOTE);
+  });
+  it("shows the template with a note, and no verified label, when the AI was unavailable", () => {
+    const html = renderToStaticMarkup(<ResultsSummaryView status="unavailable" text={text} mock={false} language="en" onLanguage={noop} />);
+    expect(html).toContain(UNAVAILABLE_NOTE);
+    expect(html).not.toContain(VERIFIED_LABEL);
+  });
+  it("shows a Mock AI badge in mock mode, a loading line, and an English/Hindi toggle", () => {
+    expect(renderToStaticMarkup(<ResultsSummaryView status="verified" text={text} mock language="en" onLanguage={noop} />)).toContain("Mock AI");
+    const loading = renderToStaticMarkup(<ResultsSummaryView status="loading" text="" mock={false} language="hi" onLanguage={noop} />);
+    expect(loading).toContain("Writing a one-line summary");
+    expect(loading).toContain("हिन्दी");
+    expect(loading).toContain('aria-pressed="true"');
+  });
+  it("marks Hindi text as Hindi", () => {
+    expect(renderToStaticMarkup(<ResultsSummaryView status="verified" text="x" mock={false} language="hi" onLanguage={noop} />)).toContain('lang="hi"');
   });
 });

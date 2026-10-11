@@ -31,7 +31,8 @@ export default function JourneyShell({
   const { state, ready, update, reset } = useJourney();
   const engine = useJourneyEngine();
   const access = stepAccess(state, step);
-  const fix = state.invoice === null ? STEPS[0] : STEPS[2];
+  // Where to send the founder to fix what is missing: the invoice, then a chosen plan, then approval.
+  const fix = state.invoice === null ? STEPS[0] : state.chosenView === null ? STEPS[2] : STEPS[3];
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">

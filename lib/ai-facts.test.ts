@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { merchant } from "./data/merchant";
 import { sampleInvoice } from "./data/invoice";
-import { cleanText, explainPromptFacts, planFacts, recommendedFacts, scriptFacts, type ExplainFacts } from "./ai-facts";
+import { cleanText, explainPromptFacts, planFacts, recommendedFacts, resultsFacts, scriptFacts, type ExplainFacts } from "./ai-facts";
+import { computeOutcome, OUTCOME_IDS, SIMULATED_OUTCOMES } from "./engine/outcome";
 import { runEngine } from "./engine";
 import { collectFactNumbers } from "./grounding";
 
@@ -219,5 +220,41 @@ describe("the explanation facts come from the RECOMMENDED plan only", () => {
       expect(rf.plan.unsoldPairsAtExpectedSales, `-${drop}%`).toBe(Math.max(0, view.units - Math.floor(r.stock.demandByScenario.expected)));
       expect(JSON.stringify(explainPromptFacts(f))).toContain(`${view.units}`);
     }
+  });
+});
+
+describe("the facts behind the results summary", () => {
+  const outcome = (id: (typeof OUTCOME_IDS)[number], drop = 0) => {
+    const r = run(drop);
+    return computeOutcome({ approved: r.recommended, fullOrder: r.views.keepFull, stock: r.stock, merchant, salesDropPercent: drop, cashElsewhere: 0, actual: SIMULATED_OUTCOMES[id] });
+  };
+
+  it("are the outcome's own numbers", () => {
+    const o = outcome("lower_15");
+    const f = resultsFacts(o);
+    expect(f.moneySavedRupees).toBe(Math.abs(o.cost.moneySaved));
+    expect(f.moneyDirection).toBe("saved");
+    expect(f).toMatchObject({ salesDirection: "below", salesVsForecastPercent: 15, pairsOrdered: o.stock.ordered, pairsSold: o.stock.sold, pairsLeftOver: o.stock.leftOver });
+    expect(f.uncoveredNeedRupees).toBe(o.borrowing.underFunded);
+    expect(f.nextUpliftTimes).toBe(o.learned.uplift.after);
+  });
+
+  it("say 'in line' for as-forecast and 'above' for higher sales", () => {
+    expect(resultsFacts(outcome("as_forecast")).salesDirection).toBe("in line");
+    expect(resultsFacts(outcome("higher_15"))).toMatchObject({ salesDirection: "above", salesVsForecastPercent: 15 });
+  });
+
+  it("name every ₹, % and x number so the grounding check can find it", () => {
+    const stray: string[] = [];
+    const COUNTS = new Set(["pairsOrdered", "pairsSold", "pairsLeftOver", "pairsMissed"]);
+    const walk = (v: unknown, key: string) => {
+      if (typeof v === "number" && !/(Rupees|Percent|Times)$/.test(key) && !COUNTS.has(key)) stray.push(key);
+      else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, k);
+    };
+    walk(resultsFacts(outcome("lower_15")), "");
+    expect(stray).toEqual([]);
+    const pool = collectFactNumbers(resultsFacts(outcome("lower_15")));
+    expect(pool.times).toEqual([1.4, 1.3]);
+    expect(pool.percents).toContain(15);
   });
 });

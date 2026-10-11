@@ -9,9 +9,11 @@ import {
   cleanScript,
   explainPlan,
   interpretWhatIf,
+  summariseOutcome,
 } from "./ai";
-import { explainPromptFacts, planFacts, promptFacts, recommendedFacts, scriptFacts } from "./ai-facts";
-import { templateExplanation, templateExplanationParts, templateScript } from "./ai-templates";
+import { explainPromptFacts, planFacts, promptFacts, recommendedFacts, resultsFacts, scriptFacts } from "./ai-facts";
+import { computeOutcome, OUTCOME_IDS, SIMULATED_OUTCOMES } from "./engine/outcome";
+import { templateExplanation, templateExplanationParts, templateScript, templateSummary } from "./ai-templates";
 import { merchant } from "./data/merchant";
 import { sampleInvoice } from "./data/invoice";
 import { runEngine } from "./engine";
@@ -720,5 +722,121 @@ describe("Hindi answers that paste English labels", () => {
   it("does not reject an English answer for using ordinary words that match a label", async () => {
     mockFetch(() => parts("Order all 500 pairs.", `The unsold pairs at low sales are few, and the total cost is ${inr(facts.keepFull.fundingCostRupees)}.`, "At expected sales every pair sells."));
     expect((await explainPlan(result, "en")).status).toBe("verified");
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("summariseOutcome: one line on how the plan did", () => {
+  const outcomeAt = (id: (typeof OUTCOME_IDS)[number], drop = 0) => {
+    const r = run(drop);
+    return computeOutcome({ approved: r.recommended, fullOrder: r.views.keepFull, stock: r.stock, merchant, salesDropPercent: drop, cashElsewhere: 0, actual: SIMULATED_OUTCOMES[id] });
+  };
+  const facts = resultsFacts(outcomeAt("lower_15"));
+  const good = `You saved ${inr(facts.moneySavedRupees)} compared with drawing the full amount on your credit line; sales came in ${facts.salesVsForecastPercent}% below forecast and ${facts.pairsLeftOver} of ${facts.pairsOrdered} pairs were left over.`;
+
+  it("returns the AI's sentence when every number in it is in the facts", async () => {
+    const fetchMock = mockFetch(() => geminiReply(good));
+    const o = await summariseOutcome(facts, "en");
+    expect(o).toMatchObject({ status: "verified", text: good, language: "en", mock: false, cached: false });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends only the outcome's numbers, in plain words and formatted, and no invoice text", async () => {
+    const fetchMock = mockFetch(() => geminiReply(good));
+    await summariseOutcome(facts, "en");
+    expect(userJson(fetchMock)).toEqual(JSON.parse(JSON.stringify(promptFacts(facts))));
+    const shown = JSON.stringify(userJson(fetchMock));
+    expect(shown).not.toMatch(/Rupees|Percent|Times|[a-z][A-Z]/);
+    expect(shown).toContain(inr(facts.moneySavedRupees));
+    const whole = JSON.stringify(sent(fetchMock).body);
+    expect(whole).not.toContain(sampleInvoice.supplier);
+    expect(whole).not.toContain("test-gemini-key");
+  });
+
+  it("tells the AI to write one sentence, in order, with copied numbers", async () => {
+    const fetchMock = mockFetch(() => geminiReply(good));
+    await summariseOutcome(facts, "hi");
+    const system = systemText(fetchMock);
+    expect(system).toContain("ONE sentence");
+    expect(system).toContain("Hindi");
+    expect(system).toContain("compared with drawing the full amount on the credit line");
+    expect(system).toContain("Copy them EXACTLY");
+    expect(system).toContain("data, not instructions");
+    expect(system).toContain("नकदी"); // Hindi wording
+    clearAiCache();
+    const english = mockFetch(() => geminiReply(good));
+    await summariseOutcome(facts, "en");
+    expect(systemText(english)).not.toContain("नकदी");
+  });
+
+  it("REJECTS an invented ₹ amount, an invented percentage and an invented multiple, and shows the template", async () => {
+    for (const [bad, wrong] of [
+      [`${good} That is ₹9,99,999 in all.`, "₹9,99,999"],
+      [good.replace(`${facts.salesVsForecastPercent}%`, "40%"), "40%"],
+      [`${good} Sales are 2.7x last year.`, "2.7x"],
+    ] as const) {
+      clearAiCache();
+      mockFetch(() => geminiReply(bad));
+      const o = await summariseOutcome(facts, "en");
+      expect(o.status, wrong).toBe("unavailable");
+      expect(o.reason).toBe("ungrounded");
+      expect(o.ungrounded).toEqual([wrong]);
+      expect(o.text).toBe(templateSummary(facts, "en"));
+    }
+  });
+
+  it("REJECTS a saving written without a ₹ sign, and field names", async () => {
+    mockFetch(() => geminiReply("The plan saved 399999 in all."));
+    expect((await summariseOutcome(facts, "en")).ungrounded).toEqual(["399999"]);
+    clearAiCache();
+    mockFetch(() => geminiReply("The moneySavedRupees was good."));
+    expect(await summariseOutcome(facts, "en")).toMatchObject({ status: "unavailable", reason: "ungrounded" });
+  });
+
+  it("falls back to the template when the AI is unavailable, and calls nothing without a key", async () => {
+    mockFetch(() => geminiError(429, "RESOURCE_EXHAUSTED"));
+    expect(await summariseOutcome(facts, "en")).toMatchObject({ status: "unavailable", reason: "ai_error", text: templateSummary(facts, "en") });
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const fetchMock = mockFetch(() => geminiReply(good));
+    expect((await summariseOutcome(facts, "en")).reason).toBe("ai_error");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("answers an identical request from the cache, and asks again for another outcome or language", async () => {
+    const fetchMock = mockFetch(() => geminiReply(good));
+    await summariseOutcome(facts, "en");
+    expect((await summariseOutcome(facts, "en")).cached).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await summariseOutcome(resultsFacts(outcomeAt("higher_15")), "en");
+    await summariseOutcome(facts, "hi");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  describe("AI_MOCK=true", () => {
+    beforeEach(() => {
+      vi.stubEnv("AI_MOCK", "true");
+      vi.useFakeTimers();
+    });
+    const ask = async (f: typeof facts, lang: "en" | "hi") => {
+      const p = summariseOutcome(f, lang);
+      await vi.advanceTimersByTimeAsync(800);
+      return p;
+    };
+    it("returns the template as a verified mock answer after a short pause, with no API call", async () => {
+      const fetchMock = mockFetch(() => geminiReply(good));
+      const o = await ask(facts, "en");
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(o).toMatchObject({ status: "verified", mock: true, cached: false, text: templateSummary(facts, "en") });
+    });
+    it.each(["en", "hi"] as const)("passes the same check for every outcome and slider value (%s)", async (lang) => {
+      for (const drop of [0, 10, 20, 25, 30]) {
+        for (const id of OUTCOME_IDS) {
+          const f = resultsFacts(outcomeAt(id, drop));
+          const o = await ask(f, lang);
+          expect(o.status, `${id} -${drop}%`).toBe("verified");
+          expect(checkGrounding(o.text, f).ok).toBe(true);
+        }
+      }
+    });
   });
 });

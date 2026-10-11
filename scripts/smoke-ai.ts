@@ -4,7 +4,9 @@
 // long each step took and whether the grounding check passed. Never prints the key. Run only when asked (rule 7).
 
 import { readFileSync } from "node:fs";
-import { callScript, explainPlan, extractInvoice, interpretWhatIf, type VerifiedTextOutcome } from "../lib/ai";
+import { callScript, explainPlan, extractInvoice, interpretWhatIf, summariseOutcome, type VerifiedTextOutcome } from "../lib/ai";
+import { resultsFacts } from "../lib/ai-facts";
+import { computeOutcome, SIMULATED_OUTCOMES, type OutcomeId } from "../lib/engine/outcome";
 import { merchant } from "../lib/data/merchant";
 import { sampleInvoice } from "../lib/data/invoice";
 import { runEngine } from "../lib/engine";
@@ -76,6 +78,16 @@ async function main() {
   for (const drop of [0, 25]) {
     for (const lang of ["en", "hi"] as const) {
       await timed(`explain-${lang}${drop ? `-${drop}` : ""}`, async () => showText(await explainPlan(engine(drop), lang)));
+    }
+  }
+  // After the season: summary-<language>-<outcome>, for example summary-hi-lower_15
+  for (const id of ["as_forecast", "lower_15", "higher_15"] as OutcomeId[]) {
+    for (const lang of ["en", "hi"] as const) {
+      await timed(`summary-${lang}-${id}`, async () => {
+        const r = engine();
+        const o = computeOutcome({ approved: r.recommended, fullOrder: r.views.keepFull, stock: r.stock, merchant, salesDropPercent: 0, cashElsewhere: 0, actual: SIMULATED_OUTCOMES[id] });
+        showText(await summariseOutcome(resultsFacts(o), lang));
+      });
     }
   }
   await timed("script-en", async () => {

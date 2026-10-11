@@ -159,3 +159,23 @@ describe("amounts written without a ₹ sign", () => {
     expect(checkGrounding("Order 12000 pairs, due in 30 days, in 2026, invoice INV-12345.", facts).ok).toBe(true);
   });
 });
+
+describe("multiples such as 1.3x", () => {
+  const facts = { usualUpliftTimes: 1.4, nextUpliftTimes: 1.3, moneySavedRupees: 11310 };
+  it("are found whichever way they are written", () => {
+    expect(extractMentions("start from 1.3x").map((m) => [m.kind, m.value])).toEqual([["times", 1.3]]);
+    expect(extractMentions("1.4× and 2 times").map((m) => m.value)).toEqual([1.4, 2]);
+  });
+  it("must match a number in the facts", () => {
+    expect(checkGrounding("Next time I'll start from 1.3x instead of 1.4x.", facts).ok).toBe(true);
+    const bad = checkGrounding("Next time I'll start from 1.8x.", facts);
+    expect(bad.ok).toBe(false);
+    expect(bad.ungrounded.map((m) => m.text)).toEqual(["1.8x"]);
+  });
+  it("are checked against multiples only, not against ₹ or % numbers", () => {
+    expect(checkGrounding("Start from 11310x.", facts).ok).toBe(false);
+  });
+  it("leaves ordinary words alone", () => {
+    expect(checkGrounding("A box, extra fees, six times as hard, text 5 days", facts).ok).toBe(true);
+  });
+});

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { STEPS, stepAccess, stepStatus, type StepId } from "@/lib/journey";
 import { useJourney } from "./JourneyProvider";
 
-/** Invoice → Cash gap → Options → Approve. Steps you can't open yet are greyed out. */
+/** Invoice → Cash gap → Options → Approve → Results. Steps you can't open yet are greyed out. */
 export default function Stepper({ current }: { current: StepId }) {
   const { state } = useJourney();
   return (

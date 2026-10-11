@@ -8,6 +8,7 @@ const TITLES: Record<string, string> = {
   "/gap": "Step 2: Cash gap",
   "/options": "Step 3: Options",
   "/approve": "Step 4: Approve",
+  "/results": "Step 5: Results",
 };
 
 export default function PageTitle() {

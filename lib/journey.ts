@@ -1,4 +1,4 @@
-// The decision journey: Invoice -> Cash gap -> Options -> Approve.
+// The decision journey: Invoice -> Cash gap -> Options -> Approve -> Results.
 // Everything here is plain TypeScript with no React, so it can be tested directly.
 // Money is only ever worked out by the engine and these functions, never by an AI.
 
@@ -18,6 +18,7 @@ export const STEPS = [
   { id: "gap", label: "Cash gap", href: "/gap" },
   { id: "options", label: "Options", href: "/options" },
   { id: "approve", label: "Approve", href: "/approve" },
+  { id: "results", label: "Results", href: "/results" },
 ] as const;
 export type StepId = (typeof STEPS)[number]["id"];
 
@@ -103,6 +104,9 @@ export function stepAccess(state: JourneyState, step: StepId): { reachable: bool
   if (step === "approve" && state.chosenView === null) {
     return { reachable: false, reason: "Choose a plan on the Options screen first." };
   }
+  if (step === "results" && !state.paid) {
+    return { reachable: false, reason: "Approve the plan and pay the supplier first." };
+  }
   return { reachable: true };
 }
 
@@ -118,6 +122,8 @@ export function stepComplete(state: JourneyState, step: StepId): boolean {
       return state.chosenView !== null;
     case "approve":
       return state.paid;
+    case "results":
+      return false; // the last step: it is simply where the journey ends
   }
 }
 

@@ -3,7 +3,9 @@ import { merchant } from "./data/merchant";
 import { sampleInvoice } from "./data/invoice";
 import { planFacts, scriptFacts } from "./ai-facts";
 import { formatINR as inr } from "./format";
-import { templateExplanation, templateExplanationParts, templateScript } from "./ai-templates";
+import { resultsFacts } from "./ai-facts";
+import { computeOutcome, OUTCOME_IDS, SIMULATED_OUTCOMES } from "./engine/outcome";
+import { templateExplanation, templateExplanationParts, templateScript, templateSummary } from "./ai-templates";
 import { runEngine } from "./engine";
 import { checkGrounding } from "./grounding";
 import type { Language } from "./language";
@@ -255,5 +257,72 @@ describe("the call script template", () => {
     expect(text).toMatch(DEVANAGARI);
     expect(text).not.toMatch(DEVANAGARI_DIGITS);
     expect(text).toContain("15 दिन");
+  });
+});
+
+describe("the results summary template (also the mock AI answer and the fallback)", () => {
+  const factsAt = (id: (typeof OUTCOME_IDS)[number], drop = 0, view: "recommended" | "keepFull" = "recommended") => {
+    const r = run(drop);
+    return resultsFacts(
+      computeOutcome({ approved: view === "keepFull" ? r.views.keepFull : r.recommended, fullOrder: r.views.keepFull, stock: r.stock, merchant, salesDropPercent: drop, cashElsewhere: 0, actual: SIMULATED_OUTCOMES[id] }),
+    );
+  };
+
+  it.each(BOTH)("every number is grounded in its own facts, for every outcome and slider value (%s)", (language) => {
+    for (const drop of ALL_DROPS) {
+      for (const id of OUTCOME_IDS) {
+        for (const view of ["recommended", "keepFull"] as const) {
+          const facts = factsAt(id, drop, view);
+          const text = templateSummary(facts, language);
+          const g = checkGrounding(text, facts);
+          expect(g.ungrounded.map((m) => m.text), `${language} ${id} ${view} -${drop}%`).toEqual([]);
+          expect(text.length).toBeGreaterThan(40);
+        }
+      }
+    }
+  });
+
+  it("leads with the money, then sales against forecast, then pairs left over", () => {
+    const f = factsAt("lower_15");
+    const text = templateSummary(f, "en");
+    expect(text).toContain(`You saved ${inr(f.moneySavedRupees)} compared with drawing the full amount on your credit line`);
+    expect(text).toContain("sales came in 15% below forecast");
+    expect(text).toContain(`${f.pairsLeftOver} of ${f.pairsOrdered} pairs were left over`);
+    expect(text.indexOf("saved")).toBeLessThan(text.indexOf("sales came in"));
+    expect(text.indexOf("sales came in")).toBeLessThan(text.indexOf("pairs were left over"));
+  });
+
+  it("says so plainly when sales were as forecast and every pair sold", () => {
+    const text = templateSummary(factsAt("as_forecast"), "en");
+    expect(text).toContain("sales came in as forecast");
+    expect(text).toContain("all 500 pairs sold");
+  });
+
+  it("adds a second sentence only when the plan left part of the real need uncovered", () => {
+    const short = factsAt("lower_15");
+    expect(short.uncoveredNeedRupees).toBeGreaterThan(0);
+    expect(templateSummary(short, "en")).toContain(`left ${inr(short.uncoveredNeedRupees)} of the real cash need uncovered`);
+    const fine = factsAt("as_forecast");
+    expect(fine.uncoveredNeedRupees).toBe(0);
+    expect(templateSummary(fine, "en").split(/(?<=\.)\s/).length).toBe(1);
+  });
+
+  it("is honest when the plan cost more", () => {
+    const f = { ...factsAt("as_forecast"), moneyDirection: "cost more" as const, moneySavedRupees: 450 };
+    expect(templateSummary(f, "en")).toContain("The plan cost ₹450 more than drawing the full amount on your credit line");
+    expect(checkGrounding(templateSummary(f, "en"), f).ok).toBe(true);
+  });
+
+  it("has the same numbers in English and Hindi, in Devanagari with 0-9 digits", () => {
+    for (const id of OUTCOME_IDS) {
+      const f = factsAt(id, 25);
+      const en = templateSummary(f, "en");
+      const hi = templateSummary(f, "hi");
+      const nums = (t: string) => (t.match(/[\d,.]*\d/g) ?? []).sort().join(" ");
+      expect(nums(hi), id).toBe(nums(en));
+      expect(hi).toMatch(DEVANAGARI);
+      expect(hi).not.toMatch(DEVANAGARI_DIGITS);
+      expect(en).not.toMatch(DEVANAGARI);
+    }
   });
 });

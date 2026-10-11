@@ -152,3 +152,25 @@ describe("cash available elsewhere", () => {
     expect(more.views.keepFull.askFirst.gapAtExtendedDate).toBeLessThanOrEqual(base.views.keepFull.askFirst.gapAtExtendedDate);
   });
 });
+
+
+describe("salesVsForecast (used after the season, to see what the real need was)", () => {
+  const base = { merchant, invoice: sampleInvoice };
+  it("defaults to 1: no change", () => {
+    expect(computeGap({ ...base, salesVsForecast: 1 }).gapExpected).toBe(computeGap(base).gapExpected);
+  });
+  it("lower actual sales mean a bigger gap, higher a smaller one, and it can go above 1 unlike the what-if drop", () => {
+    const g = (x: number) => computeGap({ ...base, salesVsForecast: x }).gapExpected;
+    expect(g(0.85)).toBeGreaterThan(g(1));
+    expect(g(1.15)).toBeLessThan(g(1));
+    expect(g(1.5)).toBeLessThan(g(1.15));
+  });
+  it("multiplies the what-if drop: -20% and then 0.5x is the same as 0.4x of the base forecast", () => {
+    const a = computeGap({ ...base, salesDropPercent: 20, salesVsForecast: 0.5 }).gapExpected;
+    const b = computeGap({ ...base, salesDropPercent: 60 }).gapExpected;
+    expect(a).toBe(b);
+  });
+  it("ignores a negative value", () => {
+    expect(computeGap({ ...base, salesVsForecast: -3 }).gapExpected).toBe(computeGap({ ...base, salesVsForecast: 0 }).gapExpected);
+  });
+});

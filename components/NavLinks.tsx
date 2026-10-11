@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { STEPS, stepAccess, stepStatus, type StepId } from "@/lib/journey";
 import { useJourney } from "./JourneyProvider";
 
-/** The sidebar follows the journey: Dashboard, then Invoice → Cash gap → Options → Approve. */
+/** The sidebar follows the journey: Dashboard, then Invoice → Cash gap → Options → Approve → Results. */
 export default function NavLinks() {
   const pathname = usePathname();
   const { state } = useJourney();

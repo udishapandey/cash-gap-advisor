@@ -35,6 +35,9 @@ export const CONFIG = {
   // Supplier extension: how many extra days we ask for. Shown as an "ask first" step, never in the plan.
   extensionDays: 15,
 
+  // After the season: how far the system moves its estimates toward what it observed (0 = ignore, 1 = replace).
+  learningRate: 0.5,
+
   daysPerYear: 365,
   daysPerMonth: 30,
 } as const;

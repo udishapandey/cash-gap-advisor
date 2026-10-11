@@ -29,6 +29,11 @@ export interface GapInput {
   windowEnd?: number;
   /** Cash the founder has available elsewhere (another account, savings). Added to cash in. Default 0. */
   cashElsewhere?: number;
+  /**
+   * Actual sales as a multiple of the forecast (1 = as forecast, 1.15 = 15% higher). Used after the season, to see
+   * what the real peak need turned out to be. Unlike salesDropPercent it can go above 1. Default 1.
+   */
+  salesVsForecast?: number;
 }
 
 export interface CashBreakdown {
@@ -176,13 +181,13 @@ function cashByDay(ctx: ScenarioContext, day: number): CashAt {
 
 function computeScenario(
   scenario: Scenario,
-  input: Required<Pick<GapInput, "merchant" | "invoice" | "byDay" | "windowEnd" | "salesDropPercent" | "cashElsewhere">>,
+  input: Required<Pick<GapInput, "merchant" | "invoice" | "byDay" | "windowEnd" | "salesDropPercent" | "cashElsewhere" | "salesVsForecast">>,
 ): ScenarioResult {
-  const { merchant, invoice, byDay: payDay, windowEnd, salesDropPercent, cashElsewhere } = input;
+  const { merchant, invoice, byDay: payDay, windowEnd, salesDropPercent, cashElsewhere, salesVsForecast } = input;
   const uplift = CONFIG.scenarioUplift[scenario];
   const ctx: ScenarioContext = {
     merchant,
-    forecastFactor: uplift * (1 - salesDropPercent / 100),
+    forecastFactor: uplift * (1 - salesDropPercent / 100) * salesVsForecast,
     cashElsewhere,
     base: baselineDaily(merchant),
     history: new Map(merchant.dailyOrders.map((r) => [r.day, r])),
@@ -228,7 +233,8 @@ export function computeGap(input: GapInput): GapResult {
   const windowEnd = Math.max(byDay, input.windowEnd ?? input.invoice.dueInDays);
   const salesDropPercent = Math.min(100, Math.max(0, input.salesDropPercent ?? 0));
   const cashElsewhere = Math.max(0, input.cashElsewhere ?? 0);
-  const args = { merchant: input.merchant, invoice: input.invoice, byDay, windowEnd, salesDropPercent, cashElsewhere };
+  const salesVsForecast = Math.max(0, input.salesVsForecast ?? 1);
+  const args = { merchant: input.merchant, invoice: input.invoice, byDay, windowEnd, salesDropPercent, cashElsewhere, salesVsForecast };
 
   const scenarios = Object.fromEntries(
     SCENARIOS.map((s) => [s, computeScenario(s, args)]),

@@ -6,6 +6,7 @@
 import type { Invoice } from "./data/invoice";
 import { merchant } from "./data/merchant";
 import type { EngineResult, ViewResult } from "./engine";
+import type { OutcomeResult } from "./engine/outcome";
 import { CONFIG } from "./engine/config";
 import type { OptionId, Plan } from "./engine/options";
 import { expectedLostMargin } from "./engine/stock";
@@ -284,4 +285,51 @@ export function recommendedFacts(f: ExplainFacts): RecommendedFacts {
 /** What the AI sees for the explanation: the recommended plan only, in plain words with formatted numbers. */
 export function explainPromptFacts(f: ExplainFacts): unknown {
   return promptFacts(recommendedFacts(f));
+}
+
+// ---------- The results summary ----------
+
+/** The numbers behind the one-line "how did the plan do" summary. Keys end in Rupees, Percent or Times on purpose. */
+export interface ResultsFacts {
+  /** "saved", "cost more" or "same": which way the money went against drawing the full amount on the credit line. */
+  moneyDirection: "saved" | "cost more" | "same";
+  moneySavedRupees: number;
+  /** "below", "above" or "in line": actual sales against the forecast. */
+  salesDirection: "below" | "above" | "in line";
+  salesVsForecastPercent: number;
+  insideForecastRange: boolean;
+  pairsOrdered: number;
+  pairsSold: number;
+  pairsLeftOver: number;
+  /** Pairs customers wanted that the order did not cover. */
+  pairsMissed: number;
+  /** Borrowed beyond the real peak need; and the real peak need the plan did not cover. */
+  unnecessaryBorrowingRupees: number;
+  uncoveredNeedRupees: number;
+  usualUpliftTimes: number;
+  nextUpliftTimes: number;
+  codAssumedPercent: number;
+  codObservedPercent: number;
+}
+
+export function resultsFacts(o: OutcomeResult): ResultsFacts {
+  const saved = o.cost.moneySaved;
+  const p = o.sales.vsForecastPercent;
+  return {
+    moneyDirection: saved > 0 ? "saved" : saved < 0 ? "cost more" : "same",
+    moneySavedRupees: Math.abs(saved),
+    salesDirection: Math.round(Math.abs(p)) === 0 ? "in line" : p < 0 ? "below" : "above",
+    salesVsForecastPercent: Math.abs(p),
+    insideForecastRange: o.sales.insideRange,
+    pairsOrdered: o.stock.ordered,
+    pairsSold: o.stock.sold,
+    pairsLeftOver: o.stock.leftOver,
+    pairsMissed: o.stock.missedPairs,
+    unnecessaryBorrowingRupees: o.borrowing.unnecessary,
+    uncoveredNeedRupees: o.borrowing.underFunded,
+    usualUpliftTimes: o.learned.uplift.before,
+    nextUpliftTimes: o.learned.uplift.after,
+    codAssumedPercent: o.learned.codReturnRate.assumedPercent,
+    codObservedPercent: o.learned.codReturnRate.observedPercent,
+  };
 }

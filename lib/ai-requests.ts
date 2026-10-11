@@ -2,6 +2,7 @@
 // reruns the engine, so the AI only ever sees numbers the engine produced, never numbers the browser made up.
 
 import { z } from "zod";
+import { OUTCOME_IDS } from "./engine/outcome";
 import { LANGUAGES } from "./language";
 import { invoiceSchema, type JourneyState } from "./journey";
 
@@ -23,6 +24,13 @@ export const scriptRequestSchema = z.object({
   language,
   /** Which plan the call is about. Defaults to the plan the numbers favour. */
   view: z.enum(["keep_full", "right_sized"]).optional(),
+});
+export const resultsRequestSchema = z.object({
+  /** The state the plan was approved on, the plan that was approved, and which simulated outcome to summarise. */
+  state: stateSchema,
+  view: z.enum(["keep_full", "right_sized"]),
+  outcome: z.enum(OUTCOME_IDS),
+  language,
 });
 export const whatIfRequestSchema = z.object({ question: z.string().trim().min(1).max(300) });
 

@@ -6,7 +6,7 @@
 export interface Mention {
   /** The text as written, e.g. "₹2.3 lakh". */
   text: string;
-  kind: "rupees" | "percent";
+  kind: "rupees" | "percent" | "times";
   /** The amount in rupees, or the percentage. */
   value: number;
   /** How far from a fact it may be and still count as the same number (rounding). */
@@ -128,17 +128,27 @@ export function extractMentions(input: string): Mention[] {
     const half = 0.5 * Math.pow(10, -decimals); // "55%" may stand for 54.75, "54.8%" for 54.75
     out.push({ text: m[0].trim(), kind: "percent", value, tolerance: () => half + 1e-9 });
   }
+
+  // Multiples: 1.3x, 1.4×, 2 times. Only when written right after a digit, so ordinary words are left alone.
+  const times = /(?<![\w.])(\d+(?:\.\d+)?)\s*(?:x|×|times)(?![A-Za-z])/gi;
+  for (let m = times.exec(text); m; m = times.exec(text)) {
+    const { value, decimals } = parseNumber(m[1]);
+    const half = 0.5 * Math.pow(10, -decimals); // "1.3x" may stand for 1.32
+    out.push({ text: m[0].trim(), kind: "times", value, tolerance: () => half + 1e-9 });
+  }
   return out;
 }
 
-/** The ₹ and % numbers in the facts. Which pool a number belongs to comes from its key: "...Rupees" or "...Percent". */
-export function collectFactNumbers(facts: unknown): { rupees: number[]; percents: number[] } {
+/** The ₹, % and multiple (x) numbers in the facts. Which pool a number belongs to comes from its key: "...Rupees", "...Percent" or "...Times". */
+export function collectFactNumbers(facts: unknown): { rupees: number[]; percents: number[]; times: number[] } {
   const rupees: number[] = [];
   const percents: number[] = [];
+  const times: number[] = [];
   const walk = (value: unknown, key: string) => {
     if (typeof value === "number" && Number.isFinite(value)) {
       if (/Rupees$/.test(key)) rupees.push(Math.abs(value));
       else if (/Percent$/.test(key)) percents.push(Math.abs(value));
+      else if (/Times$/.test(key)) times.push(Math.abs(value));
     } else if (Array.isArray(value)) {
       value.forEach((v) => walk(v, key));
     } else if (value && typeof value === "object") {
@@ -146,7 +156,7 @@ export function collectFactNumbers(facts: unknown): { rupees: number[]; percents
     }
   };
   walk(facts, "");
-  return { rupees, percents };
+  return { rupees, percents, times };
 }
 
 /** Does every ₹ amount and % in `text` match a number in `facts`? */
@@ -154,7 +164,7 @@ export function checkGrounding(text: string, facts: unknown): GroundingResult {
   const pool = collectFactNumbers(facts);
   const mentions = extractMentions(text);
   const ungrounded = mentions.filter((m) => {
-    const candidates = m.kind === "rupees" ? pool.rupees : pool.percents;
+    const candidates = m.kind === "rupees" ? pool.rupees : m.kind === "percent" ? pool.percents : pool.times;
     return !candidates.some((fact) => Math.abs(m.value - fact) <= m.tolerance(fact));
   });
   return { ok: ungrounded.length === 0, mentions, ungrounded };

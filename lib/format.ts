@@ -7,3 +7,8 @@ export function formatINR(amount: number): string {
 export function formatPct(value: number): string {
   return `${Number(value.toFixed(2))}%`;
 }
+
+/** ₹ with a minus sign in front for a negative amount: -7942 -> "−₹7,942". */
+export function formatSignedINR(amount: number): string {
+  return amount < 0 ? `−${formatINR(-amount)}` : formatINR(amount);
+}

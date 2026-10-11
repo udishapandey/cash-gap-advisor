@@ -12,11 +12,15 @@ vi.mock("@/lib/ai", async (importOriginal) => ({
   explainPlan: vi.fn(),
   callScript: vi.fn(),
   interpretWhatIf: vi.fn(),
+  summariseOutcome: vi.fn(),
 }));
-import { callScript, explainPlan, interpretWhatIf } from "@/lib/ai";
+import { callScript, explainPlan, interpretWhatIf, summariseOutcome } from "@/lib/ai";
 import { POST as explainRoute } from "./explain/route";
 import { POST as scriptRoute } from "./call-script/route";
 import { POST as whatIfRoute } from "./what-if/route";
+import { POST as resultsRoute } from "./results-summary/route";
+import { resultsFacts } from "@/lib/ai-facts";
+import { computeOutcome, SIMULATED_OUTCOMES } from "@/lib/engine/outcome";
 
 const state = { invoice: sampleInvoice, salesDropPercent: 30, cashElsewhere: 0, overdraftRatePct: 14 };
 const post = (body: unknown, raw?: string) =>
@@ -26,6 +30,7 @@ const outcome = { status: "verified", text: "ok", language: "en", mock: false, c
 beforeEach(() => {
   vi.mocked(explainPlan).mockReset().mockResolvedValue(outcome as never);
   vi.mocked(callScript).mockReset().mockResolvedValue(outcome as never);
+  vi.mocked(summariseOutcome).mockReset().mockResolvedValue(outcome as never);
   vi.mocked(interpretWhatIf).mockReset().mockResolvedValue({ status: "mapped", settings: { salesDropPercent: 25 }, trace: "t", mock: false, cached: false });
 });
 afterEach(() => vi.restoreAllMocks());
@@ -143,5 +148,54 @@ describe("POST /api/ai/what-if", () => {
     const spies = (["log", "info", "warn", "error"] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
     await whatIfRoute(post({ question: "my secret question about sales" }));
     expect(spies.flatMap((s) => s.mock.calls).flat().map(String).join(" ")).not.toContain("secret question");
+  });
+});
+
+describe("POST /api/ai/results-summary", () => {
+  const body = { state, view: "right_sized", outcome: "lower_15", language: "en" };
+
+  it("reruns the engine and the outcome on the server, and gives the AI only the outcome's facts", async () => {
+    const res = await resultsRoute(post(body));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, outcome });
+    const [facts, language] = vi.mocked(summariseOutcome).mock.calls[0];
+    const r = runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: 30, cashElsewhere: 0, overdraftRatePct: 14 });
+    const expected = resultsFacts(
+      computeOutcome({ approved: r.views.rightSized, fullOrder: r.views.keepFull, stock: r.stock, merchant, salesDropPercent: 30, cashElsewhere: 0, actual: SIMULATED_OUTCOMES.lower_15 }),
+    );
+    expect(language).toBe("en");
+    expect(facts).toEqual(expected);
+    expect(facts.salesDirection).toBe("below");
+  });
+
+  it("uses the plan that was approved, not the one the numbers favour", async () => {
+    await resultsRoute(post({ ...body, view: "keep_full" }));
+    const [facts] = vi.mocked(summariseOutcome).mock.calls[0];
+    expect(facts.pairsOrdered).toBe(sampleInvoice.units);
+  });
+
+  it.each([
+    ["no plan", { ...body, view: undefined }],
+    ["an unknown plan", { ...body, view: "both" }],
+    ["an unknown outcome", { ...body, outcome: "much_higher" }],
+    ["an unknown language", { ...body, language: "fr" }],
+    ["no invoice", { ...body, state: { ...state, invoice: undefined } }],
+  ])("refuses %s with a 400, and never calls the AI", async (_n, b) => {
+    expect((await resultsRoute(post(b))).status).toBe(400);
+    expect(vi.mocked(summariseOutcome)).not.toHaveBeenCalled();
+  });
+
+  it("refuses a body that isn't JSON or is far too large, and is never cached", async () => {
+    expect((await resultsRoute(post(null, "nope"))).status).toBe(400);
+    expect((await resultsRoute(post(null, JSON.stringify({ pad: "x".repeat(25_000) })))).status).toBe(413);
+    expect((await resultsRoute(post(body))).headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("logs only that it was unavailable and why, never the request", async () => {
+    vi.mocked(summariseOutcome).mockResolvedValue({ ...outcome, status: "unavailable", reason: "ungrounded" } as never);
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await resultsRoute(post(body));
+    expect(err).toHaveBeenCalledWith("[ai/results-summary] unavailable: ungrounded");
+    expect(JSON.stringify(err.mock.calls)).not.toContain(sampleInvoice.supplier);
   });
 });

@@ -4,8 +4,8 @@
 
 |  |  |
 |---|---|
-| **Live demo** | [add your Vercel URL here](#) |
-| **Demo video** | [add your video link here](#) |
+| **Live demo** | [cash-gap-advisor-qus7-git-main-razorpay-isb.vercel.app](https://cash-gap-advisor-qus7-git-main-razorpay-isb.vercel.app/) |
+| **Demo video** | *Coming Tuesday* |
 | **Status** | Concept prototype for the Razorpay x ISB AI PM challenge. Not affiliated with Razorpay. |
 
 > Everything about the merchant (sales, COD cash, bank balance, loan approval, the Touch ID tap, the post-season result) is **simulated and labelled "Simulated" on screen**. The invoice reading, the cost calculator, the what-if, the explanation and the call script are real.
@@ -95,7 +95,7 @@ It was tested the hard way. The first live explanation passed every automated ch
 - **Key Fact Statement first.** Credit is shown separately, with the RBI-style Key Fact Statement and an explicit consent, before anything is drawn. *(The lender, fees and contacts in it are labelled "Illustrative values": it is a prototype.)*
 - **Loan to the founder's own account, then a separate supplier payment** (as the RBI Digital Lending Directions require). The bank overdraft is drawn by the founder at their own bank, outside the approval.
 - **The invoice is never stored.** It is read in memory, never saved to disk, and its contents and file name are never logged.
-- **No dark patterns.** No pre-selected loan, no countdown timers, every cost shown side by side. Options that aren't Razorpay's, such as the founder's own bank overdraft, are compared on the same terms and used whenever they are cheapest.
+- **No dark patterns.** No pre-selected loan, no countdown timers, every cost shown side by side. The plan compares Razorpay and non-Razorpay sources on equal terms and uses whichever is cheaper: in the demo, the founder's own bank overdraft (₹1,00,000 at 14%) is used before Razorpay's credit line because it costs less for the days needed. Every funding step is tagged with who provides it, and the overdraft is marked "Your own bank, not Razorpay" on the Options and Approve screens.
 - **Standby instead of over-borrowing.** The plan is sized to *expected* sales, so the founder never borrows for a case that may not happen. The extra cash that *could* be needed at low sales is shown as **Standby**: covered by unused credit-line headroom, **₹0 cost unless drawn**, never drawn automatically, with a warning if the headroom can't cover it.
 - **A supplier extension is a request, never funding.** It appears as "Ask first" with a call script, and no plan ever depends on it.
 - **A money product must never under-borrow.** Every plan is sized to the *peak* cumulative shortfall across every day up to the due date, not one day's snapshot. A test checks that no plan, slider value or scenario ever leaves the balance negative on any day.
@@ -146,7 +146,7 @@ Variables (all in `.env.local`, which is git-ignored; never commit a key):
 | `AI_MOCK` | `true` makes every AI feature return a built-in answer after a short pause, with **no API call and no key needed**. Mock answers go through the same grounding check and show a "Mock AI" badge. Use it for development and demos without a quota. **It must never be on in production.** |
 
 ```bash
-npm test                     # 649 tests across 26 files; AI is always mocked, no network
+npm test                     # 653 tests across 26 files; AI is always mocked, no network
 npm run build                # production build
 npm run smoke:ai             # LIVE: calls the real model once per feature. Run sparingly (free-tier quota).
 npm run smoke:ai -- 2 explain-hi   # cap the calls, and run just one step
@@ -175,12 +175,13 @@ Sample invoices (synthetic) are in `public/samples/`. If the AI is unavailable t
 - State lives in the browser session only. No accounts, no persistence.
 - Vercel's request-body limit (4.5 MB) is below the 5 MB upload limit, so very large invoice files can fail in production.
 - The free Gemini tier is small; use `AI_MOCK=true` for development.
-- Not built from the spec: forwarding the invoice by chat, and the optional Razorpay test-mode API call.
+- Invoice forwarding: today, upload. Next: forward the invoice on WhatsApp to Razorpay's RAY assistant.
+- Not built from the spec: the optional Razorpay test-mode API call.
 
 **Roadmap**
 
 - Replace simulated data with the merchant's real Razorpay settlement and COD history; train the sales and return estimates on it.
-- RazorpayX bill detection, so the invoice arrives without an upload.
+- Invoice forwarding: today, upload. Next: forward the invoice on WhatsApp to Razorpay's RAY assistant. Later, RazorpayX bill detection, so no forwarding is needed.
 - A native-speaker review of the Hindi, and more languages.
 - Learn from many seasons instead of one; show forecast error over time.
 - A real partner-lender integration with a genuine Key Fact Statement, and the Razorpay test-mode call.

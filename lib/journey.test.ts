@@ -14,6 +14,8 @@ import {
   daysOut,
   earlyPayDay,
   earlySettlementWhy,
+  overdraftFirstNote,
+  SOURCE_TAGS,
   earlySettlementInsight,
   needsCreditConsent,
   parseJourney,
@@ -415,5 +417,70 @@ describe("funding cards: yearly rate AND rupee cost, and why early settlement is
     expect(daysOut(options.find((o) => o.id === "early_settlement")!, 2, 30)).toBe(2);
     expect(daysOut(options.find((o) => o.id === "credit_line")!, 2, 30)).toBe(30);
     expect(daysOut(options.find((o) => o.id === "split_order")!, 2, 30)).toBeNull();
+  });
+});
+
+describe("who provides each source, and why the founder's own overdraft goes first", () => {
+  const run = (drop = 0, extra: Partial<EngineInput> = {}) => runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop, ...extra });
+  const planOf = (view: ReturnType<typeof run>["views"]["keepFull"]) => ({
+    options: view.recommended.timing === "pay_early_for_discount" ? view.earlyOptions : view.options,
+    steps: view.recommended.plan.steps,
+    loanDays: tenureDays(view),
+  });
+
+  it("tags the bank overdraft as the founder's own bank, not Razorpay, and the credit line as Razorpay's", () => {
+    expect(SOURCE_TAGS.bank_overdraft).toEqual({ label: "Your own bank, not Razorpay", razorpay: false });
+    expect(SOURCE_TAGS.credit_line.razorpay).toBe(true);
+    expect(SOURCE_TAGS.credit_line.label).toContain("simulated");
+    expect(SOURCE_TAGS.early_settlement.razorpay).toBe(true);
+    expect(SOURCE_TAGS.split_order.razorpay).toBe(false);
+    for (const id of Object.keys(SOURCE_TAGS)) expect(SOURCE_TAGS[id as keyof typeof SOURCE_TAGS].label.length).toBeGreaterThan(5);
+  });
+
+  it("in the demo, the overdraft (₹1,00,000 at 14%) is used before the credit line because it costs less for the days needed", () => {
+    const view = run(0).views.keepFull;
+    const steps = view.recommended.plan.steps;
+    const iOd = steps.findIndex((s) => s.optionId === "bank_overdraft");
+    const iCredit = steps.findIndex((s) => s.optionId === "credit_line");
+    expect(iOd).toBeGreaterThanOrEqual(0);
+    expect(iCredit).toBeGreaterThan(iOd); // the overdraft comes first in the plan
+    expect(steps[iOd].amount).toBe(merchant.overdraftLimit);
+    expect(steps[iOd].amount).toBe(100_000);
+    const note = overdraftFirstNote(planOf(view))!;
+    expect(note).toContain("Your own bank overdraft (₹1,00,000 at 14%)");
+    expect(note).toContain("Razorpay's credit line (18%)");
+    expect(note).toContain("costs less for the 33 days needed");
+    // The two costs it quotes are real: the overdraft's own step cost, and the credit line's rate on the same amount.
+    expect(note).toContain(formatINR(steps[iOd].cost));
+    const credit = view.earlyOptions.find((o) => o.id === "credit_line")!;
+    expect(note).toContain(formatINR(Math.round(100_000 * credit.costRate)));
+    expect(steps[iOd].cost).toBeLessThan(Math.round(100_000 * credit.costRate));
+  });
+
+  it("holds for every plan and slider value that uses both: the overdraft is never the dearer one used first", () => {
+    for (const drop of [0, 10, 20, 25, 30]) {
+      const r = run(drop);
+      for (const view of [r.views.keepFull, r.views.rightSized]) {
+        const p = planOf(view);
+        const od = p.options.find((o) => o.id === "bank_overdraft")!;
+        const credit = p.options.find((o) => o.id === "credit_line")!;
+        const iOd = p.steps.findIndex((s) => s.optionId === "bank_overdraft");
+        const iCredit = p.steps.findIndex((s) => s.optionId === "credit_line");
+        if (iOd >= 0 && iCredit >= 0) {
+          expect(od.costRate < credit.costRate ? iOd < iCredit : iCredit < iOd, `${view.id} -${drop}%`).toBe(true);
+          expect(overdraftFirstNote(p) !== null, `${view.id} -${drop}%`).toBe(od.costRate < credit.costRate);
+        }
+      }
+    }
+  });
+
+  it("says nothing when the plan doesn't use both, or when the overdraft is not the cheaper", () => {
+    const rich = run(0, { cashElsewhere: 5_000_000 }).views.keepFull;
+    expect(overdraftFirstNote(planOf(rich))).toBeNull();
+    const dear = run(0, { overdraftRatePct: 30 }).views.keepFull; // a 30% overdraft costs more than the 18% credit line
+    expect(overdraftFirstNote(planOf(dear))).toBeNull();
+    const iOd = dear.recommended.plan.steps.findIndex((s) => s.optionId === "bank_overdraft");
+    const iCredit = dear.recommended.plan.steps.findIndex((s) => s.optionId === "credit_line");
+    if (iOd >= 0 && iCredit >= 0) expect(iCredit).toBeLessThan(iOd); // then the credit line really does come first
   });
 });

@@ -41,11 +41,16 @@ export function heroLine(o: OutcomeResult): string {
   return `${formatINR(-total)} worse off: ${parts.join(" + ")}`;
 }
 
+/** The sentence for a default that cannot cover the whole gap: what the founder could not have funded. */
+export function defaultCannotFund(o: OutcomeResult): string {
+  return `Without a plan, the founder couldn't fund ${formatINR(o.cost.default.uncovered)} — they would have to pay late or cut the order.`;
+}
+
 /** What the hero number is measured against, in words. */
 export function heroBasis(o: OutcomeResult): string {
   return o.cost.default.coversWholeGap
     ? "Compared with the default: credit line up to its limit, then your bank overdraft for the rest, paid on the due date with no discount."
-    : `Compared with the default: credit line up to its limit, then your bank overdraft. Even those two cannot cover the whole gap (${formatINR(o.cost.default.uncovered)} short), so the default's cost is understated and your saving is, if anything, bigger.`;
+    : `Compared with the default: credit line up to its limit, then your bank overdraft. ${defaultCannotFund(o)} The default's cost covers only what it could draw, so your saving is, if anything, bigger.`;
 }
 
 /** "What I learned": plain sentences about the sales forecast and the COD return rate. */

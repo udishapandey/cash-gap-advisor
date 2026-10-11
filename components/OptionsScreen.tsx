@@ -15,7 +15,9 @@ import {
   earlyPayDay,
   earlySettlementInsight,
   earlySettlementWhy,
+  overdraftFirstNote,
   quoteOption,
+  SOURCE_TAGS,
   tenureDays,
   type JourneyState,
 } from "@/lib/journey";
@@ -166,6 +168,7 @@ function PlanCard({
   // The options this plan was built from: loans run a few days longer when the plan pays early.
   const planOptions = early ? view.earlyOptions : view.options;
   const loanDays = tenureDays(view);
+  const overdraftNote = overdraftFirstNote({ options: planOptions, steps: plan.steps, loanDays });
   const cut = stock.fullUnits - view.units;
   const reason =
     id === "right_sized"
@@ -248,7 +251,8 @@ function PlanCard({
                       }`}
                     >
                       {s.isBorrowing ? "Loan" : "Not a loan"}
-                    </span>
+                    </span>{" "}
+                    <SourceTag id={s.optionId} />
                   </span>
                   <span className="text-right tabular-nums">
                     {formatINR(s.amount)} <span className="text-xs text-muted">cost {formatINR(s.cost)}</span>
@@ -265,6 +269,7 @@ function PlanCard({
           })}
         </ul>
       )}
+      {overdraftNote && <p className="mt-2 rounded-md bg-green-50 px-2 py-1 text-xs text-green-900">{overdraftNote}</p>}
       <StandbyLine view={view} />
       {!plan.fullyCovered && (
         <p role="alert" className="mt-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -325,8 +330,21 @@ function CapNote({ option, view }: { option: FundingOption; view: ViewResult }) 
   }
 }
 
+/** Who provides a source: green for Razorpay's, blue for the founder's own bank or supplier. */
+function SourceTag({ id }: { id: FundingOption["id"] }) {
+  const tag = SOURCE_TAGS[id];
+  return (
+    <span
+      className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${tag.razorpay ? "bg-slate-100 text-slate-700" : "bg-blue-100 text-blue-800"}`}
+    >
+      {tag.label}
+    </span>
+  );
+}
+
 function OptionCard({
   title,
+  source,
   available,
   unavailableReason,
   costLine,
@@ -340,6 +358,8 @@ function OptionCard({
   simulated,
 }: {
   title: string;
+  /** Who provides this source, shown as a tag. */
+  source?: FundingOption["id"];
   available: boolean;
   unavailableReason?: string;
   costLine: string;
@@ -358,6 +378,7 @@ function OptionCard({
     <article aria-label={title} className={`rounded-xl border border-line bg-card p-4 ${available ? "" : "opacity-60"}`}>
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold">{title}</h3>
+        {source && <SourceTag id={source} />}
         <span
           className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
             available ? "bg-green-100 text-green-800" : "bg-slate-200 text-slate-700"
@@ -602,6 +623,7 @@ function OptionsBody({
               <OptionCard
                 key={o.id}
                 title={o.name}
+                source={o.id}
                 available={q.available}
                 unavailableReason={
                   o.id === "early_settlement"

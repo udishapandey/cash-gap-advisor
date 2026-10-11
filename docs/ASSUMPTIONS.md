@@ -165,6 +165,7 @@ Where each value lives in code: `lib/engine/config.ts` (rates and multipliers), 
 | 104 | AI checks: multiples | A multiple such as "1.3x" in AI text is now checked like a ₹ amount or a %: it must match a "...Times" number in the facts. |
 | 105 | Standby | The plan is sized to EXPECTED sales, with no upfront buffer (borrowing for a case that may not happen costs real money). Standby is the extra cash that could be needed at the low end of the sales forecast: the low scenario's peak need minus what the plan already covers, on the day it peaks. It is covered by unused credit-line headroom (limit minus what the plan draws), costs ₹0 unless drawn, and is never drawn automatically. If the headroom cannot cover it, Options and Approve show a warning with the shortfall. The founder's own bank overdraft is not counted in the headroom. |
 | 106 | Results: standby | On Results, cash needed beyond the plan at lower sales is described as "drawn from standby" (up to the unused headroom); anything beyond the headroom is shown separately as not covered by standby. |
+| 107 | Who provides each source | Early settlement is the founder's own Razorpay sales money; the credit line is a simulated Razorpay partner credit product (the lender is a placeholder); the bank overdraft is the founder's own bank, not Razorpay; the split order is agreed with the supplier. Each is tagged on the Options and Approve screens. The plan uses whichever source is cheapest for the days needed, whoever provides it. |
 
 ### Known limitation: the loan still grows as sales drop
 

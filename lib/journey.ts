@@ -164,6 +164,31 @@ export function earlySettlementInsight(option: FundingOption): string | null {
   return `${CONFIG.earlySettlementFeePct.toFixed(2)}% ≈ ${Math.round(option.annualisedPct)}% a year here`;
 }
 
+/** Who provides each source, so the screen never lets a bank overdraft pass for a Razorpay product. */
+export const SOURCE_TAGS: Record<FundingOption["id"], { label: string; razorpay: boolean }> = {
+  early_settlement: { label: "Your Razorpay sales money", razorpay: true },
+  credit_line: { label: "Razorpay partner credit (simulated)", razorpay: true },
+  bank_overdraft: { label: "Your own bank, not Razorpay", razorpay: false },
+  split_order: { label: "Agreed with your supplier", razorpay: false },
+};
+
+/**
+ * When the plan uses the founder's own bank overdraft before the Razorpay credit line, say why, in numbers: it costs
+ * less for the days the money is needed. Returns null if the plan doesn't use both, or the overdraft isn't cheaper.
+ */
+export function overdraftFirstNote(args: { options: FundingOption[]; steps: PlanStep[]; loanDays: number }): string | null {
+  const { options, steps, loanDays } = args;
+  const od = options.find((o) => o.id === "bank_overdraft");
+  const credit = options.find((o) => o.id === "credit_line");
+  const odStep = steps.find((s) => s.optionId === "bank_overdraft");
+  const creditStep = steps.find((s) => s.optionId === "credit_line");
+  if (!od || !credit || !odStep || !creditStep || od.costRate >= credit.costRate) return null;
+  const sameAmount = odStep.amount;
+  const odCost = Math.round(sameAmount * od.costRate);
+  const creditCost = Math.round(sameAmount * credit.costRate);
+  return `Your own bank overdraft (${formatINR(sameAmount)} at ${od.annualisedPct}%) is used before Razorpay's credit line (${credit.annualisedPct}%) because it costs less for the ${loanDays} days needed: ${formatINR(odCost)} against ${formatINR(creditCost)} on the same ${formatINR(sameAmount)}.`;
+}
+
 /** How many days the money from this option is out: early settlement only brings money forward a few days. */
 export function daysOut(option: FundingOption, settlementDays: number, loanDays: number): number | null {
   if (option.id === "early_settlement") return settlementDays;

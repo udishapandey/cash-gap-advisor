@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { OUTCOME_IDS, SIMULATED_OUTCOMES, type OutcomeId, type OutcomeResult } from "@/lib/engine/outcome";
 import { formatINR, formatSignedINR } from "@/lib/format";
-import { heroBasis, heroLine, learnedLines, outcomeForState } from "@/lib/results";
+import { defaultCannotFund, heroBasis, heroLine, learnedLines, outcomeForState } from "@/lib/results";
 import type { Language } from "@/lib/language";
 import JourneyShell, { type ShellContext } from "./JourneyShell";
 import ResultsSummary from "./ResultsSummary";
@@ -228,12 +228,7 @@ function CostCard({ o }: { o: OutcomeResult }) {
         </div>
       </dl>
       <p className="mt-2 text-xs text-muted">The default: {def.label}.</p>
-      {!def.coversWholeGap && (
-        <p className="mt-1 text-xs text-amber-800">
-          Credit line and overdraft together cannot cover the default&apos;s whole gap: {formatINR(def.uncovered)} would be left
-          unpaid. Its cost above covers only what it could draw, so your real saving is, if anything, bigger.
-        </p>
-      )}
+      {!def.coversWholeGap && <p className="mt-1 text-xs text-amber-800">{defaultCannotFund(o)}</p>}
     </Card>
   );
 }

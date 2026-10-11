@@ -5,7 +5,7 @@ import { runEngine } from "./engine";
 import { computeOutcome, OUTCOME_IDS, SIMULATED_OUTCOMES } from "./engine/outcome";
 import { formatINR, formatSignedINR } from "./format";
 import { DEFAULT_JOURNEY } from "./journey";
-import { heroBasis, heroLine, learnedLines, outcomeForState } from "./results";
+import { defaultCannotFund, heroBasis, heroLine, learnedLines, outcomeForState } from "./results";
 
 const run = (drop = 0) => runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop });
 const state = (drop = 0, chosenView: "keep_full" | "right_sized" | null = "keep_full") => ({ ...DEFAULT_JOURNEY, salesDropPercent: drop, chosenView });
@@ -64,8 +64,12 @@ describe("the hero line", () => {
     expect(heroBasis(at("as_forecast"))).toContain("credit line up to its limit, then your bank overdraft");
     const big = at("as_forecast", 25);
     expect(big.cost.default.coversWholeGap).toBe(false);
-    expect(heroBasis(big)).toContain(`${formatINR(big.cost.default.uncovered)} short`);
+    expect(defaultCannotFund(big)).toBe(
+      `Without a plan, the founder couldn't fund ${formatINR(big.cost.default.uncovered)} — they would have to pay late or cut the order.`,
+    );
+    expect(heroBasis(big)).toContain(defaultCannotFund(big));
     expect(heroBasis(big)).toContain("your saving is, if anything, bigger");
+    expect(heroBasis(at("as_forecast"))).not.toContain("couldn't fund");
   });
 });
 

@@ -13,6 +13,8 @@ import {
   consentText,
   earlyPayDay,
   needsCreditConsent,
+  overdraftFirstNote,
+  SOURCE_TAGS,
   SIMULATED_ACCOUNT,
   splitPlan,
   supplierPayment,
@@ -38,6 +40,11 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
   const stage = approvalStage(state);
   const pay = supplierPayment(view);
   const kfs = sections.creditLine ? buildKfs(sections.creditLine.amount, tenureDays(view)) : null;
+  const overdraftNote = overdraftFirstNote({
+    options: view.recommended.timing === "pay_early_for_discount" ? view.earlyOptions : view.options,
+    steps: plan.steps,
+    loanDays: tenureDays(view),
+  });
 
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState<null | "touch" | "pay">(null);
@@ -182,18 +189,29 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
 
         {sections.overdraft && (
           <div className="mt-4 rounded-lg border border-line p-4">
-            <h3 className="text-sm font-semibold">Your own bank overdraft: {formatINR(sections.overdraft.amount)}</h3>
+            <h3 className="text-sm font-semibold">
+              Your own bank overdraft: {formatINR(sections.overdraft.amount)}{" "}
+              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-800">
+                {SOURCE_TAGS.bank_overdraft.label}
+              </span>
+            </h3>
             <p className="mt-1 text-sm">
               At {formatPct(state.overdraftRatePct)} a year the cost is about {formatINR(sections.overdraft.cost)}.
               You draw this yourself at your own bank. It is not part of this approval, and we never draw it for you.
             </p>
+            {overdraftNote && <p className="mt-2 text-xs text-green-900">{overdraftNote}</p>}
           </div>
         )}
 
         {kfs && sections.creditLine && (
           <div className="mt-4 space-y-4">
             <div>
-              <h3 className="text-sm font-semibold">Credit line from {kfs.lender}</h3>
+              <h3 className="text-sm font-semibold">
+                Credit line from {kfs.lender}{" "}
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
+                  {SOURCE_TAGS.credit_line.label}
+                </span>
+              </h3>
               <p className="mt-1 text-sm">
                 Borrow <strong>{formatINR(kfs.loanAmount)}</strong> at {kfs.annualRatePct}% a year for {kfs.tenureDays}{" "}
                 days. Total interest {formatINR(kfs.totalInterest)}. You repay{" "}

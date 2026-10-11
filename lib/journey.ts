@@ -9,6 +9,7 @@ import { CONFIG } from "./engine/config";
 import { amountDueOn } from "./engine/gap";
 import { interestRate, type FundingOption, type PlanStep } from "./engine/options";
 import { formatINR } from "./format";
+import type { Language } from "./language";
 
 // ---------- Steps ----------
 
@@ -39,6 +40,8 @@ export interface JourneyState {
   chosenView: ViewId | null;
   approved: boolean;
   paid: boolean;
+  /** The language of the AI explanation and call script. */
+  language: Language;
 }
 
 export const DEFAULT_JOURNEY: JourneyState = {
@@ -50,12 +53,13 @@ export const DEFAULT_JOURNEY: JourneyState = {
   chosenView: null,
   approved: false,
   paid: false,
+  language: "en",
 };
 
 /** The inputs that change the numbers. Changing one clears any chosen plan and approval. */
 export const INPUT_KEYS = ["salesDropPercent", "cashElsewhere", "overdraftRatePct"] as const;
 
-const invoiceSchema = z.object({
+export const invoiceSchema = z.object({
   simulated: z.boolean(),
   supplier: z.string(),
   invoiceNumber: z.string(),
@@ -78,6 +82,7 @@ const journeySchema = z.object({
   chosenView: z.enum(["keep_full", "right_sized"]).nullable().catch(null),
   approved: z.boolean().catch(false),
   paid: z.boolean().catch(false),
+  language: z.enum(["en", "hi"]).catch("en"),
 });
 
 /** Read saved state. Never throws: anything unusable becomes the default. */

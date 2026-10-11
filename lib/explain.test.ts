@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { merchant } from "./data/merchant";
 import { sampleInvoice } from "./data/invoice";
 import { runEngine, type EngineInput } from "./engine";
-import { explainPlan } from "./explain";
+import { explainPlanTemplate } from "./explain";
 import { formatINR } from "./format";
 
 const run = (extra: Partial<EngineInput> = {}, invoice = sampleInvoice) => runEngine({ merchant, invoice, ...extra });
@@ -14,7 +14,7 @@ describe("Why this plan (plain-text template)", () => {
     const r = run({}, dueDateInvoice);
     const view = r.views.keepFull;
     const s = view.gap.scenarios.expected;
-    const out = text(explainPlan(view, r.stock));
+    const out = text(explainPlanTemplate(view, r.stock));
     expect(out).toContain(`Cash needed by day 10: invoice ${formatINR(s.invoiceDue)} + other outflows ${formatINR(s.otherOutflows)} = ${formatINR(s.cashOut)}`);
     expect(out).toContain(`Cash expected by then: ${formatINR(s.cash.totalIn)}`);
     expect(out).toContain(`bank balance ${formatINR(s.cash.bankBalance)}`);
@@ -24,7 +24,7 @@ describe("Why this plan (plain-text template)", () => {
   it("shows amount × rate = cost for every step, cheapest first, and the totals", () => {
     const r = run({}, dueDateInvoice);
     const view = r.views.keepFull;
-    const lines = explainPlan(view, r.stock);
+    const lines = explainPlanTemplate(view, r.stock);
     for (const step of view.recommended.plan.steps) {
       expect(text(lines)).toContain(`${step.name}: ${formatINR(step.amount)} × `);
       expect(text(lines)).toContain(`= ${formatINR(step.cost)}`);
@@ -37,7 +37,7 @@ describe("Why this plan (plain-text template)", () => {
 
   it("says why an option was not used", () => {
     const r = run({}, dueDateInvoice);
-    const out = text(explainPlan(r.views.keepFull, r.stock));
+    const out = text(explainPlanTemplate(r.views.keepFull, r.stock));
     expect(out).toContain("Not used: Split the order");
     expect(out).toContain("left out because you keep the full order");
     expect(out).toContain("Not used: Credit line");
@@ -46,7 +46,7 @@ describe("Why this plan (plain-text template)", () => {
 
   it("explains a right-sized order: pairs, share unsold, cash saved, lost margin", () => {
     const r = run({ salesDropPercent: 30 }, dueDateInvoice);
-    const out = text(explainPlan(r.views.rightSized, r.stock, { salesDropPercent: 30 }));
+    const out = text(explainPlanTemplate(r.views.rightSized, r.stock, { salesDropPercent: 30 }));
     expect(out).toContain("Order right-sized");
     expect(out).toContain("364 of 500 pairs");
     expect(out).toContain("136 pairs (27%)");
@@ -57,17 +57,17 @@ describe("Why this plan (plain-text template)", () => {
 
   it("when keeping the full order, warns how much stock would stay unsold", () => {
     const r = run({ salesDropPercent: 30 }, dueDateInvoice);
-    const out = text(explainPlan(r.views.keepFull, r.stock));
+    const out = text(explainPlanTemplate(r.views.keepFull, r.stock));
     expect(out).toContain("keep the full order");
     expect(out).toContain("136 of 500 pairs (27%)");
-    expect(text(explainPlan(run({}, dueDateInvoice).views.keepFull, run({}, dueDateInvoice).stock))).not.toContain("expected to stay unsold");
+    expect(text(explainPlanTemplate(run({}, dueDateInvoice).views.keepFull, run({}, dueDateInvoice).stock))).not.toContain("expected to stay unsold");
   });
 
   it("explains paying early: discount, extra funding cost, net saving", () => {
     const r = run();
     const view = r.views.keepFull;
     expect(view.recommended.timing).toBe("pay_early_for_discount");
-    const out = text(explainPlan(view, r.stock));
+    const out = text(explainPlanTemplate(view, r.stock));
     expect(out).toContain("Paying by day 7 earns the 2% discount of ₹10,000");
     expect(out).toContain(`a net saving of ${formatINR(view.discount.netSaving)}`);
     expect(out).toContain("Cash needed by day 7");
@@ -79,7 +79,7 @@ describe("Why this plan (plain-text template)", () => {
     const view = r.views.keepFull;
     expect(view.recommended.timing).toBe("pay_early_for_discount");
     expect(view.discount.extraFundingCost).toBeLessThan(0);
-    const out = text(explainPlan(view, r.stock, { salesDropPercent: 10 }));
+    const out = text(explainPlanTemplate(view, r.stock, { salesDropPercent: 10 }));
     expect(out).toContain(`funding it costs ${formatINR(-view.discount.extraFundingCost)} less`);
     expect(out).toContain(`a net saving of ${formatINR(view.discount.netSaving)}`);
     expect(out).not.toContain("₹-");
@@ -89,26 +89,26 @@ describe("Why this plan (plain-text template)", () => {
     const r = run();
     const view = r.views.keepFull;
     expect(view.discount.extraFundingCost).toBeGreaterThan(0);
-    expect(text(explainPlan(view, r.stock))).toContain(`funding it costs ${formatINR(view.discount.extraFundingCost)} more`);
+    expect(text(explainPlanTemplate(view, r.stock))).toContain(`funding it costs ${formatINR(view.discount.extraFundingCost)} more`);
   });
 
   it("says when paying early is not worth it", () => {
     const r = run({}, dueDateInvoice);
-    expect(text(explainPlan(r.views.keepFull, r.stock))).toContain("so it is not worth it");
+    expect(text(explainPlanTemplate(r.views.keepFull, r.stock))).toContain("so it is not worth it");
   });
 
   it("mentions cash available elsewhere only when there is some", () => {
     const none = run({}, dueDateInvoice);
-    expect(text(explainPlan(none.views.keepFull, none.stock))).not.toContain("cash elsewhere");
+    expect(text(explainPlanTemplate(none.views.keepFull, none.stock))).not.toContain("cash elsewhere");
     const some = run({ cashElsewhere: 75_000 }, dueDateInvoice);
-    expect(text(explainPlan(some.views.keepFull, some.stock))).toContain(`cash elsewhere ${formatINR(75_000)}`);
+    expect(text(explainPlanTemplate(some.views.keepFull, some.stock))).toContain(`cash elsewhere ${formatINR(75_000)}`);
   });
 
   it("explains when the worst day is not the payment day: sized to the peak", () => {
     // Right-sized at -30%, paying early: ₹2,91,349 short on day 7, but ₹3,30,719 short by day 10.
     const r = run({ salesDropPercent: 30 });
     const view = r.views.rightSized;
-    const out = text(explainPlan(view, r.stock, { salesDropPercent: 30 }));
+    const out = text(explainPlanTemplate(view, r.stock, { salesDropPercent: 30 }));
     expect(out).toContain("Shortfall on day 7 alone");
     expect(out).toContain(formatINR(291_349));
     expect(out).toContain("the worst day is day 10");
@@ -120,7 +120,7 @@ describe("Why this plan (plain-text template)", () => {
 
   it("uses the simple 'Expected gap' line when the payment day is the worst day", () => {
     const r = run({}, dueDateInvoice);
-    const out = text(explainPlan(r.views.keepFull, r.stock));
+    const out = text(explainPlanTemplate(r.views.keepFull, r.stock));
     expect(out).toContain("Expected gap:");
     expect(out).not.toContain("the worst day is");
   });
@@ -132,27 +132,27 @@ describe("Why this plan (plain-text template)", () => {
     // the figure quoted is the lowest balance on THAT payment path.
     const path = view.recommended.timing === "pay_early_for_discount" ? view.earlyGap : view.gap;
     expect(path.scenarios.expected.gap).toBe(0);
-    expect(text(explainPlan(view, r.stock))).toContain(
+    expect(text(explainPlanTemplate(view, r.stock))).toContain(
       `the lowest your balance gets on any day up to day 10 is ${formatINR(path.scenarios.expected.minBalance)}`,
     );
   });
 
   it("says plainly when there is no gap", () => {
     const r = run({ cashElsewhere: 1_000_000 }, dueDateInvoice);
-    const out = text(explainPlan(r.views.keepFull, r.stock));
+    const out = text(explainPlanTemplate(r.views.keepFull, r.stock));
     expect(out).toContain("No gap");
     expect(out).not.toContain("Sources are used cheapest first");
   });
 
   it("warns when the plan does not cover the gap", () => {
     const r = run({}, { ...sampleInvoice, amount: 5_000_000, units: 5000 });
-    const out = text(explainPlan(r.views.keepFull, r.stock));
+    const out = text(explainPlanTemplate(r.views.keepFull, r.stock));
     expect(out).toContain("Warning");
     expect(out).toContain("is not covered");
   });
 
   it("labels the data as simulated", () => {
     const r = run();
-    expect(explainPlan(r.views.keepFull, r.stock)[0]).toContain("simulated");
+    expect(explainPlanTemplate(r.views.keepFull, r.stock)[0]).toContain("simulated");
   });
 });

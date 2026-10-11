@@ -53,6 +53,12 @@ describe("journey state", () => {
     expect(s.chosenView).toBeNull();
   });
 
+  it("remembers the language, and falls back to English for anything unknown", () => {
+    expect(DEFAULT_JOURNEY.language).toBe("en");
+    expect(parseJourney({ ...withInvoice(), language: "hi" }).language).toBe("hi");
+    for (const bad of ["fr", 3, null, undefined]) expect(parseJourney({ ...withInvoice(), language: bad }).language).toBe("en");
+  });
+
   it("drops an invalid invoice", () => {
     expect(parseJourney({ ...withInvoice(), invoice: { amount: "five lakh" } }).invoice).toBeNull();
   });

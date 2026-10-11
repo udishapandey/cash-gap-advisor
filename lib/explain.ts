@@ -8,7 +8,7 @@ import { formatINR, formatPct } from "./format";
 import { earlyPayDay } from "./journey";
 
 /** One line per fact, in the order a person would check them. */
-export function explainPlan(
+export function explainPlanTemplate(
   view: ViewResult,
   stock: RightSizing,
   opts: { salesDropPercent?: number } = {},

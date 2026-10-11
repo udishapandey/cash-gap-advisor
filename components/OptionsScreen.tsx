@@ -1,16 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { merchant } from "@/lib/data/merchant";
 import { runEngine, runWhatIf, type EngineInput, type EngineResult, type ViewId, type ViewResult } from "@/lib/engine";
 import { CONFIG } from "@/lib/engine/config";
 import type { FundingOption } from "@/lib/engine/options";
 import { expectedLostMargin, type RightSizing } from "@/lib/engine/stock";
-import { explainPlan } from "@/lib/explain";
+import { explainPlanTemplate } from "@/lib/explain";
 import { formatINR, formatPct } from "@/lib/format";
-import { SALES_DROPS, earlyPayDay, earlySettlementInsight, quoteOption } from "@/lib/journey";
+import { SALES_DROPS, earlyPayDay, earlySettlementInsight, quoteOption, type JourneyState } from "@/lib/journey";
+import type { Language } from "@/lib/language";
+import type { AppliedWhatIf } from "@/lib/whatif";
+import AiExplanation from "./AiExplanation";
+import CallScriptPanel from "./CallScriptPanel";
 import JourneyShell from "./JourneyShell";
+import WhatIfAsk from "./WhatIfAsk";
 import { Card, SectionTitle, SimulatedTag } from "./ui";
 
 const dropLabel = (d: number) => (d === 0 ? "no change" : `−${d}%`);
@@ -23,16 +28,22 @@ function WhatIf({
   drop,
   onChange,
   result,
+  ask,
 }: {
   input: EngineInput;
   drop: number;
   onChange: (d: number) => void;
   result: EngineResult;
+  /** The typed what-if box. */
+  ask: ReactNode;
 }) {
+  // A typed question can set a sales drop the slider has no stop for (for example 25%). It gets its own row.
+  const custom = !(SALES_DROPS as readonly number[]).includes(drop);
+  const drops = useMemo(() => (custom ? [...SALES_DROPS, drop].sort((a, b) => a - b) : [...SALES_DROPS]), [custom, drop]);
   // The engine is rerun for every sales drop, so the table and the slider always agree.
   const rows = useMemo(
-    () => runWhatIf({ ...input, salesDropPercent: 0 }, [...SALES_DROPS]),
-    [input.merchant, input.invoice, input.cashElsewhere, input.overdraftRatePct], // eslint-disable-line react-hooks/exhaustive-deps
+    () => runWhatIf({ ...input, salesDropPercent: 0 }, drops),
+    [input.merchant, input.invoice, input.cashElsewhere, input.overdraftRatePct, drops], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const { keepFull, rightSized } = result.views;
   return (
@@ -53,7 +64,7 @@ function WhatIf({
           min={0}
           max={30}
           step={10}
-          value={drop}
+          value={Math.min(30, drop)}
           aria-valuetext={dropLabel(drop)}
           onChange={(e) => onChange(Number(e.target.value))}
           className="mt-2 w-full accent-[#3395ff]"
@@ -63,7 +74,14 @@ function WhatIf({
             <span key={d}>{d === 0 ? "0%" : `−${d}%`}</span>
           ))}
         </div>
+        {custom && (
+          <p className="mt-1 text-xs text-amber-800">
+            Custom value from your question: {dropLabel(drop)}. Move the slider to go back to a preset.
+          </p>
+        )}
       </div>
+
+      {ask}
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2" aria-live="polite">
         <div className="rounded-lg border border-line p-3">
@@ -227,7 +245,7 @@ function PlanCard({
       <details className="mt-4 rounded-md border border-line px-3 py-2 text-sm">
         <summary className="cursor-pointer font-medium">Why this plan</summary>
         <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-muted">
-          {explainPlan(view, stock, { salesDropPercent: drop }).map((line, i) => (
+          {explainPlanTemplate(view, stock, { salesDropPercent: drop }).map((line, i) => (
             <li key={i} className="whitespace-pre-wrap">
               {line}
             </li>
@@ -337,11 +355,18 @@ function AskFirst({
   days,
   onDays,
   ask,
+  script,
 }: {
   days: number;
   onDays: (d: number) => void;
   ask: EngineResult;
+  /** The call-script panel. */
+  script: ReactNode;
 }) {
+  // A typed question can ask for a number of days that isn't one of the buttons. Show it as well.
+  const choices = (EXTENSION_CHOICES as readonly number[]).includes(days)
+    ? [...EXTENSION_CHOICES]
+    : [...EXTENSION_CHOICES, days].sort((a, b) => a - b);
   const rows = [
     ["Keep full order", ask.views.keepFull.askFirst],
     ["Right-size order", ask.views.rightSized.askFirst],
@@ -364,7 +389,7 @@ function AskFirst({
 
       <div className="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label="Extra days to ask for">
         <span className="text-sm">If they agree to</span>
-        {EXTENSION_CHOICES.map((d) => (
+        {choices.map((d) => (
           <button
             key={d}
             type="button"
@@ -409,6 +434,8 @@ function AskFirst({
         fee of {formatINR(ask.views.keepFull.askFirst.lateFeeIfMissed)} on the full order. That is the price of
         missing the date, not a way to pay.
       </p>
+
+      {script}
     </section>
   );
 }
@@ -442,10 +469,16 @@ function OptionsBody({
   extensionDays,
   setExtensionDays,
 }: {
-  state: { salesDropPercent: number; chosenView: ViewId | null };
+  state: JourneyState;
   input: EngineInput;
   result: EngineResult;
-  update: (patch: { salesDropPercent?: number; chosenView?: ViewId | null }) => void;
+  update: (patch: {
+    salesDropPercent?: number;
+    cashElsewhere?: number;
+    overdraftRatePct?: number;
+    chosenView?: ViewId | null;
+    language?: Language;
+  }) => void;
   extensionDays: number;
   setExtensionDays: (d: number) => void;
 }) {
@@ -465,9 +498,25 @@ function OptionsBody({
   }).expectedLostMargin;
   const d = keepFull.discount;
 
+  // The call script is about the plan the founder chose, or the one the numbers favour if they haven't chosen yet.
+  const scriptViewId: ViewId = state.chosenView ?? result.recommendedView;
+  const scriptView = scriptViewId === "right_sized" ? rightSized : keepFull;
+  const setLanguage = (language: Language) => update({ language });
+  // A typed what-if only gives us numbers. Applying them reruns the engine, and the explanation follows.
+  const applyTyped = (a: AppliedWhatIf) => {
+    if (Object.keys(a.patch).length > 0) update(a.patch);
+    if (a.extensionDays !== undefined) setExtensionDays(a.extensionDays);
+  };
+
   return (
     <>
-      <WhatIf input={input} drop={drop} onChange={(v) => update({ salesDropPercent: v })} result={result} />
+      <WhatIf
+        input={input}
+        drop={drop}
+        onChange={(v) => update({ salesDropPercent: v })}
+        result={result}
+        ask={<WhatIfAsk onApply={applyTyped} />}
+      />
 
       <section aria-label="Two plans" className="space-y-3">
         <SectionTitle aside={<SimulatedTag />}>Choose a plan</SectionTitle>
@@ -475,6 +524,7 @@ function OptionsBody({
           Both are shown side by side with their real costs. Nothing is chosen for you. The green outline marks what
           the numbers favour.
         </p>
+        <AiExplanation result={result} state={state} language={state.language} onLanguage={setLanguage} />
         <div className="grid gap-4 lg:grid-cols-2">
           <PlanCard
             id="keep_full"
@@ -556,7 +606,21 @@ function OptionsBody({
         </div>
       </section>
 
-      <AskFirst days={extensionDays} onDays={setExtensionDays} ask={ask} />
+      <AskFirst
+        days={extensionDays}
+        onDays={setExtensionDays}
+        ask={ask}
+        script={
+          <CallScriptPanel
+            state={state}
+            view={scriptView}
+            viewId={scriptViewId}
+            extensionDays={extensionDays}
+            language={state.language}
+            onLanguage={setLanguage}
+          />
+        }
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link href="/gap" className="text-sm text-brand hover:underline">

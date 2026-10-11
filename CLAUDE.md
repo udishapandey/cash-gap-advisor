@@ -23,6 +23,8 @@ Invoice reading: `extractInvoice` in `lib/ai.ts` (the only AI call that sees a f
 
 Check the AI reader against a real file: `npm run try:extract` (clean sample) or `npm run try:extract -- path/to/file.png`. It times the call and prints the provider's real error if it fails. It makes a live AI call, so run it only when asked (see rule 7).
 
+AI judgement (explanation, call script, typed what-if): `explainPlan`, `callScript` and `interpretWhatIf` in `lib/ai.ts`; facts in `lib/ai-facts.ts`; the number check in `lib/grounding.ts`; what-if ranges in `lib/whatif.ts`; templates (also the mock answers) in `lib/ai-templates.ts`; routes under `app/api/ai/`.
+
 Decision journey: `/invoice` → `/gap` → `/options` → `/approve` (screens in `components/*Screen.tsx`, shared state in `components/JourneyProvider.tsx`, rules in `lib/journey.ts`, plain-text "Why this plan" in `lib/explain.ts`). Every number on those screens comes from `runEngine()`. Keep logic that can be tested in `lib/`, not inside components.
 
 Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate lives in `config.ts`). **Sizing rule: every plan is sized to the peak cumulative shortfall over the whole window from today to the due date (the balance on every day), never to one day's snapshot.** `lib/engine/peak.test.ts` enforces it for every plan, slider value and scenario. Simulated data: `lib/data/`. Every assumption is listed in `docs/ASSUMPTIONS.md`; update it whenever an assumption changes.
@@ -37,6 +39,7 @@ Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate live
 6. **Invoice files are private.** Process them in memory only. Never save one to disk, and never log or echo its contents or file name (including in error messages). The AI only reads printed values: it returns null for anything missing, quotes its evidence, and never calculates amounts or dates.
 7. **No live AI calls unless the founder asks.** Tests use mocks. For development use `AI_MOCK=true`. Don't run `npm run try:extract` or any live extraction on your own: the free tier allows 20 requests a day per model.
 8. **Credit is separate and never pre-selected.** Credit is shown apart from non-credit actions, with a Key Fact Statement before approval. No plan, consent box or approval is ever pre-chosen, and the founder approves every credit action.
+9. **AI writes words, never numbers.** The AI is given only the engine's numbers as JSON. Every ₹ amount and % in its text must pass the grounding check or the text is replaced by the template. A what-if answer must be four optional numbers in fixed ranges, and code applies them. Every AI feature has a mock for `AI_MOCK=true` and caches by input hash.
 
 ## AI provider
 

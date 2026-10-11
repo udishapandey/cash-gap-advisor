@@ -4,12 +4,13 @@
 // the grounding check uses that to know which numbers a ₹ amount or a % may match.
 
 import type { Invoice } from "./data/invoice";
+import { merchant } from "./data/merchant";
 import type { EngineResult, ViewResult } from "./engine";
 import { CONFIG } from "./engine/config";
 import type { OptionId, Plan } from "./engine/options";
 import { expectedLostMargin } from "./engine/stock";
 import { formatINR, formatPct } from "./format";
-import { earlyPayDay } from "./journey";
+import { earlyPayDay, tenureDays } from "./journey";
 
 const SOURCE_NAMES: Record<OptionId, string> = {
   early_settlement: "early settlement",
@@ -27,6 +28,13 @@ export interface StepFacts {
 
 export interface ViewFacts {
   pairs: number;
+  /** Pairs forecast to sell at expected sales, and the pairs of THIS plan's order left over at expected and at lower sales. */
+  forecastPairsAtExpectedSales: number;
+  unsoldPairsAtExpectedSales: number;
+  unsoldAtExpectedSalesPercent: number;
+  forecastPairsAtLowSales: number;
+  unsoldPairsAtLowSales: number;
+  unsoldAtLowSalesPercent: number;
   orderRupees: number;
   /** The worst single-day shortfall over the whole window: what the plan has to cover. */
   peakShortfallRupees: number;
@@ -57,12 +65,6 @@ export interface ExplainFacts {
   rightSized: ViewFacts;
   stock: {
     forecastPairsToSell: number;
-    unsoldPairsAtExpectedSales: number;
-    unsoldAtExpectedSalesPercent: number;
-    /** The same, if sales come in at the low end of the forecast instead of at the expected level. */
-    lowSalesForecastPairs: number;
-    unsoldPairsAtLowSales: number;
-    unsoldAtLowSalesPercent: number;
     cashSavedByRightSizingRupees: number;
     expectedLostMarginRupees: number;
   };
@@ -71,18 +73,32 @@ export interface ExplainFacts {
     earlySettlementAnnualisedPercent: number;
     creditLineAnnualPercent: number;
     overdraftAnnualPercent: number;
+    /** What the cheaper loan costs for the days it would really be out, as a share of the amount. */
+    cheapestLoanCostForItsDaysPercent: number;
   };
+  /** How many days each kind of money would be out: early settlement only comes forward a few days; a loan runs much longer. */
+  earlySettlementDays: number;
+  loanDays: number;
   lowConfidenceForecast: boolean;
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-function viewFacts(v: ViewResult): ViewFacts {
+function viewFacts(v: ViewResult, demand: { expected: number; low: number }): ViewFacts {
   const plan = v.recommended.plan;
   const early = v.recommended.timing === "pay_early_for_discount";
+  // Left over = pairs ordered in THIS plan minus pairs forecast to sell. Never the full invoice quantity.
+  const sells = { expected: Math.floor(demand.expected), low: Math.floor(demand.low) };
+  const unsold = { expected: Math.max(0, v.units - sells.expected), low: Math.max(0, v.units - sells.low) };
   return {
     pairs: v.units,
+    forecastPairsAtExpectedSales: sells.expected,
+    unsoldPairsAtExpectedSales: unsold.expected,
+    unsoldAtExpectedSalesPercent: round1((unsold.expected / v.units) * 100),
+    forecastPairsAtLowSales: sells.low,
+    unsoldPairsAtLowSales: unsold.low,
+    unsoldAtLowSalesPercent: round1((unsold.low / v.units) * 100),
     orderRupees: v.orderValue,
     peakShortfallRupees: plan.gap,
     loanRupees: v.loan,
@@ -109,6 +125,8 @@ export function planFacts(result: EngineResult): ExplainFacts {
   const { keepFull, rightSized } = result.views;
   const { stock } = result;
   const demand = stock.demandByScenario[stock.basis];
+  // The loans are priced for the days they are really out under the recommended plan (a few more if it pays early).
+  const loanOptions = result.recommended.recommended.timing === "pay_early_for_discount" ? result.recommended.earlyOptions : result.recommended.options;
   const rate = (id: OptionId) => keepFull.options.find((o) => o.id === id)?.annualisedPct ?? 0;
   return {
     salesDropPercent: keepFull.gap.salesDropPercent,
@@ -117,15 +135,10 @@ export function planFacts(result: EngineResult): ExplainFacts {
     dueInDays: keepFull.invoice.dueInDays,
     cashElsewhereRupees: keepFull.gap.scenarios.expected.cash.cashElsewhere,
     recommendedPlan: result.recommendedView,
-    keepFull: viewFacts(keepFull),
-    rightSized: viewFacts(rightSized),
+    keepFull: viewFacts(keepFull, stock.demandByScenario),
+    rightSized: viewFacts(rightSized, stock.demandByScenario),
     stock: {
       forecastPairsToSell: Math.floor(demand),
-      unsoldPairsAtExpectedSales: stock.unitsCut,
-      unsoldAtExpectedSalesPercent: round1(stock.unsoldShare * 100),
-      lowSalesForecastPairs: Math.floor(stock.demandByScenario.low),
-      unsoldPairsAtLowSales: Math.max(0, stock.fullUnits - Math.floor(stock.demandByScenario.low)),
-      unsoldAtLowSalesPercent: round1((Math.max(0, stock.fullUnits - Math.floor(stock.demandByScenario.low)) / stock.fullUnits) * 100),
       cashSavedByRightSizingRupees: stock.cashSaved,
       expectedLostMarginRupees: expectedLostMargin({
         orderUnits: stock.fullUnits,
@@ -138,7 +151,12 @@ export function planFacts(result: EngineResult): ExplainFacts {
       earlySettlementAnnualisedPercent: round2(rate("early_settlement")),
       creditLineAnnualPercent: round2(rate("credit_line")),
       overdraftAnnualPercent: round2(rate("bank_overdraft")),
+      cheapestLoanCostForItsDaysPercent: round2(
+        Math.min(...(["credit_line", "bank_overdraft"] as const).map((id) => (loanOptions.find((o) => o.id === id)?.costRate ?? 0) * 100)),
+      ),
     },
+    earlySettlementDays: merchant.settlementDays,
+    loanDays: tenureDays(result.recommended),
     lowConfidenceForecast: keepFull.gap.lowConfidence,
   };
 }
@@ -229,9 +247,26 @@ export function promptFacts(facts: unknown): unknown {
   return walk(facts, "");
 }
 
-/** What the AI sees for the explanation: only the plan being recommended, in plain words with formatted numbers. */
-export function explainPromptFacts(f: ExplainFacts): unknown {
-  return promptFacts({
+/**
+ * The facts for the explanation: the RECOMMENDED plan only, nothing from the other plan. The AI is shown exactly these,
+ * and the grounding check accepts only numbers from exactly these.
+ */
+export interface RecommendedFacts {
+  recommendedPlan: ExplainFacts["recommendedPlan"];
+  invoiceRupees: number;
+  pairsOrdered: number;
+  dueInDays: number;
+  salesDropPercent: number;
+  cashElsewhereRupees: number;
+  plan: ViewFacts;
+  ratesPercent: ExplainFacts["ratesPercent"];
+  earlySettlementDays: number;
+  loanDays: number;
+  lowConfidenceForecast: boolean;
+}
+
+export function recommendedFacts(f: ExplainFacts): RecommendedFacts {
+  return {
     recommendedPlan: f.recommendedPlan,
     invoiceRupees: f.invoiceRupees,
     pairsOrdered: f.pairsOrdered,
@@ -239,8 +274,14 @@ export function explainPromptFacts(f: ExplainFacts): unknown {
     salesDropPercent: f.salesDropPercent,
     cashElsewhereRupees: f.cashElsewhereRupees,
     plan: f.recommendedPlan === "right_sized" ? f.rightSized : f.keepFull,
-    stock: f.stock,
     ratesPercent: f.ratesPercent,
+    earlySettlementDays: f.earlySettlementDays,
+    loanDays: f.loanDays,
     lowConfidenceForecast: f.lowConfidenceForecast,
-  });
+  };
+}
+
+/** What the AI sees for the explanation: the recommended plan only, in plain words with formatted numbers. */
+export function explainPromptFacts(f: ExplainFacts): unknown {
+  return promptFacts(recommendedFacts(f));
 }

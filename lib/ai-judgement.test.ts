@@ -10,7 +10,7 @@ import {
   explainPlan,
   interpretWhatIf,
 } from "./ai";
-import { explainPromptFacts, planFacts, promptFacts, scriptFacts } from "./ai-facts";
+import { explainPromptFacts, planFacts, promptFacts, recommendedFacts, scriptFacts } from "./ai-facts";
 import { templateExplanation, templateExplanationParts, templateScript } from "./ai-templates";
 import { merchant } from "./data/merchant";
 import { sampleInvoice } from "./data/invoice";
@@ -89,14 +89,14 @@ describe("explainPlan: three labelled parts", () => {
   const goodParts = {
     doThis: `Order ${v.pairs} of ${facts.pairsOrdered} pairs now and cover the cash gap with ${inr(v.steps[0].amountRupees)} from ${v.steps[0].source}.`,
     whyCheapest: `Funding costs ${inr(v.fundingCostRupees)} in all, since early settlement is only ${facts.ratesPercent.earlySettlementFeePercent}% (about ${Math.round(facts.ratesPercent.earlySettlementAnnualisedPercent)}% a year).`,
-    watchOut: `Keeping the full order could leave about ${facts.stock.unsoldPairsAtExpectedSales} pairs (${facts.stock.unsoldAtExpectedSalesPercent}%) unsold at expected sales.`,
+    watchOut: `At expected sales all ${v.pairs} pairs should sell; at lower sales about ${v.unsoldPairsAtLowSales} pairs (${v.unsoldAtLowSalesPercent}%) could be left over.`,
   };
   const reply = (parts: Record<string, unknown> = goodParts) => geminiReply(JSON.stringify(parts));
   const bad = (field: keyof typeof goodParts, extra: string) => reply({ ...goodParts, [field]: `${goodParts[field]} ${extra}` });
   const joined = Object.values(goodParts).join(" ");
 
   it("returns the AI's three parts when every number in them is in the facts", async () => {
-    expect(checkGrounding(joined, facts).ok).toBe(true); // the fixture itself is honest
+    expect(checkGrounding(joined, recommendedFacts(facts)).ok).toBe(true); // the fixture itself is honest
     const fetchMock = mockFetch(() => reply());
     const o = await explainPlan(result, "en");
     expect(o).toMatchObject({ status: "verified", parts: goodParts, text: joined, language: "en", mock: false, cached: false });
@@ -125,6 +125,8 @@ describe("explainPlan: three labelled parts", () => {
     }
     // Both the expected-sales and the lower-sales unsold figures, and the net result of paying early.
     expect(shown).toContain("unsold pairs at low sales");
+    expect(shown).not.toContain("keep full"); // nothing from the plan that was not recommended
+    expect(shown).not.toContain("right sized");
     expect(shown).toContain("net saving from early payment");
     const whole = JSON.stringify(sent(fetchMock).body);
     expect(whole).not.toContain(sampleInvoice.supplier);
@@ -138,7 +140,7 @@ describe("explainPlan: three labelled parts", () => {
     const system = systemText(fetchMock);
     for (const part of ["doThis", "whyCheapest", "watchOut"]) expect(system).toContain(`"${part}"`);
     expect(system).toContain("WITH its exact amount");
-    expect(system).toContain("LOWER sales");
+    expect(system).toContain("lower-sales figure");
     expect(system).toContain("at expected sales");
     expect(system).toContain('never "shortfall"');
     expect(system).toContain("Copy them EXACTLY");
@@ -155,8 +157,19 @@ describe("explainPlan: three labelled parts", () => {
     const system = systemText(fetchMock);
     expect(system).toContain("Hindi");
     expect(system).toContain("पूरे 500 जोड़ी का ऑर्डर मंगवाएँ");
-    expect(system).toContain("मंगवाएँ और 3% छूट"); // the Hindi example answer
+    expect(system).toContain("मंगवाएँ और छूट पाने के लिए"); // the Hindi example answer
     expect(o.language).toBe("hi");
+  });
+
+  it("the prompt examples carry no discount percentage the model could copy by mistake (a live Hindi answer wrote the example's 3%)", async () => {
+    for (const lang of ["en", "hi"] as const) {
+      clearAiCache();
+      const fetchMock = mockFetch(() => reply());
+      await explainPlan(result, lang);
+      const example = systemText(fetchMock).split("one good answer")[1].split("Numbers:")[0];
+      expect(example, lang).not.toMatch(/\d+% (?:discount|छूट)|\d+% छूट/);
+      expect(example, lang).not.toContain("3%");
+    }
   });
 
   it.each(["doThis", "whyCheapest", "watchOut"] as const)("REJECTS an invented ₹ amount in %s, and shows the template instead", async (field) => {
@@ -167,6 +180,31 @@ describe("explainPlan: three labelled parts", () => {
     expect(o.ungrounded).toEqual(["₹5,55,555"]);
     expect(o.parts).toEqual(templateExplanationParts(facts, "en"));
     expect(o.text).not.toContain("5,55,555");
+  });
+
+  it("REJECTS a number that belongs only to the plan that was NOT recommended", async () => {
+    const other = facts.keepFull; // the recommendation here is the right-sized plan
+    expect(other.loanRupees).not.toBe(v.loanRupees);
+    mockFetch(() => bad("whyCheapest", `The full order would need ${inr(other.loanRupees)} of loans.`));
+    const o = await explainPlan(result, "en");
+    expect(o).toMatchObject({ status: "unavailable", reason: "ungrounded", ungrounded: [inr(other.loanRupees)] });
+  });
+
+  it("REJECTS 'N pairs ... 0 pairs' wording: with nothing left over it must say all pairs should sell", async () => {
+    mockFetch(() => reply({ ...goodParts, watchOut: "At expected sales 0 pairs (0%) could stay unsold." }));
+    const o = await explainPlan(result, "en");
+    expect(o).toMatchObject({ status: "unavailable", reason: "ungrounded" });
+  });
+
+  it("tells the AI to say 'all N pairs should sell' and the Hindi words to use", async () => {
+    const fetchMock = mockFetch(() => reply());
+    await explainPlan(result, "hi");
+    const system = systemText(fetchMock);
+    expect(system).toContain("all N pairs should sell");
+    expect(system).toContain("नकदी की कमी");
+    expect(system).toContain("जल्दी भुगतान");
+    expect(system).not.toContain("नकद की कमी");
+    expect(system).toContain("Never compare yearly rates");
   });
 
   it("REJECTS an invented percentage", async () => {
@@ -664,11 +702,11 @@ describe("Hindi answers that paste English labels", () => {
   const facts = planFacts(result);
   const HI_OK = "अनुमानित बिक्री पर सारी जोड़ी बिक जाएँगी, पर कम बिक्री पर कुछ जोड़ी बिना बिकी रह सकती हैं।";
   const parts = (doThis: string, whyCheapest: string, watchOut: string) => geminiReply(JSON.stringify({ doThis, whyCheapest, watchOut }));
-  it("rejects the real smoke-test answer that copied 'forecast pairs to sell' into Hindi", async () => {
-    mockFetch(() => parts("पूरे 500 जोड़ी का ऑर्डर मंगवाएँ।", `कुल खर्च ${inr(facts.keepFull.fundingCostRupees)} है।`, "मुख्य जोखिम यह है कि forecast pairs to sell 520 हैं और unsold pairs at expected sales 0 है।"));
+  it("rejects a Hindi answer that pastes an English data label ('unsold pairs at low sales')", async () => {
+    mockFetch(() => parts("पूरे 500 जोड़ी का ऑर्डर मंगवाएँ।", `कुल खर्च ${inr(facts.keepFull.fundingCostRupees)} है।`, "मुख्य जोखिम यह है कि unsold pairs at low sales 92 हैं।"));
     const o = await explainPlan(result, "hi");
     expect(o.status).toBe("unavailable");
-    expect(o.ungrounded).toEqual(expect.arrayContaining(["forecast pairs to sell"]));
+    expect(o.ungrounded).toEqual(expect.arrayContaining(["unsold pairs at low sales"]));
     expect(o.text).toBe(templateExplanation(facts, "hi"));
   });
   it("still accepts a clean Hindi answer", async () => {
@@ -680,7 +718,7 @@ describe("Hindi answers that paste English labels", () => {
     expect((await explainPlan(result, "hi")).status).toBe("unavailable");
   });
   it("does not reject an English answer for using ordinary words that match a label", async () => {
-    mockFetch(() => parts("Order all 500 pairs.", `The forecast pairs to sell fit within it, and the total cost is ${inr(facts.keepFull.fundingCostRupees)}.`, "At expected sales every pair sells."));
+    mockFetch(() => parts("Order all 500 pairs.", `The unsold pairs at low sales are few, and the total cost is ${inr(facts.keepFull.fundingCostRupees)}.`, "At expected sales every pair sells."));
     expect((await explainPlan(result, "en")).status).toBe("verified");
   });
 });

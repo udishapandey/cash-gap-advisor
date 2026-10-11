@@ -158,6 +158,34 @@ export function earlySettlementInsight(option: FundingOption): string | null {
   return `${CONFIG.earlySettlementFeePct.toFixed(2)}% ≈ ${Math.round(option.annualisedPct)}% a year here`;
 }
 
+/** How many days the money from this option is out: early settlement only brings money forward a few days. */
+export function daysOut(option: FundingOption, settlementDays: number, loanDays: number): number | null {
+  if (option.id === "early_settlement") return settlementDays;
+  return option.isBorrowing ? loanDays : null;
+}
+
+/**
+ * When early settlement is cheaper in rupees than the cheapest loan, say why, in numbers: its yearly rate looks high,
+ * but the money is only needed a couple of days, while a loan would run much longer. Returns null if it is not cheaper.
+ * `amount` is how much early settlement would cover; `loanDays` is how long a loan would be out.
+ */
+export function earlySettlementWhy(args: {
+  options: FundingOption[];
+  amount: number;
+  settlementDays: number;
+  loanDays: number;
+}): string | null {
+  const { options, amount, settlementDays, loanDays } = args;
+  const early = options.find((o) => o.id === "early_settlement");
+  const loans = options.filter((o) => o.isBorrowing && o.maxAmount > 0);
+  if (!early || early.annualisedPct === null || loans.length === 0 || amount <= 0) return null;
+  const loan = loans.reduce((a, b) => (b.costRate < a.costRate ? b : a));
+  if (early.costRate >= loan.costRate) return null;
+  const earlyCost = Math.round(amount * early.costRate);
+  const loanCost = Math.round(amount * loan.costRate);
+  return `High yearly rate (${Math.round(early.annualisedPct)}% a year), but only needed for ${settlementDays} days. A loan would run ${loanDays} days and cost ${formatINR(loanCost)} to cover the same ${formatINR(amount)}, against ${formatINR(earlyCost)} here.`;
+}
+
 // ---------- Plan sections for the approval screen ----------
 
 export interface ActionLine {

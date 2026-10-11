@@ -11,3 +11,16 @@
 **What AI did:** Claude Code built the engine and raised two product questions.
 
 **What I decided:** (1) A supplier extension is a request, not confirmed funding, so the plan never depends on it; (2) the what-if compares keeping the full order with right-sizing it, because the right answer to lower sales is to buy less stock, not to borrow more.
+
+
+## Day 2 (later) — Sun 11 Oct: AI judgement layer and safeguards
+
+**What AI did:** Claude Code built invoice reading, the decision screens, then the AI layer: a plain-language explanation, a supplier call script and a typed what-if. It found its own bug: the pay-early plan under-borrowed by about ₹39,000 at -30% sales because it checked only one day. It also ran a live smoke test of every AI feature (11 real calls, capped).
+
+**What went wrong:** (1) The under-borrowing bug above. (2) The AI's first explanation passed every automated check but was useless to a founder: correct numbers, wrong content. It repeated field names like "peakShortfallRupees" and gave bare numbers like 288151. (3) Later, the "why cheapest" sentence had correct numbers that did not visibly add up (₹2,058 cost, ₹10,000 saving, "₹9,107 better off").
+
+**What I decided:**
+- Every plan must be sized to the peak shortfall across the whole window, with a test that no plan ever goes negative on any day. A money product must never under-borrow.
+- AI writes words, never numbers: a grounding check rejects any AI explanation containing a number not in the engine's output. I deliberately broke each safeguard to confirm the tests catch it (mutation testing).
+- Out-of-range what-ifs are rejected, not silently adjusted: changing the user's question would be misleading.
+- Automated checks catch false numbers; only human review catches unhelpful wording. I restructured the output into "Do this / Why it's cheapest / Watch out", and made the cost sentence include the extra cost of paying early so it adds up.

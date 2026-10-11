@@ -38,8 +38,7 @@ export function templateExplanationParts(facts: ExplainFacts, language: Language
   const rightSized = facts.recommendedPlan === "right_sized";
   const v = rightSized ? facts.rightSized : facts.keepFull;
   const r = facts.ratesPercent;
-  const st = facts.stock;
-  const partOrder = rightSized && v.pairs < facts.pairsOrdered;
+    const partOrder = rightSized && v.pairs < facts.pairsOrdered;
 
   // 1. Do this: the order, the date, the funding sources with amounts.
   const order = hi
@@ -63,7 +62,7 @@ export function templateExplanationParts(facts: ExplainFacts, language: Language
         ? "आपको कर्ज़ लेने की ज़रूरत नहीं है: आपका कैश इनवॉइस के लिए काफ़ी है।"
         : "You do not need to borrow: your cash covers the invoice."
       : hi
-        ? `नकद की कमी इस तरह पूरी करें: ${steps}।`
+        ? `नकदी की कमी इस तरह पूरी करें: ${steps}।`
         : `Cover the cash gap with ${steps}.`;
   const doThis = hi ? `${order} और ${pay} ${funding}` : `${order} and ${pay} ${funding}`;
 
@@ -72,40 +71,44 @@ export function templateExplanationParts(facts: ExplainFacts, language: Language
   if (v.paysEarlyForDiscount && v.netSavingFromEarlyPaymentRupees > 0) {
     whyCheapest = hi
       ? v.extraCostOfPayingEarlyRupees > 0
-        ? `कुल फंडिंग खर्च ${inr(v.fundingCostRupees)} है, जो दिन ${facts.dueInDays} पर भुगतान से सिर्फ़ ${inr(v.extraCostOfPayingEarlyRupees)} ज़्यादा है, और ${v.earlyPaymentDiscountPercent}% छूट से ${inr(v.earlyPaymentDiscountRupees)} बचते हैं, इसलिए आपको ${inr(v.netSavingFromEarlyPaymentRupees)} का फ़ायदा होता है।`
-        : `कुल फंडिंग खर्च ${inr(v.fundingCostRupees)} है और ${v.earlyPaymentDiscountPercent}% छूट से ${inr(v.earlyPaymentDiscountRupees)} बचते हैं, इसलिए आपको ${inr(v.netSavingFromEarlyPaymentRupees)} का फ़ायदा होता है।`
+        ? `कुल फंडिंग खर्च ${inr(v.fundingCostRupees)} है, जो दिन ${facts.dueInDays} पर भुगतान से सिर्फ़ ${inr(v.extraCostOfPayingEarlyRupees)} ज़्यादा है, और ${v.earlyPaymentDiscountPercent}% छूट से ${inr(v.earlyPaymentDiscountRupees)} बचते हैं, इसलिए जल्दी भुगतान करने से आपको ${inr(v.netSavingFromEarlyPaymentRupees)} का फ़ायदा होता है।`
+        : `कुल फंडिंग खर्च ${inr(v.fundingCostRupees)} है और ${v.earlyPaymentDiscountPercent}% छूट से ${inr(v.earlyPaymentDiscountRupees)} बचते हैं, इसलिए जल्दी भुगतान करने से आपको ${inr(v.netSavingFromEarlyPaymentRupees)} का फ़ायदा होता है।`
       : v.extraCostOfPayingEarlyRupees > 0
         ? `Funding costs ${inr(v.fundingCostRupees)} in all, only ${inr(v.extraCostOfPayingEarlyRupees)} more than paying on day ${facts.dueInDays}, and the ${v.earlyPaymentDiscountPercent}% discount saves ${inr(v.earlyPaymentDiscountRupees)}, so you come out ${inr(v.netSavingFromEarlyPaymentRupees)} better off.`
         : `Funding costs ${inr(v.fundingCostRupees)} in all and the ${v.earlyPaymentDiscountPercent}% discount saves ${inr(v.earlyPaymentDiscountRupees)}, so you come out ${inr(v.netSavingFromEarlyPaymentRupees)} better off.`;
   } else if (v.peakShortfallRupees > 0) {
+    // Compare what each costs for the days it is really used, never the yearly rates: a 2-day fee looks huge a year.
     whyCheapest = hi
-      ? `कुल फंडिंग खर्च ${inr(v.fundingCostRupees)} है, जो आपके विकल्पों में सबसे कम है: अर्ली सेटलमेंट सिर्फ़ ${r.earlySettlementFeePercent}% (लगभग ${r.earlySettlementAnnualisedPercent}% सालाना) है, जबकि क्रेडिट लाइन ${r.creditLineAnnualPercent}% सालाना है।`
-      : `Funding costs ${inr(v.fundingCostRupees)} in all, the lowest of your options: early settlement is only ${r.earlySettlementFeePercent}% (about ${r.earlySettlementAnnualisedPercent}% a year) against ${r.creditLineAnnualPercent}% a year for the credit line.`;
+      ? `कुल फंडिंग खर्च ${inr(v.fundingCostRupees)} है, जो आपके विकल्पों में सबसे कम है: अर्ली सेटलमेंट की ज़रूरत सिर्फ़ ${facts.earlySettlementDays} दिन है और उसकी फ़ीस ${r.earlySettlementFeePercent}% है, जबकि कर्ज़ ${facts.loanDays} दिन चलेगा और उस पर लगभग ${r.cheapestLoanCostForItsDaysPercent}% लगेगा।`
+      : `Funding costs ${inr(v.fundingCostRupees)} in all, the lowest of your options: early settlement is needed for only ${facts.earlySettlementDays} days and costs ${r.earlySettlementFeePercent}%, while a loan would run ${facts.loanDays} days and cost about ${r.cheapestLoanCostForItsDaysPercent}%.`;
   } else {
     whyCheapest = hi ? "आपको उधार नहीं लेना है, इसलिए फंडिंग का कोई खर्च नहीं है।" : "You do not need to borrow, so there is no funding cost.";
   }
 
-  // 3. Watch out: the main risk. Never "0% unsold" without saying it is at expected sales, and the lower-sales case.
-  const u = st.unsoldPairsAtExpectedSales;
-  const lu = st.unsoldPairsAtLowSales;
-  let watchOut: string;
-  if (rightSized) {
-    watchOut = hi
-      ? `कम जोड़ी मँगाने पर अगर बिक्री अनुमान से ज़्यादा रही तो स्टॉक कम पड़ सकता है; पूरा ऑर्डर रखने पर अनुमानित बिक्री पर लगभग ${u} जोड़ी (${st.unsoldAtExpectedSalesPercent}%) बिना बिकी रहतीं।`
-      : `Ordering fewer pairs could leave you short of stock if sales beat the forecast; keeping the full order would leave about ${u} pairs (${st.unsoldAtExpectedSalesPercent}%) unsold at expected sales.`;
-  } else if (u > 0) {
-    watchOut = hi
-      ? `अनुमानित बिक्री पर लगभग ${u} जोड़ी (${st.unsoldAtExpectedSalesPercent}%) बिना बिकी रहेंगी; कम बिक्री पर लगभग ${lu} जोड़ी (${st.unsoldAtLowSalesPercent}%) बिना बिकी रह सकती हैं।`
-      : `At expected sales about ${u} pairs (${st.unsoldAtExpectedSalesPercent}%) stay unsold, and at lower sales about ${lu} pairs (${st.unsoldAtLowSalesPercent}%) could stay unsold.`;
+  // 3. Watch out: the main risk. Every figure is for the pairs of THIS plan's order, at expected and at lower sales.
+  const n = v.pairs;
+  const u = v.unsoldPairsAtExpectedSales;
+  const lu = v.unsoldPairsAtLowSales;
+  const lowPart = hi
+    ? `कम बिक्री पर लगभग ${lu} जोड़ी (${v.unsoldAtLowSalesPercent}%) बच सकती हैं`
+    : `at lower sales about ${lu} pairs (${v.unsoldAtLowSalesPercent}%) could be left over`;
+  let sales: string;
+  if (u > 0) {
+    sales = hi
+      ? `अनुमानित बिक्री पर लगभग ${u} जोड़ी (${v.unsoldAtExpectedSalesPercent}%) बच सकती हैं, और ${lowPart}।`
+      : `At expected sales about ${u} pairs (${v.unsoldAtExpectedSalesPercent}%) could be left over, and ${lowPart}.`;
   } else if (lu > 0) {
-    watchOut = hi
-      ? `अनुमानित बिक्री पर कोई जोड़ी बिना बिकी नहीं रहेगी, पर कम बिक्री पर लगभग ${lu} जोड़ी (${st.unsoldAtLowSalesPercent}%) बिना बिकी रह सकती हैं।`
-      : `At expected sales no pairs stay unsold, but at lower sales about ${lu} pairs (${st.unsoldAtLowSalesPercent}%) could stay unsold.`;
+    sales = hi ? `अनुमानित बिक्री पर सभी ${n} जोड़ी बिक जानी चाहिए; ${lowPart}।` : `At expected sales all ${n} pairs should sell; ${lowPart}.`;
   } else {
-    watchOut = hi
-      ? "अनुमानित और कम, दोनों बिक्री पर सारी जोड़ी बिक जानी चाहिए; जोखिम यह है कि बिक्री और गिर जाए और आपको ज़्यादा उधार लेना पड़े।"
-      : "At expected sales and at lower sales every pair should sell; the risk is that sales fall even further and you need to borrow more.";
+    sales = hi
+      ? `अनुमानित बिक्री पर और कम बिक्री पर भी सभी ${n} जोड़ी बिक जानी चाहिए; जोखिम यह है कि बिक्री और गिर जाए और आपको ज़्यादा उधार लेना पड़े।`
+      : `At expected sales, and at lower sales too, all ${n} pairs should sell; the risk is that sales fall even further and you need to borrow more.`;
   }
+  let watchOut = partOrder
+    ? hi
+      ? `कम जोड़ी मँगाने पर अगर बिक्री अनुमान से ज़्यादा रही तो स्टॉक कम पड़ सकता है। ${sales}`
+      : `Ordering fewer pairs could leave you short of stock if sales beat the forecast. ${sales}`
+    : sales;
   if (!v.fullyCovered) {
     watchOut = (hi ? `चेतावनी: यह प्लान कमी का ${inr(v.uncoveredRupees)} पूरा नहीं करता। ` : `Warning: this plan leaves ${inr(v.uncoveredRupees)} of the cash gap uncovered. `) + watchOut;
   }

@@ -9,7 +9,16 @@ import type { FundingOption } from "@/lib/engine/options";
 import { expectedLostMargin, type RightSizing } from "@/lib/engine/stock";
 import { explainPlanTemplate } from "@/lib/explain";
 import { formatINR, formatPct } from "@/lib/format";
-import { SALES_DROPS, earlyPayDay, earlySettlementInsight, quoteOption, type JourneyState } from "@/lib/journey";
+import {
+  SALES_DROPS,
+  daysOut,
+  earlyPayDay,
+  earlySettlementInsight,
+  earlySettlementWhy,
+  quoteOption,
+  tenureDays,
+  type JourneyState,
+} from "@/lib/journey";
 import type { Language } from "@/lib/language";
 import type { AppliedWhatIf } from "@/lib/whatif";
 import AiExplanation from "./AiExplanation";
@@ -153,6 +162,9 @@ function PlanCard({
 }) {
   const plan = view.recommended.plan;
   const early = view.recommended.timing === "pay_early_for_discount";
+  // The options this plan was built from: loans run a few days longer when the plan pays early.
+  const planOptions = early ? view.earlyOptions : view.options;
+  const loanDays = tenureDays(view);
   const cut = stock.fullUnits - view.units;
   const reason =
     id === "right_sized"
@@ -217,23 +229,39 @@ function PlanCard({
         <p className="mt-1 text-sm text-muted">Nothing: you expect to have enough cash.</p>
       ) : (
         <ul className="mt-1 divide-y divide-line text-sm">
-          {plan.steps.map((s) => (
-            <li key={s.optionId} className="flex items-baseline justify-between gap-3 py-2">
-              <span>
-                {s.name}{" "}
-                <span
-                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                    s.isBorrowing ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
-                  }`}
-                >
-                  {s.isBorrowing ? "Loan" : "Not a loan"}
-                </span>
-              </span>
-              <span className="text-right tabular-nums">
-                {formatINR(s.amount)} <span className="text-xs text-muted">cost {formatINR(s.cost)}</span>
-              </span>
-            </li>
-          ))}
+          {plan.steps.map((s) => {
+            const option = planOptions.find((o) => o.id === s.optionId);
+            const days = option ? daysOut(option, merchant.settlementDays, loanDays) : null;
+            const why =
+              s.optionId === "early_settlement"
+                ? earlySettlementWhy({ options: planOptions, amount: s.amount, settlementDays: merchant.settlementDays, loanDays })
+                : null;
+            return (
+              <li key={s.optionId} className="py-2">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span>
+                    {s.name}{" "}
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                        s.isBorrowing ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
+                      }`}
+                    >
+                      {s.isBorrowing ? "Loan" : "Not a loan"}
+                    </span>
+                  </span>
+                  <span className="text-right tabular-nums">
+                    {formatINR(s.amount)} <span className="text-xs text-muted">cost {formatINR(s.cost)}</span>
+                  </span>
+                </div>
+                {option?.annualisedPct != null && days !== null && (
+                  <p className="mt-0.5 text-xs text-muted">
+                    {formatPct(option.annualisedPct)} a year, out for {days} days = {formatINR(s.cost)} on {formatINR(s.amount)}
+                  </p>
+                )}
+                {why && <p className="mt-1 rounded-md bg-green-50 px-2 py-1 text-xs text-green-900">{why}</p>}
+              </li>
+            );
+          })}
         </ul>
       )}
       {!plan.fullyCovered && (
@@ -304,6 +332,8 @@ function OptionCard({
   annualised,
   cap,
   insight,
+  why,
+  days,
   note,
   simulated,
 }: {
@@ -315,6 +345,10 @@ function OptionCard({
   annualised: string;
   cap?: React.ReactNode;
   insight?: string | null;
+  /** Why early settlement is still the cheapest in rupees despite a high yearly rate. */
+  why?: string | null;
+  /** How many days the money is out, for this cost. */
+  days?: number | null;
   note?: string;
   simulated?: boolean;
 }) {
@@ -335,10 +369,12 @@ function OptionCard({
       {coverLine && <p className="text-xs text-muted">{coverLine}</p>}
       <p className="mt-2 text-sm">
         Annualised: <strong>{annualised}</strong>
+        {days != null && <span className="text-muted"> · out for {days} days</span>}
       </p>
       {cap && <p className="mt-1 text-xs text-muted">{cap}</p>}
       {!available && unavailableReason && <p className="mt-1 text-xs text-muted">{unavailableReason}</p>}
-      {insight && (
+      {why && <p className="mt-3 rounded-md bg-green-50 px-3 py-2 text-xs text-green-900">{why}</p>}
+      {insight && !why && (
         <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
           <strong>Looks cheap, isn&apos;t small: {insight}.</strong> The fee is tiny in rupees because the money only
           arrives {merchant.settlementDays} days sooner. Used for longer, it would cost far more.
@@ -575,6 +611,12 @@ function OptionsBody({
                 annualised={o.annualisedPct === null ? "n/a: priced as lost margin" : `${formatPct(o.annualisedPct)} a year`}
                 cap={<CapNote option={o} view={keepFull} />}
                 insight={o.id === "early_settlement" ? earlySettlementInsight(o) : null}
+                why={
+                  o.id === "early_settlement" && q.available
+                    ? earlySettlementWhy({ options: keepFull.options, amount: q.covers, settlementDays: merchant.settlementDays, loanDays: CONFIG.borrowDays })
+                    : null
+                }
+                days={daysOut(o, merchant.settlementDays, CONFIG.borrowDays)}
                 note={o.id === "split_order" ? o.note : undefined}
                 simulated={o.id !== "split_order"}
               />

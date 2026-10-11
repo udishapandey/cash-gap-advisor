@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { merchant } from "./data/merchant";
 import { sampleInvoice } from "./data/invoice";
-import { cleanText, planFacts, scriptFacts, type ExplainFacts } from "./ai-facts";
+import { cleanText, explainPromptFacts, planFacts, recommendedFacts, scriptFacts, type ExplainFacts } from "./ai-facts";
 import { runEngine } from "./engine";
 import { collectFactNumbers } from "./grounding";
 
@@ -25,8 +25,9 @@ describe("the facts the AI is given about a plan", () => {
   });
 
   it("include the unsold-stock comparison from the right-sizing", () => {
-    expect(f.stock.unsoldPairsAtExpectedSales).toBe(r.stock.unitsCut);
-    expect(f.stock.unsoldAtExpectedSalesPercent).toBeCloseTo(r.stock.unsoldShare * 100, 1);
+    // Unsold figures belong to a plan and refer to THAT plan's quantity.
+    expect(f.keepFull.unsoldPairsAtExpectedSales).toBe(Math.max(0, r.stock.fullUnits - Math.floor(r.stock.demandByScenario.expected)));
+    expect(f.rightSized.unsoldPairsAtExpectedSales).toBe(Math.max(0, r.views.rightSized.units - Math.floor(r.stock.demandByScenario.expected)));
     expect(f.stock.cashSavedByRightSizingRupees).toBe(r.stock.cashSaved);
     expect(f.stock.forecastPairsToSell).toBe(Math.floor(r.stock.demandByScenario.expected));
   });
@@ -81,7 +82,7 @@ describe("the facts the AI is given about a plan", () => {
 
   it("name every money or percent number so the grounding check can find it", () => {
     // Every number whose key ends in Rupees or Percent lands in a pool; counts and days are the only others.
-    const COUNTS = new Set(["pairs", "payByDay", "pairsOrdered", "dueInDays", "forecastPairsToSell", "unsoldPairsAtExpectedSales", "lowSalesForecastPairs", "unsoldPairsAtLowSales"]);
+    const COUNTS = new Set(["pairs", "payByDay", "pairsOrdered", "dueInDays", "forecastPairsToSell", "unsoldPairsAtExpectedSales", "forecastPairsAtExpectedSales", "forecastPairsAtLowSales", "unsoldPairsAtLowSales", "earlySettlementDays", "loanDays"]);
     const stray: string[] = [];
     const walk = (v: unknown, key: string) => {
       if (typeof v === "number" && !/(Rupees|Percent)$/.test(key) && !COUNTS.has(key)) stray.push(key);
@@ -96,7 +97,7 @@ describe("the facts the AI is given about a plan", () => {
   });
 
   it("put the unsold-stock percentage where a '27%' in the text can be matched to it", () => {
-    expect(collectFactNumbers(f).percents).toContain(f.stock.unsoldAtExpectedSalesPercent);
+    expect(collectFactNumbers(f).percents).toContain(f.keepFull.unsoldAtLowSalesPercent);
   });
 
   it("show a plan that pays early, and one that doesn't", () => {
@@ -173,3 +174,50 @@ describe("the facts for the supplier call script", () => {
 });
 
 export type _Unused = ExplainFacts;
+
+describe("the explanation facts come from the RECOMMENDED plan only", () => {
+  // At -25% the recommendation is to order fewer pairs than the invoice says.
+  const result = runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: 25 });
+  const facts = planFacts(result);
+  const rec = recommendedFacts(facts);
+
+  it("recommends a smaller order in this case, so the test below is meaningful", () => {
+    expect(facts.recommendedPlan).toBe("right_sized");
+    expect(rec.plan.pairs).toBeLessThan(facts.pairsOrdered);
+    expect(rec.plan).toBe(facts.rightSized);
+  });
+
+  it("when the recommended order is smaller than the invoice, every unsold figure refers to the recommended quantity", () => {
+    const { expected, low } = { expected: Math.floor(result.stock.demandByScenario.expected), low: Math.floor(result.stock.demandByScenario.low) };
+    const n = rec.plan.pairs;
+    expect(rec.plan.unsoldPairsAtExpectedSales).toBe(Math.max(0, n - expected));
+    expect(rec.plan.unsoldPairsAtLowSales).toBe(Math.max(0, n - low));
+    expect(rec.plan.unsoldAtLowSalesPercent).toBeCloseTo((rec.plan.unsoldPairsAtLowSales / n) * 100, 1);
+    expect(rec.plan.unsoldAtExpectedSalesPercent).toBeCloseTo((rec.plan.unsoldPairsAtExpectedSales / n) * 100, 1);
+    // Not the old, wrong figures, which were measured against the full 500: 500 - 390 = 110 unsold.
+    expect(rec.plan.unsoldPairsAtExpectedSales).not.toBe(facts.pairsOrdered - n);
+    expect(rec.plan.unsoldPairsAtLowSales).toBeLessThan(facts.pairsOrdered - Math.floor(result.stock.demandByScenario.low));
+  });
+
+  it("contains no number that belongs only to the other plan", () => {
+    const shown = JSON.stringify(rec);
+    expect(shown).not.toContain("keepFull");
+    expect(shown).not.toContain("rightSized");
+    const other = facts.keepFull;
+    const mine = collectFactNumbers(rec).rupees;
+    // The other plan's loan and cost are not available to be quoted.
+    for (const n of [other.loanRupees, other.fundingCostRupees]) if (n !== rec.plan.loanRupees && n !== rec.plan.fundingCostRupees) expect(mine).not.toContain(n);
+  });
+
+  it("also holds for the prompt text the AI is sent, and for every slider value", () => {
+    for (const drop of [0, 10, 20, 25, 30]) {
+      const r = runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop });
+      const f = planFacts(r);
+      const rf = recommendedFacts(f);
+      const view = f.recommendedPlan === "right_sized" ? r.views.rightSized : r.views.keepFull;
+      expect(rf.plan.pairs, `-${drop}%`).toBe(view.units);
+      expect(rf.plan.unsoldPairsAtExpectedSales, `-${drop}%`).toBe(Math.max(0, view.units - Math.floor(r.stock.demandByScenario.expected)));
+      expect(JSON.stringify(explainPromptFacts(f))).toContain(`${view.units}`);
+    }
+  });
+});

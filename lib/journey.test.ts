@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { merchant } from "./data/merchant";
+import { formatINR } from "./format";
 import { sampleInvoice } from "./data/invoice";
 import { runEngine, type EngineInput } from "./engine";
 import {
@@ -9,7 +10,9 @@ import {
   buildKfs,
   canApprove,
   consentText,
+  daysOut,
   earlyPayDay,
+  earlySettlementWhy,
   earlySettlementInsight,
   needsCreditConsent,
   parseJourney,
@@ -339,5 +342,62 @@ describe("range bar layout", () => {
   });
   it("handles no gap at all without dividing by zero", () => {
     expect(rangeBarLayout(0, 0, 0)).toEqual({ max: 0, bestPct: 0, expectedPct: 0, worstPct: 0 });
+  });
+});
+
+describe("funding cards: yearly rate AND rupee cost, and why early settlement is still cheapest", () => {
+  const run = (drop = 0, extra: Partial<EngineInput> = {}) => runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop, ...extra });
+  const optionsOf = (view: ReturnType<typeof run>["recommended"]) => (view.recommended.timing === "pay_early_for_discount" ? view.earlyOptions : view.options);
+
+  it("on every step of every plan, yearly rate x days out / 365 equals the rupee cost shown", () => {
+    for (const drop of [0, 10, 20, 25, 30]) {
+      const result = run(drop);
+      for (const view of [result.views.keepFull, result.views.rightSized]) {
+        const options = optionsOf(view);
+        const loanDays = tenureDays(view);
+        for (const step of view.recommended.plan.steps) {
+          const option = options.find((o) => o.id === step.optionId)!;
+          const days = daysOut(option, merchant.settlementDays, loanDays);
+          if (option.annualisedPct === null || days === null) continue; // the split order is priced as lost margin
+          const expected = step.amount * (option.annualisedPct / 100) * (days / 365);
+          expect(Math.abs(step.cost - expected), `${option.id} at -${drop}%`).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+  });
+
+  it("explains in numbers: a high yearly rate, 2 days, against a 30-day loan that costs more", () => {
+    const view = run(0).views.keepFull;
+    const step = view.recommended.plan.steps.find((s) => s.optionId === "early_settlement")!;
+    const text = earlySettlementWhy({ options: optionsOf(view), amount: step.amount, settlementDays: merchant.settlementDays, loanDays: tenureDays(view) })!;
+    const loan = optionsOf(view).filter((o) => o.isBorrowing).reduce((a, b) => (b.costRate < a.costRate ? b : a));
+    expect(text).toContain("High yearly rate (55% a year)");
+    expect(text).toContain(`only needed for ${merchant.settlementDays} days`);
+    expect(text).toContain(`A loan would run ${tenureDays(view)} days`);
+    expect(text).toContain(`cost ${formatINR(Math.round(step.amount * loan.costRate))}`);
+    expect(text).toContain(`against ${formatINR(step.cost)} here`);
+    expect(Math.round(step.amount * loan.costRate)).toBeGreaterThan(step.cost);
+  });
+
+  it("is said only when early settlement really is cheaper in rupees than the cheapest loan", () => {
+    const cheapBank = run(0, { overdraftRatePct: 3 }).views.keepFull; // 3% x 30 days = 0.25%, under the 0.30% fee
+    expect(earlySettlementWhy({ options: cheapBank.options, amount: 100_000, settlementDays: 2, loanDays: 30 })).toBeNull();
+    expect(earlySettlementWhy({ options: cheapBank.options.filter((o) => !o.isBorrowing), amount: 100_000, settlementDays: 2, loanDays: 30 })).toBeNull();
+    expect(earlySettlementWhy({ options: run(0).views.keepFull.options, amount: 0, settlementDays: 2, loanDays: 30 })).toBeNull();
+  });
+
+  it("uses the longer loan period when the plan pays early for the discount", () => {
+    const view = run(0).views.keepFull;
+    expect(view.recommended.timing).toBe("pay_early_for_discount");
+    expect(tenureDays(view)).toBe(30 + (sampleInvoice.dueInDays - earlyPayDay(sampleInvoice)));
+    const step = view.recommended.plan.steps.find((s) => s.optionId === "early_settlement")!;
+    expect(earlySettlementWhy({ options: view.earlyOptions, amount: step.amount, settlementDays: 2, loanDays: tenureDays(view) })).toContain("A loan would run 33 days");
+  });
+
+  it("days out: early settlement a few days, loans their period, split order none", () => {
+    const options = run(0).views.rightSized.options;
+    expect(daysOut(options.find((o) => o.id === "early_settlement")!, 2, 30)).toBe(2);
+    expect(daysOut(options.find((o) => o.id === "credit_line")!, 2, 30)).toBe(30);
+    expect(daysOut(options.find((o) => o.id === "split_order")!, 2, 30)).toBeNull();
   });
 });

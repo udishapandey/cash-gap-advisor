@@ -86,21 +86,61 @@ describe("the explanation template (also the mock AI answer and the fallback)", 
       }
     }
     const facts = planFacts(run(0));
-    expect(facts.stock.unsoldPairsAtExpectedSales).toBe(0);
-    expect(facts.stock.unsoldPairsAtLowSales).toBeGreaterThan(0);
+    const v = facts.keepFull;
+    expect(v.unsoldPairsAtExpectedSales).toBe(0);
+    expect(v.unsoldPairsAtLowSales).toBeGreaterThan(0);
     const en = templateExplanationParts(facts, "en").watchOut;
-    expect(en).toContain("At expected sales no pairs stay unsold");
-    expect(en).toContain(`${facts.stock.unsoldPairsAtLowSales} pairs (${facts.stock.unsoldAtLowSalesPercent}%)`);
-    expect(templateExplanationParts(facts, "hi").watchOut).toContain("अनुमानित बिक्री पर कोई जोड़ी बिना बिकी नहीं रहेगी");
+    expect(en).toContain(`At expected sales all ${v.pairs} pairs should sell; at lower sales about ${v.unsoldPairsAtLowSales} pairs (${v.unsoldAtLowSalesPercent}%) could be left over`);
+    expect(en).not.toMatch(/\b0 pairs|\(0%\)/);
+    const hi = templateExplanationParts(facts, "hi").watchOut;
+    expect(hi).toContain(`अनुमानित बिक्री पर सभी ${v.pairs} जोड़ी बिक जानी चाहिए`);
+    expect(hi).toContain(`कम बिक्री पर लगभग ${v.unsoldPairsAtLowSales} जोड़ी`);
+    expect(hi).not.toMatch(/(?<![\d.])0 जोड़ी|\(0%\)/);
   });
 
-  it("names the unsold-stock risk from the right-sizing comparison", () => {
+  it("never says '0 pairs' or '(0%)' at any slider value, in either language", () => {
+    for (const drop of ALL_DROPS) for (const language of BOTH) {
+      expect(templateExplanationParts(planFacts(run(drop)), language).watchOut, `${language} -${drop}%`).not.toMatch(/(?<![\d.,])0 (?:pairs|जोड़ी)|\(0%\)/);
+    }
+  });
+
+  it("Hindi uses 'नकदी की कमी' and 'जल्दी भुगतान', never 'नकद की कमी' or 'शुरुआती भुगतान'", () => {
+    for (const drop of ALL_DROPS) {
+      const hi = templateExplanation(planFacts(run(drop)), "hi");
+      expect(hi, `-${drop}%`).not.toMatch(/नकद की कमी|शुरुआती भुगतान/);
+    }
+    const hi = templateExplanationParts(planFacts(run(0)), "hi");
+    expect(hi.doThis).toContain("नकदी की कमी");
+    expect(hi.whyCheapest).toContain("जल्दी भुगतान");
+  });
+
+  it("when the order is cut, watch-out figures are for the smaller order, not the invoice", () => {
+    const facts = planFacts(run(25));
+    const v = facts.rightSized;
+    expect(facts.recommendedPlan).toBe("right_sized");
+    const en = templateExplanationParts(facts, "en").watchOut;
+    expect(en).toContain(`all ${v.pairs} pairs should sell`);
+    expect(en).toContain(`about ${v.unsoldPairsAtLowSales} pairs (${v.unsoldAtLowSalesPercent}%)`);
+    expect(en).not.toContain(`${facts.pairsOrdered - v.pairs} pairs`);
+  });
+
+  it("explains early settlement by days, not yearly rates, when there is no discount to take", () => {
+    const facts = planFacts(runEngine({ merchant, invoice: { ...sampleInvoice, earlyPayDiscountPct: 0 } }));
+    const why = templateExplanationParts(facts, "en").whyCheapest;
+    expect(facts.recommendedPlan === "right_sized" ? facts.rightSized.paysEarlyForDiscount : facts.keepFull.paysEarlyForDiscount).toBe(false);
+    expect(why).toContain(`needed for only ${facts.earlySettlementDays} days`);
+    expect(why).toContain(`a loan would run ${facts.loanDays} days`);
+    expect(why).not.toContain("a year");
+  });
+
+  it("names the left-over stock risk for the recommended order", () => {
     const facts = planFacts(run(30));
+    const v = facts.rightSized;
     const text = templateExplanation(facts, "en");
     expect(facts.recommendedPlan).toBe("right_sized");
-    expect(text).toContain(`${facts.stock.unsoldPairsAtExpectedSales} pairs`);
-    expect(text).toContain(`${facts.stock.unsoldAtExpectedSalesPercent}%`);
-    expect(text).toContain("unsold");
+    expect(text).toContain(`${v.unsoldPairsAtLowSales} pairs`);
+    expect(text).toContain(`${v.unsoldAtLowSalesPercent}%`);
+    expect(text).toContain("left over");
   });
 
   it("describes ordering fewer pairs when the right-sized plan is recommended", () => {

@@ -13,6 +13,8 @@ import { FIELD_KEYS } from "../lib/invoice-extraction";
 import { sniffMimeType } from "../lib/invoice-upload";
 
 process.env.AI_MOCK = "false";
+// Tests use Flash-Lite only: never the larger Flash fallback model (its free tier is 20 requests a day).
+process.env.GEMINI_FALLBACK_MODEL = "off";
 const CAP = Number(process.argv[2]) || 8;
 const only = process.argv[3];
 let calls = 0;

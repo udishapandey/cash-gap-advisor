@@ -1,18 +1,18 @@
 // True cost of each way to cover a cash gap, and the cheapest plan. Plain TypeScript, no AI.
 // Options are ranked by actual ₹ paid per ₹1 raised, never by a fixed order.
+//
+// Only CONFIRMED sources are in here: early settlement, credit line, bank overdraft, and
+// ordering fewer pairs. Asking the supplier for more time is never counted as certain, so it
+// is not an option here. See `askFirst` in index.ts.
 
 import { CONFIG } from "./config";
 import { amountDueOn, type ScenarioResult } from "./gap";
+import { expectedLostMargin, type StockOutRisk } from "./stock";
 import { formatINR } from "../format";
 import type { Merchant } from "../data/merchant";
 import type { Invoice } from "../data/invoice";
 
-export type OptionId =
-  | "early_settlement"
-  | "credit_line"
-  | "bank_overdraft"
-  | "split_order"
-  | "supplier_extension";
+export type OptionId = "early_settlement" | "credit_line" | "bank_overdraft" | "split_order";
 
 export interface FundingOption {
   id: OptionId;
@@ -24,6 +24,8 @@ export interface FundingOption {
   /** Cost expressed as % per year, for comparison with loans. null if it doesn't make sense. */
   annualisedPct: number | null;
   isBorrowing: boolean;
+  /** Only for the split order: how the stock-out risk was priced. */
+  stockOut?: StockOutRisk;
   note: string;
 }
 
@@ -39,9 +41,12 @@ export interface PlanStep {
 export interface Plan {
   gap: number;
   steps: PlanStep[];
+  /** Covered by confirmed sources. Never includes a supplier extension. */
   covered: number;
   uncovered: number;
+  fullyCovered: boolean;
   totalCost: number;
+  /** Credit line + overdraft. */
   borrowed: number;
 }
 
@@ -51,23 +56,22 @@ export interface DiscountAnalysis {
   /** Extra funding cost of paying early (bigger gap earlier) compared with paying on the due date. */
   extraFundingCost: number;
   netSaving: number;
-  /** False if even every source together can't cover the earlier, bigger gap. */
+  /** False if even every confirmed source together can't cover the earlier, bigger gap. */
   affordable: boolean;
   worthIt: boolean;
 }
 
 export interface FundingInput {
   merchant: Merchant;
+  /** The invoice being paid (already resized if the order was right-sized). */
   invoice: Invoice;
   /** The scenario (at the day we pay) whose "earned but not yet settled" cash caps early settlement. */
   scenario: ScenarioResult;
+  /** Pairs forecast to sell this season in the plan scenario. Prices the split order's stock-out risk. */
+  demandUnits: number;
   overdraftRatePct?: number;
-  /** True if the supplier has already agreed to an extension at no charge. */
-  supplierAgrees?: boolean;
   /** Days borrowed money stays out. Defaults to CONFIG.borrowDays. */
   borrowDays?: number;
-  /** Paying early means asking for an extension makes no sense, so it is left out. */
-  forEarlyPayment?: boolean;
 }
 
 const round = (n: number) => Math.round(n);
@@ -82,13 +86,30 @@ export function interestRate(ratePct: number, days: number): number {
   return (ratePct / 100) * (days / CONFIG.daysPerYear);
 }
 
+/** The late fee if the due date is missed by `daysLate`. Shown as a cost of missing it, never as a plan. */
+export function lateFeeIfMissed(invoice: Invoice, daysLate: number): number {
+  return round(
+    ((invoice.amount * invoice.lateFeePctPerMonth) / 100) * (daysLate / CONFIG.daysPerMonth),
+  );
+}
+
 export function buildFundingOptions(input: FundingInput): FundingOption[] {
   const { merchant, invoice, scenario } = input;
   const overdraftRatePct = input.overdraftRatePct ?? CONFIG.overdraftRatePct;
   const borrowDays = input.borrowDays ?? CONFIG.borrowDays;
-  const supplierAgrees = input.supplierAgrees ?? false;
 
   const earlySettlementCap = round(scenario.earnedNotSettled);
+
+  // Split order: defer some pairs to a later delivery. The cost is the margin on the
+  // deferred pairs that would have sold.
+  const splitUnits = round(invoice.units * CONFIG.maxSplitShareOfInvoice);
+  const splitAmount = splitUnits * invoice.unitPrice;
+  const risk = expectedLostMargin({
+    orderUnits: invoice.units,
+    unitsNotOrdered: splitUnits,
+    demandUnits: input.demandUnits,
+  });
+
   const options: FundingOption[] = [
     {
       id: "early_settlement",
@@ -120,37 +141,21 @@ export function buildFundingOptions(input: FundingInput): FundingOption[] {
     {
       id: "split_order",
       name: "Split the order",
-      maxAmount: round(invoice.amount * CONFIG.maxSplitShareOfInvoice),
-      costRate: 0,
-      annualisedPct: 0,
+      maxAmount: splitAmount,
+      costRate: splitAmount > 0 ? risk.expectedLostMargin / splitAmount : 0,
+      annualisedPct: null,
       isBorrowing: false,
-      note: "No interest. Part of the stock ships later, so the best sellers may run out before the festival.",
+      stockOut: risk,
+      note: `Delivers ${splitUnits} pairs later. No interest, but the forecast says ${Math.round(risk.probabilitySell * 100)}% of those pairs would sell, so the expected lost margin is ${formatINR(risk.expectedLostMargin)} (pairs × chance they sell × ${formatINR(risk.marginPerUnit)} margin).`,
     },
   ];
-
-  if (!input.forEarlyPayment) {
-    const lateFeeRate = supplierAgrees
-      ? 0
-      : (invoice.lateFeePctPerMonth / 100) * (CONFIG.extensionDays / CONFIG.daysPerMonth);
-    options.push({
-      id: "supplier_extension",
-      name: "Ask supplier for more time",
-      maxAmount: invoice.amount,
-      costRate: lateFeeRate,
-      annualisedPct: supplierAgrees ? 0 : invoice.lateFeePctPerMonth * 12,
-      isBorrowing: false,
-      note: supplierAgrees
-        ? `Agreed: no charge for ${CONFIG.extensionDays} extra days.`
-        : `Free if the supplier agrees. If not, the late fee is ${invoice.lateFeePctPerMonth}% a month. Priced here at the late fee for ${CONFIG.extensionDays} days.`,
-    });
-  }
 
   return options.sort(
     (a, b) => a.costRate - b.costRate || Number(a.isBorrowing) - Number(b.isBorrowing),
   );
 }
 
-/** Use the cheapest sources first, by actual cost, until the gap is covered. */
+/** Use the cheapest confirmed sources first, by actual cost, until the gap is covered. */
 export function buildPlan(gap: number, options: FundingOption[], exclude: OptionId[] = []): Plan {
   const ranked = options
     .filter((o) => !exclude.includes(o.id))
@@ -173,12 +178,12 @@ export function buildPlan(gap: number, options: FundingOption[], exclude: Option
     remaining -= amount;
   }
 
-  const covered = gap - remaining;
   return {
     gap,
     steps,
-    covered,
+    covered: gap - remaining,
     uncovered: remaining,
+    fullyCovered: remaining === 0,
     totalCost: steps.reduce((s, x) => s + x.cost, 0),
     borrowed: steps.filter((s) => s.isBorrowing).reduce((s, x) => s + x.amount, 0),
   };
@@ -192,7 +197,7 @@ export function evaluateDiscount(
 ): DiscountAnalysis {
   const discountAmount = round(invoice.amount - amountDueOn(invoice, invoice.earlyPayWithinDays));
   const extraFundingCost = earlyPlan.totalCost - duePlan.totalCost;
-  const affordable = earlyPlan.uncovered === 0;
+  const affordable = earlyPlan.fullyCovered;
   const netSaving = discountAmount - extraFundingCost;
   return {
     discountAmount,

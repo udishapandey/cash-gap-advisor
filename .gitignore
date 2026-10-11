@@ -42,3 +42,6 @@ next-env.d.ts
 
 # secrets (explicit, in addition to .env* above)
 .env.local
+
+# test reports
+.vitest

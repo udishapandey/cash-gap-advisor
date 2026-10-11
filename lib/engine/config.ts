@@ -22,7 +22,17 @@ export const CONFIG = {
   // Split order: part of the order is delivered (and paid for) later.
   maxSplitShareOfInvoice: 0.3,
 
-  // Supplier extension: how many extra days we ask for.
+  // Stock. Used to price the risk of ordering fewer pairs than would have sold.
+  stock: {
+    sellingPricePerPair: 1_700, // ₹
+    grossMarginPct: 40, // % of selling price
+    lastDiwaliUnitsSold: 520, // SIMULATED: pairs of this festive range sold last Diwali
+  },
+
+  // Recommend right-sizing the order when expected unsold stock is more than this share of the order.
+  rightSizeUnsoldThreshold: 0.1,
+
+  // Supplier extension: how many extra days we ask for. Shown as an "ask first" step, never in the plan.
   extensionDays: 15,
 
   daysPerYear: 365,

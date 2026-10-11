@@ -47,7 +47,7 @@ Where each value lives in code: `lib/engine/config.ts` (rates and multipliers), 
 
 | # | Assumption | Value | Source | How we'd verify with real data |
 |---|---|---|---|---|
-| 19 | Amount | ₹5,00,000 | Brief | Read from the real invoice (Phase 2 will extract it with AI, and the founder confirms). |
+| 19 | Amount | 500 pairs × ₹1,000 = ₹5,00,000 (amount is always units × unit price) | Brief | Read from the real invoice (Phase 2 will extract it with AI, and the founder confirms). |
 | 20 | Due date | 10 days from today | Brief | Same. |
 | 21 | Early-payment discount | 2% if paid within 7 days | Brief | Same. |
 | 22 | Late fee | 1.5% a month of the amount | Brief | Same. Check the supplier contract for how it is actually charged. |
@@ -66,12 +66,32 @@ Where each value lives in code: `lib/engine/config.ts` (rates and multipliers), 
 | 30 | How long borrowed money stays out | 30 days | Claude | Measure how fast cash recovers after festive sales. |
 | 31 | Interest method | Simple interest: rate × days ÷ 365 | Claude | Compare with the lender's schedule, which may add fees and compounding. |
 | 32 | Early-payment discount value | 2% of the amount, minus the extra funding cost of needing the cash 3 days sooner. Worth it only if every source together can cover the larger, earlier gap | Brief | Run on real invoices and compare with what founders actually did. |
-| 33 | Split order | Up to 30% of the invoice, ₹0 interest, with a stock-out risk warning | Brief (₹0 + risk note); Claude (30%) | Ask the supplier what splits they accept. Check last season's sell-through for the SKUs involved. |
-| 34 | Supplier extension | Asks for 15 extra days. Free if the supplier agrees; if not, priced at the late fee for those 15 days. Up to the full invoice | Brief (₹0 or late fee); Claude (15 days) | Ask the supplier. Record how often they agree. |
-| 35 | Recommended plan | Uses the cheapest sources first by rupee cost until the gap is covered. Compares paying early (discount) against paying on the due date. The founder can exclude any option | Brief | Compare with what a finance advisor would pick on real cases. |
+| 33 | Split order | Defers up to 30% of the pairs (150 of 500) to a later delivery. No interest. Priced at the expected lost gross margin on the deferred pairs (see #38). Excluded from the "keep the full order" view | Brief (pricing); Claude (30%) | Ask the supplier what splits they accept. Check last season's sell-through for the SKUs involved. |
+| 34 | Supplier extension | **Never counted as certain and never in the plan.** Shown separately as "Ask first": if the supplier agrees to N extra days (default 15), how much borrowing it removes, measured by rerunning the plan on the later date. It can remove nothing, e.g. when sales are weak and cash goes out faster than it comes in | Brief (never certain); Claude (15 days default) | Ask the supplier. Record how often they agree and for how many days. |
+| 35 | Late fee | 1.5% a month of the invoice, pro-rated by days. Shown only as the cost of missing the due date, never as a way to pay | Brief | Same as #22. |
+| 36 | Recommended plan | Uses only confirmed sources (early settlement, bank overdraft, credit line, ordering fewer pairs), cheapest first by rupee cost, until the gap is covered. If they can't cover it, the shortfall is shown as uncovered. Compares paying early (discount) against paying on the due date. The founder can exclude any option | Brief | Compare with what a finance advisor would pick on real cases. |
+| 37 | What counts as "the loan" | Credit line plus bank overdraft in the recommended plan. Early settlement is the merchant's own money, so it is not counted as borrowing | Claude | Confirm with the merchant how they think of settlement advances. |
+
+## Stock and order sizing
+
+| # | Assumption | Value | Source | How we'd verify with real data |
+|---|---|---|---|---|
+| 38 | Expected lost margin (split order) | pairs not ordered × probability they would sell × gross margin per pair. The pairs left off are the last ones, so the probability is the share of them that falls inside forecast demand | Brief | Compare against real stock-outs: sales lost per pair short in past seasons. |
+| 39 | Selling price | ₹1,700 per pair | Brief | Average realised price per pair from the order data, after discounts. |
+| 40 | Gross margin | 40% of selling price = ₹680 per pair | Brief | Selling price minus landed cost, from the merchant's books. **Does not match #19:** a ₹1,700 pair bought at ₹1,000 implies ₹700 (41%). The brief's 40% is used as given. |
+| 41 | Last Diwali units sold | 520 pairs of this festive range (simulated) | Brief (to be synthetic); Claude (the value) | Units of the same range sold in the 14 days before last Diwali, from order data. |
+| 42 | Pairs forecast to sell this season | Last Diwali's units × (scenario uplift ÷ last year's uplift of 1.4) × (1 − sales drop). So expected = 520, low = 408, high = 631, and a 30% drop gives 364 | Claude | Back-test the same rule on earlier seasons. |
+| 43 | Right-sized order | The pairs forecast to sell in the plan scenario (expected by default), rounded down, capped at the invoice quantity. Other scenarios' demand is shown for information only | Brief | Compare with what founders would actually order, and with what sold through. |
+| 44 | When to recommend right-sizing | When expected unsold stock is more than 10% of the order. At 0% and −10% sales the full order is recommended; at −20% and −30% the right-sized order | Brief | Test the 10% line against real leftover stock and the margin lost by under-ordering. |
+| 45 | Two what-if views | (a) keep the full order: the gap grows as sales drop. (b) right-sized order: the order shrinks as sales drop and the gap is measured against the smaller invoice. Both are always computed | Brief | n/a |
+| 46 | Stock sold before the due date | Not modelled. Unsold pairs of this order do not change near-term cash-in; only the what-if sales drop does | Claude | Check when stock from this order actually arrives and sells relative to the due date. |
+
+### Known limitation: the loan still grows as sales drop
+
+With these inputs, right-sizing shrinks the loan a lot **compared with keeping the full order** (about ₹1.72L against ₹3.05L at −30% sales), but the right-sized loan at −30% is still **higher than the loan at 0%** (about ₹1.72L against ₹1.17L). A 30% sales drop cuts forecast cash-in by about ₹2.5L, while right-sizing saves only about ₹1.4L of stock cost. The main reason is that "other outflows" (#1) are fixed. In reality courier, fees and part of ad spend would fall with sales, which would narrow this. Treat the "loan shrinks" claim in the spec as true relative to keeping the full order, not relative to the 0% case, until #1 is replaced with real data.
 
 ## Not modelled yet
 
-- Non-money costs: the split-order stock-out risk and the relationship cost of asking for more time are shown as notes, not given a rupee value.
+- Non-money costs: the relationship cost of asking the supplier for more time.
 - Taxes, fees and penalties beyond those above.
 - The AI invoice reader, the what-if question box, the call script, the approval flow with the RBI Key Fact Statement, and post-season results (later phases).

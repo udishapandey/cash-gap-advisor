@@ -15,7 +15,7 @@ Diwali is the demo, not the product: any large supplier bill the founder can't f
 2. The AI reads it: amount, due date, early-payment discount, late fee. The founder confirms or edits.
 3. The cash gap is shown as a range, including COD cash in transit and expected returns (RTO), with a "low confidence" label when the forecast is shaky.
 4. Every option is compared by true cost, with no fixed ranking: early settlement, credit line, split order, supplier extension, the invoice's early-payment discount, the founder's own bank rate.
-5. What-if: a slider (sales -10/-20/-30%) plus a typed question. The recommended loan shrinks as sales assumptions drop.
+5. What-if: a slider (sales -10/-20/-30%) plus a typed question. As sales assumptions drop, the gap grows if you keep the full order — but the recommended order is right-sized, so the loan shrinks.
 6. For "ask for more time", the AI writes a call script for the founder, not an auto-message to the supplier.
 7. One approval screen for the plan, with the loan section clearly separate and its RBI Key Fact Statement (KFS) shown before any credit is drawn.
 8. After the season: results against the founder's default choice, and what the system learned.

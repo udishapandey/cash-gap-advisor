@@ -8,6 +8,7 @@ import {
   buildFundingOptions,
   buildPlan,
   interestRate,
+  lateFeeIfMissed,
   type FundingOption,
 } from "./options";
 import { flatMerchant } from "./testing";
@@ -15,7 +16,13 @@ import { flatMerchant } from "./testing";
 const flat = flatMerchant();
 const expectedScenario = computeGap({ merchant: flat, invoice: sampleInvoice }).scenarios.expected;
 const optionsFor = (extra = {}) =>
-  buildFundingOptions({ merchant: flat, invoice: sampleInvoice, scenario: expectedScenario, ...extra });
+  buildFundingOptions({
+    merchant: flat,
+    invoice: sampleInvoice,
+    scenario: expectedScenario,
+    demandUnits: 520,
+    ...extra,
+  });
 const get = (opts: FundingOption[], id: string) => opts.find((o) => o.id === id)!;
 
 describe("true cost of each option", () => {
@@ -46,15 +53,18 @@ describe("true cost of each option", () => {
     expect(edited.costRate).toBeGreaterThan(base.costRate);
   });
 
-  it("split order has no interest but carries a stock-out warning", () => {
+  it("split order is priced as expected lost margin, not as free", () => {
     const o = get(optionsFor(), "split_order");
-    expect(o.costRate).toBe(0);
-    expect(o.note.toLowerCase()).toContain("run out");
+    // 150 pairs deferred, all would sell at 520 demand, ₹680 margin each
+    expect(o.stockOut?.expectedLostMargin).toBe(102_000);
+    expect(o.costRate).toBeCloseTo(0.68, 10);
+    expect(o.isBorrowing).toBe(false);
   });
 
-  it("supplier extension costs the late fee, or nothing if the supplier agrees", () => {
-    expect(get(optionsFor(), "supplier_extension").costRate).toBeCloseTo(0.0075, 10); // 1.5%/month x 15 days
-    expect(get(optionsFor({ supplierAgrees: true }), "supplier_extension").costRate).toBe(0);
+  it("has no supplier extension: it is never a confirmed source", () => {
+    const ids = optionsFor().map((o) => o.id as string);
+    expect(ids).not.toContain("supplier_extension");
+    expect(ids.sort()).toEqual(["bank_overdraft", "credit_line", "early_settlement", "split_order"]);
   });
 
   it("ranks options by actual cost, cheapest first", () => {
@@ -63,18 +73,27 @@ describe("true cost of each option", () => {
   });
 });
 
+describe("late fee is the cost of missing the due date", () => {
+  it("is 1.5% a month on the invoice, pro-rated", () => {
+    expect(lateFeeIfMissed(sampleInvoice, 15)).toBe(3_750); // 5,00,000 x 1.5% x 15/30
+    expect(lateFeeIfMissed(sampleInvoice, 30)).toBe(7_500);
+  });
+});
+
 describe("recommended plan", () => {
-  it("uses the cheapest sources first until the gap is covered", () => {
+  it("uses the cheapest confirmed sources first until the gap is covered", () => {
     const opts = optionsFor();
     const plan = buildPlan(250_000, opts);
-    expect(plan.steps.map((s) => s.optionId)).toEqual(["split_order", "early_settlement"]);
-    expect(plan.steps[0].amount).toBe(150_000); // 30% of the invoice, free
-    expect(plan.steps[1].amount).toBe(100_000);
-    expect(plan.steps[1].cost).toBe(300); // 0.30% of 1,00,000
+    expect(plan.steps.map((s) => s.optionId)).toEqual(["early_settlement", "bank_overdraft"]);
+    expect(plan.steps[0].amount).toBe(168_000); // capped at sales already earned
+    expect(plan.steps[0].cost).toBe(504); // 0.30% of 1,68,000
+    expect(plan.steps[1].amount).toBe(82_000);
+    expect(plan.steps[1].cost).toBe(944); // 14% a year for 30 days
     expect(plan.covered).toBe(250_000);
     expect(plan.uncovered).toBe(0);
-    expect(plan.totalCost).toBe(300);
-    expect(plan.borrowed).toBe(0);
+    expect(plan.fullyCovered).toBe(true);
+    expect(plan.totalCost).toBe(504 + 944);
+    expect(plan.borrowed).toBe(82_000); // early settlement is not a loan
   });
 
   it("steps are in non-decreasing cost order", () => {
@@ -85,7 +104,7 @@ describe("recommended plan", () => {
   });
 
   it("skips excluded options and falls back to the next cheapest", () => {
-    const plan = buildPlan(250_000, optionsFor(), ["split_order", "early_settlement", "supplier_extension"]);
+    const plan = buildPlan(250_000, optionsFor(), ["early_settlement", "split_order"]);
     // overdraft (14%) is cheaper than the credit line (18%), so it is used first
     expect(plan.steps.map((s) => s.optionId)).toEqual(["bank_overdraft", "credit_line"]);
     expect(plan.steps[0].amount).toBe(100_000);
@@ -97,6 +116,7 @@ describe("recommended plan", () => {
   it("reports what it could not cover", () => {
     const plan = buildPlan(5_000_000, optionsFor());
     expect(plan.uncovered).toBeGreaterThan(0);
+    expect(plan.fullyCovered).toBe(false);
     expect(plan.covered + plan.uncovered).toBe(5_000_000);
   });
 
@@ -104,46 +124,24 @@ describe("recommended plan", () => {
     const plan = buildPlan(0, optionsFor());
     expect(plan.steps).toEqual([]);
     expect(plan.totalCost).toBe(0);
+    expect(plan.fullyCovered).toBe(true);
   });
 });
 
 describe("early-payment discount", () => {
-  it("is worth taking in the sample: 2% (₹10,000) beats the small extra funding cost", () => {
-    const r = runEngine({ merchant, invoice: sampleInvoice });
-    expect(r.discount.discountAmount).toBe(10_000);
-    expect(r.discount.daysEarly).toBe(3);
-    expect(r.discount.netSaving).toBe(10_000 - r.discount.extraFundingCost);
-    expect(r.discount.worthIt).toBe(true);
-    expect(r.recommended.timing).toBe("pay_early_for_discount");
+  it("is worth taking in the sample: 2% (₹10,000) beats the extra funding cost", () => {
+    const { discount, recommended } = runEngine({ merchant, invoice: sampleInvoice }).views.keepFull;
+    expect(discount.discountAmount).toBe(10_000);
+    expect(discount.daysEarly).toBe(3);
+    expect(discount.netSaving).toBe(10_000 - discount.extraFundingCost);
+    expect(discount.worthIt).toBe(true);
+    expect(recommended.timing).toBe("pay_early_for_discount");
   });
 
   it("is not worth taking when the discount is tiny", () => {
     const stingy = { ...sampleInvoice, earlyPayDiscountPct: 0.01 };
-    const r = runEngine({ merchant, invoice: stingy });
-    expect(r.discount.worthIt).toBe(false);
-    expect(r.recommended.timing).toBe("on_due_date");
-  });
-});
-
-describe("whole engine on the sample data", () => {
-  it("covers the expected gap without borrowing", () => {
-    const r = runEngine({ merchant, invoice: sampleInvoice });
-    expect(r.duePlan.gap).toBe(r.gap.gapExpected);
-    expect(r.duePlan.uncovered).toBe(0);
-    expect(r.duePlan.borrowed).toBe(0);
-  });
-
-  it("reruns everything for a sales drop: bigger gap, bigger plan", () => {
-    const base = runEngine({ merchant, invoice: sampleInvoice });
-    const drop = runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: 30 });
-    expect(drop.gap.gapExpected).toBeGreaterThan(base.gap.gapExpected);
-    expect(drop.duePlan.covered).toBeGreaterThan(base.duePlan.covered);
-    expect(drop.duePlan.totalCost).toBeGreaterThanOrEqual(base.duePlan.totalCost);
-  });
-
-  it("lets the founder rule out options they don't want", () => {
-    const r = runEngine({ merchant, invoice: sampleInvoice, exclude: ["split_order", "supplier_extension"] });
-    expect(r.duePlan.steps.some((s) => s.optionId === "split_order")).toBe(false);
-    expect(r.duePlan.uncovered).toBe(0);
+    const { discount, recommended } = runEngine({ merchant, invoice: stingy }).views.keepFull;
+    expect(discount.worthIt).toBe(false);
+    expect(recommended.timing).toBe("on_due_date");
   });
 });

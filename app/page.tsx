@@ -9,7 +9,7 @@ function SimulatedTag() {
 }
 
 export default function Home() {
-  const { gap } = runEngine({ merchant, invoice: sampleInvoice });
+  const { gap } = runEngine({ merchant, invoice: sampleInvoice }).views.keepFull;
   const { low, expected, high } = gap.scenarios;
 
   const cashIn = [

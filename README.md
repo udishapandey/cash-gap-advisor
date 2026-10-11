@@ -146,7 +146,7 @@ Variables (all in `.env.local`, which is git-ignored; never commit a key):
 | `AI_MOCK` | `true` makes every AI feature return a built-in answer after a short pause, with **no API call and no key needed**. Mock answers go through the same grounding check and show a "Mock AI" badge. Use it for development and demos without a quota. **It must never be on in production.** |
 
 ```bash
-npm test                     # 697 tests across 27 files; AI is always mocked, no network
+npm test                     # 739 tests across 28 files; AI is always mocked, no network
 npm run build                # production build
 npm run smoke:ai             # LIVE: calls the real model once per feature. Run sparingly (free-tier quota).
 npm run smoke:ai -- 2 explain-hi   # cap the calls, and run just one step
@@ -187,8 +187,12 @@ Five sample invoices (all synthetic, with different layouts, languages and fine 
 - Learn from many seasons instead of one; show forecast error over time.
 - A real partner-lender integration with a genuine Key Fact Statement, and the Razorpay test-mode call.
 
+## Visual style
+
+Visual style uses design tokens from Razorpay's open-source Blade design system (MIT). Only the token values (colours, type scale, radius, shadow, fonts: Inter and TASA Orbiter) are read from `@razorpay/blade`; none of its components are used, and there is no Razorpay logo or wordmark. A test checks every value in `app/globals.css` against the package.
+
 ## Built with Claude Code
 
 This was built end to end with [Claude Code](https://claude.com/claude-code), working under the rules in `CLAUDE.md` and against the locked spec. I made the product decisions; Claude Code wrote the code, the tests (including breaking each safeguard on purpose to confirm the tests catch it), and found some of its own bugs, such as a plan that under-borrowed by about ₹39,000 because it looked at one day. The honest story of what worked and what didn't is in [`docs/BUILD_LOG.md`](docs/BUILD_LOG.md).
 
-Stack: Next.js 16 (App Router) · TypeScript · Tailwind · Zod · Vitest · Gemini (Claude switchable).
+Stack: Next.js 16 (App Router) · TypeScript · Tailwind · Zod · Vitest · Gemini (Claude switchable) · Blade design tokens.

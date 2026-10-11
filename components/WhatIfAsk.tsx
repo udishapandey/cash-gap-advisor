@@ -88,7 +88,7 @@ export default function WhatIfAsk({ onApply }: { onApply: (applied: AppliedWhatI
         <button
           type="submit"
           disabled={busy || !question.trim()}
-          className="shrink-0 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          className="shrink-0 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
         >
           {busy ? "Working it out…" : "Ask"}
         </button>

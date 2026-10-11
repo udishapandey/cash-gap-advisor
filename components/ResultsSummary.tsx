@@ -28,7 +28,7 @@ export function ResultsSummaryView({
   onLanguage: (l: Language) => void;
 }) {
   return (
-    <section aria-label="AI summary" className="rounded-xl border border-line bg-card p-5">
+    <section aria-label="AI summary" className="rounded-xl border border-line bg-card shadow-sm p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-semibold">

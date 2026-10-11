@@ -112,7 +112,7 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
             type="button"
             onClick={payNow}
             disabled={busy !== null}
-            className="mt-4 rounded-md bg-brand px-6 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+            className="mt-4 rounded-md bg-brand px-6 py-3 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-60"
           >
             {busy === "pay" ? "Paying… (simulated)" : `Pay supplier ${formatINR(pay)}`}
           </button>
@@ -246,7 +246,7 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
           type="button"
           onClick={approve}
           disabled={!allowed || busy !== null}
-          className="mt-4 rounded-md bg-brand px-6 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-4 rounded-md bg-brand px-6 py-3 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy === "touch" ? "Verifying… (simulated)" : "Approve with Touch ID"}
         </button>
@@ -311,17 +311,17 @@ function Success({
         )}
       </dl>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <Link href="/results" className="rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-white hover:opacity-90">
+        <Link href="/results" className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover">
           See how the plan did →
         </Link>
         <button
           type="button"
           onClick={onAgain}
-          className="rounded-md border border-line px-5 py-2.5 text-sm font-medium hover:bg-background"
+          className="rounded-md border border-brand-border text-brand-text px-5 py-2.5 text-sm font-medium hover:bg-background"
         >
           Start another invoice
         </button>
-        <Link href="/" className="rounded-md border border-line px-5 py-2.5 text-sm font-medium hover:bg-background">
+        <Link href="/" className="rounded-md border border-brand-border text-brand-text px-5 py-2.5 text-sm font-medium hover:bg-background">
           Back to the dashboard
         </Link>
       </div>

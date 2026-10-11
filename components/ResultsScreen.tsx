@@ -34,7 +34,7 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
         plan would have done.
       </p>
 
-      <fieldset className="rounded-xl border border-line bg-card p-4">
+      <fieldset className="rounded-xl border border-line bg-card shadow-sm p-4">
         <legend className="px-1 text-sm font-medium">
           Simulated actual outcome <SimulatedTag />
         </legend>
@@ -87,7 +87,7 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
             reset();
             router.push("/invoice");
           }}
-          className="rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
+          className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
         >
           Start a new invoice
         </button>
@@ -99,8 +99,8 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
 function Hero({ o }: { o: OutcomeResult }) {
   const saved = o.cost.moneySaved;
   return (
-    <Card aria-label="Money saved" className={saved >= 0 ? "border-green-300 bg-green-50/60" : "border-red-300 bg-red-50/60"}>
-      <p className="text-2xl font-semibold leading-snug sm:text-3xl">{heroLine(o)}</p>
+    <Card aria-label="Money saved" className={saved >= 0 ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50"}>
+      <p className="font-heading text-2xl font-semibold leading-snug sm:text-3xl">{heroLine(o)}</p>
       <p className="mt-2 text-sm text-muted">
         {heroBasis(o)} The default cost {formatINR(o.cost.default.netCost)}; your plan cost {formatSignedINR(o.cost.plan.netCost)}.
       </p>

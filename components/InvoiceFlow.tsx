@@ -317,7 +317,7 @@ export default function InvoiceFlow() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <section className="rounded-xl border border-line bg-card p-5">
+      <section className="rounded-xl border border-line bg-card shadow-sm p-5">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">Forward a supplier invoice</h2>
           {mockAi && (
@@ -353,8 +353,8 @@ export default function InvoiceFlow() {
           <p className="text-sm text-muted">Drag an invoice here, or</p>
           <div className="flex flex-wrap justify-center gap-3">
             <label
-              className={`cursor-pointer rounded-md bg-brand px-4 py-2 text-sm font-medium text-white ${
-                reading ? "pointer-events-none opacity-50" : "hover:opacity-90"
+              className={`cursor-pointer rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white ${
+                reading ? "pointer-events-none opacity-50" : "hover:bg-brand-hover"
               }`}
             >
               Choose file
@@ -374,7 +374,7 @@ export default function InvoiceFlow() {
               type="button"
               onClick={useSample}
               disabled={reading}
-              className="rounded-md border border-line bg-card px-4 py-2 text-sm font-medium hover:bg-background disabled:opacity-50"
+              className="rounded-md border border-brand-border text-brand-text bg-card px-4 py-2 text-sm font-medium hover:bg-background disabled:opacity-50"
             >
               Use sample invoice
             </button>
@@ -412,7 +412,7 @@ export default function InvoiceFlow() {
                 <button
                   type="button"
                   onClick={enterManually}
-                  className="rounded-md border border-line px-4 py-2 text-sm font-medium hover:bg-background"
+                  className="rounded-md border border-brand-border text-brand-text px-4 py-2 text-sm font-medium hover:bg-background"
                 >
                   Enter invoice manually
                 </button>
@@ -432,7 +432,7 @@ export default function InvoiceFlow() {
       </section>
 
       {phase === "review" && extraction && values && (
-        <section className="rounded-xl border border-line bg-card p-5">
+        <section className="rounded-xl border border-line bg-card shadow-sm p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">
@@ -532,7 +532,7 @@ export default function InvoiceFlow() {
               type="button"
               onClick={confirm}
               disabled={reading}
-              className="rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
             >
               Confirm invoice
             </button>
@@ -560,7 +560,7 @@ export default function InvoiceFlow() {
           )}
           <Link
             href="/gap"
-            className="mt-4 inline-block rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
+            className="mt-4 inline-block rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
           >
             Continue to the cash gap →
           </Link>

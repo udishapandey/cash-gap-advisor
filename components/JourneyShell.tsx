@@ -40,12 +40,12 @@ export default function JourneyShell({
       {!ready ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : !access.reachable || !engine || !state.invoice ? (
-        <section className="rounded-xl border border-line bg-card p-6">
+        <section className="rounded-xl border border-line bg-card shadow-sm p-6">
           <h2 className="text-lg font-semibold">Not yet</h2>
           <p className="mt-1 text-sm text-muted">{access.reason}</p>
           <Link
             href={fix.href}
-            className="mt-4 inline-block rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            className="mt-4 inline-block rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
           >
             Go to {fix.label.toLowerCase()}
           </Link>

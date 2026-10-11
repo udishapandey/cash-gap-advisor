@@ -150,7 +150,7 @@ export default function CallScriptPanel({
         <button
           type="button"
           onClick={() => setRequested(true)}
-          className="mt-3 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          className="mt-3 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
         >
           Write a call script
         </button>

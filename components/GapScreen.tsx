@@ -185,7 +185,7 @@ export default function GapScreen() {
             <div className="flex justify-end">
               <Link
                 href="/options"
-                className="rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
+                className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
               >
                 See your options →
               </Link>

@@ -15,7 +15,7 @@ export function Card({
   ...rest
 }: { children: ReactNode; className?: string } & React.HTMLAttributes<HTMLElement>) {
   return (
-    <section className={`rounded-xl border border-line bg-card p-5 ${className}`} {...rest}>
+    <section className={`rounded-xl border border-line bg-card shadow-sm p-5 ${className}`} {...rest}>
       {children}
     </section>
   );

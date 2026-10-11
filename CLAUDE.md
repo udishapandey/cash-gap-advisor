@@ -29,6 +29,10 @@ Decision journey: `/invoice` → `/gap` → `/options` → `/approve` → `/resu
 
 Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate lives in `config.ts`). **Sizing rule: every plan is sized to the peak cumulative shortfall over the whole window from today to the due date (the balance on every day), never to one day's snapshot.** `lib/engine/peak.test.ts` enforces it for every plan, slider value and scenario. There is no upfront buffer: the extra cash that could be needed at low sales is shown as **Standby** (`lib/engine/standby.ts`), covered by unused credit-line headroom, ₹0 cost unless drawn, never drawn automatically. Simulated data: `lib/data/`. Every assumption is listed in `docs/ASSUMPTIONS.md`; update it whenever an assumption changes.
 
+## Visual style
+
+Design tokens come from Razorpay's open-source Blade design system (MIT): `@razorpay/blade` is a dev dependency used ONLY to read token values. They live in `app/globals.css` (token path beside each value), and `lib/design-tokens.test.ts` checks them against the package. Don't use Blade components or providers, don't add hex colours, and don't add the Razorpay logo or wordmark. `.npmrc` sets `legacy-peer-deps=true` so Blade's React Native peers are not installed.
+
 ## Rules
 
 1. **Secrets only in `.env.local`.** Never hard-code keys, never commit them, never print them.

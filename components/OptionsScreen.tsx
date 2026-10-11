@@ -375,7 +375,7 @@ function OptionCard({
   simulated?: boolean;
 }) {
   return (
-    <article aria-label={title} className={`rounded-xl border border-line bg-card p-4 ${available ? "" : "opacity-60"}`}>
+    <article aria-label={title} className={`rounded-xl border border-line bg-card shadow-sm p-4 ${available ? "" : "opacity-60"}`}>
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold">{title}</h3>
         {source && <SourceTag id={source} />}
@@ -695,7 +695,7 @@ function OptionsBody({
           ← Back to the cash gap
         </Link>
         {state.chosenView ? (
-          <Link href="/approve" className="rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-white hover:opacity-90">
+          <Link href="/approve" className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover">
             Continue to approve →
           </Link>
         ) : (

@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, TASA_Orbiter } from "next/font/google";
 import "./globals.css";
 import { JourneyProvider } from "@/components/JourneyProvider";
 import NavLinks from "@/components/NavLinks";
 import PageTitle from "@/components/PageTitle";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Blade's two font families, both free on Google Fonts: Inter for text, TASA Orbiter for headings.
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const tasaOrbiter = TASA_Orbiter({
+  variable: "--font-tasa-orbiter",
   subsets: ["latin"],
 });
 
@@ -24,12 +25,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${tasaOrbiter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex">
         <JourneyProvider>
           <aside className="hidden md:flex w-60 shrink-0 flex-col bg-navy text-white">
-            <div className="px-6 py-6 text-lg font-semibold tracking-tight">
+            <div className="px-6 py-6 font-heading text-lg font-semibold tracking-tight">
               Cash Gap Advisor
             </div>
             <NavLinks />

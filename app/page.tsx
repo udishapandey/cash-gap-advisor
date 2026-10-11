@@ -28,14 +28,14 @@ export default function Home() {
         </p>
         <Link
           href="/invoice"
-          className="mt-3 inline-block rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          className="mt-3 inline-block rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
         >
           Got a supplier bill you can&apos;t fully pay? Start here →
         </Link>
       </div>
 
       <section className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-line bg-card p-5">
+        <div className="rounded-xl border border-line bg-card shadow-sm p-5">
           <p className="text-xs uppercase tracking-wide text-muted">Cash in by due date</p>
           <p className="mt-2 text-2xl font-semibold">{formatINR(expected.cash.totalIn)}</p>
           <p className="mt-1 text-xs text-muted">
@@ -44,7 +44,7 @@ export default function Home() {
           <SimulatedTag />
         </div>
 
-        <div className="rounded-xl border border-line bg-card p-5">
+        <div className="rounded-xl border border-line bg-card shadow-sm p-5">
           <p className="text-xs uppercase tracking-wide text-muted">Cash out by due date</p>
           <p className="mt-2 text-2xl font-semibold">{formatINR(expected.cashOut)}</p>
           <p className="mt-1 text-xs text-muted">
@@ -53,7 +53,7 @@ export default function Home() {
           <SimulatedTag />
         </div>
 
-        <div className="rounded-xl border border-line bg-card p-5">
+        <div className="rounded-xl border border-line bg-card shadow-sm p-5">
           <p className="text-xs uppercase tracking-wide text-muted">Projected cash gap</p>
           <p className="mt-2 text-2xl font-semibold">
             {formatINR(gap.gapMin)} to {formatINR(gap.gapMax)}
@@ -68,7 +68,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-line bg-card p-5">
+      <section className="rounded-xl border border-line bg-card shadow-sm p-5">
         <p className="text-xs uppercase tracking-wide text-muted">How expected cash in adds up</p>
         <dl className="mt-3 divide-y divide-line text-sm">
           {cashIn.map(([label, value]) => (

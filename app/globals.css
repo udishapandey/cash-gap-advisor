@@ -1,29 +1,195 @@
 @import "tailwindcss";
 
+/*
+ * Visual style: design tokens from Razorpay's open-source Blade design system (MIT), package @razorpay/blade.
+ * Every value below is copied verbatim from `bladeTheme` in `@razorpay/blade/tokens` (light theme, `colors.onLight`;
+ * the sidebar uses the dark theme, `colors.onDark`). The token path is in the comment beside each value, and
+ * `lib/design-tokens.test.ts` fails if a value drifts from the package or if a guessed hex code is added.
+ * Blade is only read for its token values: none of its components or providers are used.
+ * No Razorpay logo or wordmark is used anywhere.
+ */
 :root {
-  --background: #f5f7fa;
-  --foreground: #0c2451;
-  --navy: #0c2451;
-  --brand: #3395ff;
-  --muted: #6b7a99;
-  --line: #e4e9f2;
-  --card: #ffffff;
+  /* ---- surface ---- */
+  --background: hsla(0, 0%, 97%, 1); /* colors.onLight.surface.background.gray.subtle */
+  --card: hsla(0, 0%, 100%, 1); /* colors.onLight.surface.background.gray.intense */
+
+  /* ---- text ---- */
+  --foreground: hsla(0, 0%, 2%, 1); /* colors.onLight.surface.text.gray.normal */
+  --text-subtle: hsla(200, 10%, 18%, 1); /* colors.onLight.surface.text.gray.subtle */
+  --muted: hsla(204, 9%, 42%, 1); /* colors.onLight.surface.text.gray.muted */
+
+  /* ---- border ---- */
+  --line: hsla(204, 8%, 88%, 1); /* colors.onLight.surface.border.gray.subtle */
+  --line-strong: hsla(203, 8%, 80%, 1); /* colors.onLight.surface.border.gray.normal */
+
+  /* ---- primary / brand ---- */
+  --brand: hsla(218, 89%, 51%, 1); /* colors.onLight.interactive.background.primary.default */
+  --brand-hover: hsla(218, 87%, 43%, 1); /* colors.onLight.interactive.background.primary.highlighted */
+  --brand-faded: hsla(218, 89%, 51%, 0.09); /* colors.onLight.interactive.background.primary.faded */
+  --brand-border: hsla(218, 89%, 51%, 0.18); /* colors.onLight.interactive.border.primary.faded */
+  --brand-text: hsla(218, 87%, 43%, 1); /* colors.onLight.interactive.text.primary.normal */
+
+  /* ---- feedback: positive (green), negative (red), notice (amber), information (blue), neutral (grey) ---- */
+  --positive-bg: hsla(150, 100%, 28%, 0.09); /* colors.onLight.feedback.background.positive.subtle */
+  --positive-bg-intense: hsla(150, 100%, 28%, 1); /* colors.onLight.feedback.background.positive.intense */
+  --positive-border: hsla(150, 100%, 28%, 0.18); /* colors.onLight.feedback.border.positive.subtle */
+  --positive-text: hsla(150, 100%, 23%, 1); /* colors.onLight.feedback.text.positive.intense */
+
+  --negative-bg: hsla(4, 85%, 44%, 0.09); /* colors.onLight.feedback.background.negative.subtle */
+  --negative-bg-intense: hsla(4, 85%, 44%, 1); /* colors.onLight.feedback.background.negative.intense */
+  --negative-border: hsla(4, 85%, 44%, 0.18); /* colors.onLight.feedback.border.negative.subtle */
+  --negative-text: hsla(4, 85%, 44%, 1); /* colors.onLight.feedback.text.negative.intense */
+
+  --notice-bg: hsla(25, 100%, 44%, 0.09); /* colors.onLight.feedback.background.notice.subtle */
+  --notice-bg-intense: hsla(25, 100%, 44%, 1); /* colors.onLight.feedback.background.notice.intense */
+  --notice-border: hsla(25, 100%, 44%, 0.18); /* colors.onLight.feedback.border.notice.subtle */
+  --notice-text: hsla(25, 100%, 39%, 1); /* colors.onLight.feedback.text.notice.intense */
+
+  --information-bg: hsla(200, 100%, 41%, 0.09); /* colors.onLight.feedback.background.information.subtle */
+  --information-bg-intense: hsla(200, 100%, 41%, 1); /* colors.onLight.feedback.background.information.intense */
+  --information-border: hsla(200, 100%, 41%, 0.18); /* colors.onLight.feedback.border.information.subtle */
+  --information-text: hsla(200, 100%, 33%, 1); /* colors.onLight.feedback.text.information.intense */
+
+  --neutral-bg: hsla(206, 10%, 29%, 0.09); /* colors.onLight.feedback.background.neutral.subtle */
+  --neutral-bg-faded: hsla(206, 10%, 29%, 0.06); /* colors.onLight.interactive.background.gray.default */
+
+  /* ---- sidebar: the dark theme's surface (colors.onDark) ---- */
+  --navy: hsla(210, 4%, 11%, 1); /* colors.onDark.surface.background.gray.subtle */
+
+  /* ---- shadow ---- */
+  --elevation-low: 0px 2px 4px 0px hsla(200, 10%, 18%, 0.06); /* elevation.onLight.lowRaised */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-navy: var(--navy);
-  --color-brand: var(--brand);
+  --color-card: var(--card);
   --color-muted: var(--muted);
   --color-line: var(--line);
-  --color-card: var(--card);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-line-strong: var(--line-strong);
+  --color-subtle: var(--text-subtle);
+  --color-navy: var(--navy);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-faded: var(--brand-faded);
+  --color-brand-border: var(--brand-border);
+  --color-brand-text: var(--brand-text);
+
+  /*
+   * The screens already use Tailwind's green / red / amber / blue / purple / slate shades for their badges, alerts and
+   * markers. Each shade is pointed at the Blade feedback token that plays the same role, so every badge and alert
+   * takes Blade's colours without each component being rewritten:
+   *   50, 100  background, subtle     200, 300, 400  border, subtle     500, 600  background, intense
+   *   700, 800, 900  text, intense
+   */
+  --color-green-50: var(--positive-bg);
+  --color-green-100: var(--positive-bg);
+  --color-green-200: var(--positive-border);
+  --color-green-300: var(--positive-border);
+  --color-green-400: var(--positive-border);
+  --color-green-500: var(--positive-bg-intense);
+  --color-green-600: var(--positive-bg-intense);
+  --color-green-700: var(--positive-text);
+  --color-green-800: var(--positive-text);
+  --color-green-900: var(--positive-text);
+
+  --color-red-50: var(--negative-bg);
+  --color-red-100: var(--negative-bg);
+  --color-red-200: var(--negative-border);
+  --color-red-300: var(--negative-border);
+  --color-red-400: var(--negative-border);
+  --color-red-500: var(--negative-bg-intense);
+  --color-red-600: var(--negative-bg-intense);
+  --color-red-700: var(--negative-text);
+  --color-red-800: var(--negative-text);
+  --color-red-900: var(--negative-text);
+
+  --color-amber-50: var(--notice-bg);
+  --color-amber-100: var(--notice-bg);
+  --color-amber-200: var(--notice-border);
+  --color-amber-300: var(--notice-border);
+  --color-amber-400: var(--notice-border);
+  --color-amber-500: var(--notice-bg-intense);
+  --color-amber-600: var(--notice-bg-intense);
+  --color-amber-700: var(--notice-text);
+  --color-amber-800: var(--notice-text);
+  --color-amber-900: var(--notice-text);
+
+  --color-blue-50: var(--information-bg);
+  --color-blue-100: var(--information-bg);
+  --color-blue-200: var(--information-border);
+  --color-blue-300: var(--information-border);
+  --color-blue-500: var(--information-bg-intense);
+  --color-blue-700: var(--information-text);
+  --color-blue-800: var(--information-text);
+
+  /* The "Mock AI" badge: a development marker, so neutral rather than a feedback colour. */
+  --color-purple-100: var(--neutral-bg);
+  --color-purple-800: var(--text-subtle);
+
+  --color-slate-50: var(--neutral-bg);
+  --color-slate-100: var(--neutral-bg-faded);
+  --color-slate-200: var(--line);
+  --color-slate-300: var(--line-strong);
+  --color-slate-400: var(--line-strong);
+  --color-slate-500: var(--muted);
+  --color-slate-700: var(--text-subtle);
+
+  /* ---- typography: Blade's families, sizes and line heights (typography.onDesktop) ---- */
+  --font-sans: var(--font-inter), "Inter Fallback Arial", Arial, sans-serif; /* fonts.family.text */
+  --font-heading: var(--font-tasa-orbiter), "TASA Orbiter Fallback Arial", Arial, sans-serif; /* fonts.family.heading */
+  --font-mono: "Menlo", "San Francisco Mono", "Courier New", "Roboto Mono", monospace; /* fonts.family.code */
+  --text-xs: 12px; /* fonts.size.75 / lineHeights.75 */
+  --text-xs--line-height: 17px;
+  --text-sm: 14px; /* size.100 / 20 */
+  --text-sm--line-height: 20px;
+  --text-base: 16px; /* size.200 / 24 */
+  --text-base--line-height: 24px;
+  --text-lg: 18px; /* size.300 / 24 */
+  --text-lg--line-height: 24px;
+  --text-xl: 20px; /* size.400 / 26 */
+  --text-xl--line-height: 26px;
+  --text-2xl: 24px; /* size.500 / 32 */
+  --text-2xl--line-height: 32px;
+  --text-3xl: 32px; /* size.600 / 38 */
+  --text-3xl--line-height: 38px;
+  --text-4xl: 40px; /* size.700 / 46 */
+  --text-4xl--line-height: 46px;
+
+  /* ---- radius (border.radius): small 8, medium 12 ---- */
+  --radius-md: 8px; /* border.radius.small: buttons, inputs */
+  --radius-lg: 8px; /* border.radius.small: panels inside a card */
+  --radius-xl: 12px; /* border.radius.medium: cards */
+
+  /* ---- shadow (elevation.onLight.lowRaised): cards ---- */
+  --shadow-sm: var(--elevation-low);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-inter), "Inter Fallback Arial", Arial, sans-serif;
+}
+
+/* Headings use Blade's heading family, TASA Orbiter. */
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-tasa-orbiter), "TASA Orbiter Fallback Arial", Arial, sans-serif;
+}
+
+/* Form fields: Blade's border.gray.normal and small radius; focus ring in the primary colour. */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+select,
+textarea {
+  border-color: var(--line-strong);
+  border-radius: 8px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }

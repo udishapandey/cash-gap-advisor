@@ -56,7 +56,7 @@ export function AiExplanationView({
   onExplain?: () => void;
 }) {
   return (
-    <section aria-label="AI explanation" className="rounded-xl border border-line bg-card p-5">
+    <section aria-label="AI explanation" className="rounded-xl border border-line bg-card shadow-sm p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           {status === "verified" && (
@@ -98,7 +98,7 @@ export function AiExplanationView({
           <button
             type="button"
             onClick={onExplain}
-            className="rounded-md border border-line bg-white px-3 py-1.5 text-sm font-medium hover:bg-background"
+            className="rounded-md border border-brand-border text-brand-text bg-white px-3 py-1.5 text-sm font-medium hover:bg-background"
           >
             Explain this plan
           </button>

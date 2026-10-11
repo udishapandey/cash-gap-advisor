@@ -147,3 +147,15 @@ describe("against the real engine's numbers", () => {
     expect(checkGrounding(`Loans total ₹${Math.round(wrong).toLocaleString("en-IN")}.`, real).ok).toBe(false);
   });
 });
+
+describe("amounts written without a ₹ sign", () => {
+  const facts = { shortfallRupees: 288151, feeRupees: 5601, pairsOrdered: 500 };
+  it("checks a bare big number as a rupee amount", () => {
+    expect(checkGrounding("The shortfall is 288151 in all.", facts).ok).toBe(true);
+    expect(checkGrounding("The shortfall is 2,88,151 in all.", facts).ok).toBe(true);
+    expect(checkGrounding("The shortfall is 299000 in all.", facts).ok).toBe(false);
+  });
+  it("leaves counts, days, years and codes alone", () => {
+    expect(checkGrounding("Order 12000 pairs, due in 30 days, in 2026, invoice INV-12345.", facts).ok).toBe(true);
+  });
+});

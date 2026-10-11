@@ -8,6 +8,7 @@ import type { EngineResult, ViewResult } from "./engine";
 import { CONFIG } from "./engine/config";
 import type { OptionId, Plan } from "./engine/options";
 import { expectedLostMargin } from "./engine/stock";
+import { formatINR, formatPct } from "./format";
 import { earlyPayDay } from "./journey";
 
 const SOURCE_NAMES: Record<OptionId, string> = {
@@ -179,4 +180,38 @@ export function scriptFacts(
     lateFeeMonthlyPercent: invoice.lateFeePctPerMonth,
     borrowingRemovedIfAgreedRupees: o.borrowingRemovedRupees,
   };
+}
+
+// ---------- What the AI is actually shown ----------
+
+const PLAN_NAMES: Record<string, string> = { keep_full: "keep the full order", right_sized: "order fewer pairs now (right-sized)" };
+
+/** "peakShortfallRupees" -> "peak shortfall". Plain words, so the AI has no code-looking names to copy. */
+function label(key: string): string {
+  return key
+    .replace(/(Rupees|Percent)$/, "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * The same facts, written for the AI to read: plain-word labels instead of field names, and every ₹ amount and % already
+ * formatted ("₹2,88,151", "55%"), so it can copy them exactly. The grounding check still uses the numeric `facts`.
+ */
+export function promptFacts(facts: unknown): unknown {
+  const walk = (value: unknown, key: string): unknown => {
+    if (typeof value === "number") {
+      if (/Rupees$/.test(key)) return formatINR(value);
+      if (/Percent$/.test(key)) return formatPct(value);
+      return value;
+    }
+    if (typeof value === "string") return PLAN_NAMES[value] ?? value;
+    if (Array.isArray(value)) return value.map((v) => walk(v, key));
+    if (value && typeof value === "object") {
+      return Object.fromEntries(Object.entries(value).map(([k, v]) => [label(k) || k, walk(v, k)]));
+    }
+    return value;
+  };
+  return walk(facts, "");
 }

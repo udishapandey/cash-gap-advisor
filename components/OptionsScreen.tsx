@@ -503,7 +503,9 @@ function OptionsBody({
   const scriptView = scriptViewId === "right_sized" ? rightSized : keepFull;
   const setLanguage = (language: Language) => update({ language });
   // A typed what-if only gives us numbers. Applying them reruns the engine, and the explanation follows.
+  const [typedToken, setTypedToken] = useState(0);
   const applyTyped = (a: AppliedWhatIf) => {
+    setTypedToken((n) => n + 1);
     if (Object.keys(a.patch).length > 0) update(a.patch);
     if (a.extensionDays !== undefined) setExtensionDays(a.extensionDays);
   };
@@ -524,7 +526,7 @@ function OptionsBody({
           Both are shown side by side with their real costs. Nothing is chosen for you. The green outline marks what
           the numbers favour.
         </p>
-        <AiExplanation result={result} state={state} language={state.language} onLanguage={setLanguage} />
+        <AiExplanation result={result} state={state} language={state.language} onLanguage={setLanguage} typedToken={typedToken} />
         <div className="grid gap-4 lg:grid-cols-2">
           <PlanCard
             id="keep_full"

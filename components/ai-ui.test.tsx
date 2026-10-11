@@ -52,6 +52,15 @@ describe("the AI explanation on the Options screen", () => {
     expect(hi).toContain('lang="hi"');
   });
 
+  it("after the numbers change, shows the plain text and an Explain this plan button, not the verified label", () => {
+    const html = renderToStaticMarkup(
+      <AiExplanationView status="stale" text={explanation} mock={false} language="en" onLanguage={noop} onExplain={noop} />,
+    );
+    expect(html).toContain("Explain this plan");
+    expect(html).toContain(explanation);
+    expect(html).not.toContain(VERIFIED_LABEL);
+  });
+
   it("shows a 'Mock AI' badge in mock mode only", () => {
     expect(renderToStaticMarkup(<AiExplanationView status="verified" text="x" mock language="en" onLanguage={noop} />)).toContain("Mock AI");
     expect(renderToStaticMarkup(<AiExplanationView status="verified" text="x" mock={false} language="en" onLanguage={noop} />)).not.toContain("Mock AI");

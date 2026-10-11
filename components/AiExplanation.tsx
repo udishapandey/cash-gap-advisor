@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { aiStateFrom } from "@/lib/ai-requests";
+import { stableStringify } from "@/lib/hash";
 import { planFacts } from "@/lib/ai-facts";
 import { templateExplanation } from "@/lib/ai-templates";
 import type { VerifiedTextOutcome } from "@/lib/ai";
@@ -30,12 +31,15 @@ export function AiExplanationView({
   mock,
   language,
   onLanguage,
+  onExplain,
 }: {
-  status: "loading" | "verified" | "unavailable";
+  status: "loading" | "verified" | "unavailable" | "stale";
   text: string;
   mock: boolean;
   language: Language;
   onLanguage: (l: Language) => void;
+  /** Only for "stale": asks the AI to explain the plan as it is now. */
+  onExplain?: () => void;
 }) {
   return (
     <section aria-label="AI explanation" className="rounded-xl border border-line bg-card p-5">
@@ -48,7 +52,7 @@ export function AiExplanationView({
             </h3>
           )}
           {status === "unavailable" && <h3 className="text-sm font-semibold">Plain explanation</h3>}
-          {status === "loading" && <h3 className="text-sm font-semibold">Why this plan</h3>}
+          {(status === "loading" || status === "stale") && <h3 className="text-sm font-semibold">Why this plan</h3>}
           {mock && (
             <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">Mock AI</span>
           )}
@@ -66,6 +70,18 @@ export function AiExplanationView({
         </p>
       )}
       {status === "unavailable" && <p className="mt-2 text-xs text-muted">{UNAVAILABLE_NOTE}</p>}
+      {status === "stale" && (
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={onExplain}
+            className="rounded-md border border-line bg-white px-3 py-1.5 text-sm font-medium hover:bg-background"
+          >
+            Explain this plan
+          </button>
+          <span className="text-xs text-muted">The numbers changed. This is the plain explanation; ask the AI to rewrite it.</span>
+        </div>
+      )}
     </section>
   );
 }
@@ -79,16 +95,29 @@ export default function AiExplanation({
   state,
   language,
   onLanguage,
+  typedToken = 0,
 }: {
   result: EngineResult;
   state: JourneyState;
   language: Language;
   onLanguage: (l: Language) => void;
+  /** Goes up each time a typed what-if is applied: that asks for a fresh explanation by itself. */
+  typedToken?: number;
 }) {
-  const request = useMemo(() => {
-    const s = aiStateFrom(state);
-    return s ? { state: s, language } : null;
-  }, [state, language]);
+  const aiState = useMemo(() => aiStateFrom(state), [state]);
+  const stateKey = aiState ? stableStringify(aiState) : null;
+
+  // The AI is asked once when the screen first loads, and again only when the founder asks: by clicking "Explain this
+  // plan", by choosing a language, or by typing a what-if. Moving the slider or editing a number does not call it.
+  const [armed, setArmed] = useState<{ stateKey: string | null; language: Language } | null>(() => ({ stateKey, language }));
+  const [seenToken, setSeenToken] = useState(typedToken);
+  if (seenToken !== typedToken) {
+    setSeenToken(typedToken);
+    setArmed({ stateKey, language });
+  }
+  const isArmed = !!armed && armed.stateKey === stateKey && armed.language === language;
+
+  const request = useMemo(() => (aiState && isArmed ? { state: aiState, language } : null), [aiState, language, isArmed]);
 
   const resource = useAiResource<VerifiedTextOutcome>({
     endpoint: "/api/ai/explain",
@@ -101,12 +130,29 @@ export default function AiExplanation({
   // If we couldn't even reach the server, build the same template here: it is plain code.
   const template = useMemo(() => templateExplanation(planFacts(result), language), [result, language]);
 
+  const chooseLanguage = (l: Language) => {
+    setArmed({ stateKey, language: l });
+    onLanguage(l);
+  };
+
+  if (!isArmed) {
+    return (
+      <AiExplanationView
+        status="stale"
+        text={template}
+        mock={false}
+        language={language}
+        onLanguage={chooseLanguage}
+        onExplain={() => setArmed({ stateKey, language })}
+      />
+    );
+  }
   if (resource.status === "idle" || resource.status === "loading") {
-    return <AiExplanationView status="loading" text="" mock={false} language={language} onLanguage={onLanguage} />;
+    return <AiExplanationView status="loading" text="" mock={false} language={language} onLanguage={chooseLanguage} />;
   }
   if (resource.status === "failed") {
-    return <AiExplanationView status="unavailable" text={template} mock={false} language={language} onLanguage={onLanguage} />;
+    return <AiExplanationView status="unavailable" text={template} mock={false} language={language} onLanguage={chooseLanguage} />;
   }
   const o = resource.value;
-  return <AiExplanationView status={o.status} text={o.text} mock={o.mock} language={language} onLanguage={onLanguage} />;
+  return <AiExplanationView status={o.status} text={o.text} mock={o.mock} language={language} onLanguage={chooseLanguage} />;
 }

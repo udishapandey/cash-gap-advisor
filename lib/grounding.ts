@@ -19,6 +19,36 @@ export interface GroundingResult {
   ungrounded: Mention[];
 }
 
+/**
+ * Field names or plan codes from the calculator's data that the AI repeated ("peakShortfallRupees", "keep_full").
+ * They mean nothing to the founder, so text containing one is rejected.
+ */
+export function findLeakedNames(text: string, facts: unknown, language: "en" | "hi" = "en"): string[] {
+  const names = new Set<string>();
+  // The plain-word labels the AI is shown ("unsold pairs if full order"). In Hindi, an English label pasted into the
+  // sentence is a leak; in English, ordinary words may repeat a label.
+  const labels = new Set<string>();
+  const walk = (value: unknown) => {
+    if (Array.isArray(value)) value.forEach(walk);
+    else if (value && typeof value === "object") {
+      for (const [k, v] of Object.entries(value)) {
+        if (/[a-z][A-Z]/.test(k)) {
+          names.add(k.toLowerCase());
+          const words = k.replace(/(Rupees|Percent)$/, "").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+          if (words.includes(" ")) labels.add(words);
+        }
+        walk(v);
+      }
+    }
+  };
+  walk(facts);
+  const lower = text.toLowerCase();
+  const found = [...names].filter((n) => lower.includes(n));
+  if (language === "hi") found.push(...[...labels].filter((l) => lower.includes(l)));
+  const snake = text.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? [];
+  return [...new Set([...found, ...snake])];
+}
+
 const DEVANAGARI_ZERO = 0x0966;
 
 /** Devanagari digits (०-९) to 0-9, and drop invisible characters, so Hindi text is read the same way. */
@@ -81,6 +111,15 @@ export function extractMentions(input: string): Mention[] {
   // "5000 rupees".
   const suffixed = new RegExp(`(${NUMBER})\\s*(?:rupees?(?![A-Za-z])|रुपये|रुपए|रुपया)`, "gi");
   for (let m = suffixed.exec(text); m; m = suffixed.exec(text)) addRupees(m, m[1]);
+
+  // A big number with no ₹ at all ("288151", "2,88,151") is read as a rupee amount too, so leaving the sign off is not a way
+  // round the check. Counts of things (pairs, days) and codes such as invoice numbers are left alone.
+  const bare = /(?<![A-Za-z0-9/\-.,])(\d{1,3}(?:,\d{2,3})+|\d{5,})(?:\.\d+)?(?![\w%,])(?!\s*(?:pairs?|units?|pcs|pieces|days?|जोड़े|जोड़ी|दिन))/gi;
+  for (let m = bare.exec(text); m; m = bare.exec(text)) {
+    if (overlaps(m.index, m.index + m[0].length)) continue;
+    if (parseNumber(m[0]).value < 10_000) continue;
+    addRupees(m, m[0]);
+  }
 
   // Percentages: 18%, 54.75 percent, 27 प्रतिशत.
   const percent = /(\d+(?:\.\d+)?)\s*(?:%|per\s?cent|percent|प्रतिशत|फीसदी|फ़ीसदी)/gi;

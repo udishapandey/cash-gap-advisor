@@ -37,9 +37,9 @@ Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate live
 4. **Every LLM call goes through `lib/ai.ts`.** No other file imports an AI SDK or calls an AI API.
 5. **Label simulated data as simulated in the UI.** Any fake number, transaction or customer must be visibly marked "Simulated".
 6. **Invoice files are private.** Process them in memory only. Never save one to disk, and never log or echo its contents or file name (including in error messages). The AI only reads printed values: it returns null for anything missing, quotes its evidence, and never calculates amounts or dates.
-7. **No live AI calls unless the founder asks.** Tests use mocks. For development use `AI_MOCK=true`. Don't run `npm run try:extract` or any live extraction on your own: the free tier allows 20 requests a day per model.
+7. **No live AI calls unless the founder asks.** Tests use mocks. For development use `AI_MOCK=true`. Don't run `npm run try:extract`, `npm run smoke:ai` (a capped live check of every AI feature) or any live extraction on your own: the free tier allows 20 requests a day per model.
 8. **Credit is separate and never pre-selected.** Credit is shown apart from non-credit actions, with a Key Fact Statement before approval. No plan, consent box or approval is ever pre-chosen, and the founder approves every credit action.
-9. **AI writes words, never numbers.** The AI is given only the engine's numbers as JSON. Every ₹ amount and % in its text must pass the grounding check or the text is replaced by the template. A what-if answer must be four optional numbers in fixed ranges, and code applies them. Every AI feature has a mock for `AI_MOCK=true` and caches by input hash.
+9. **AI writes words, never numbers.** The AI is given only the engine's numbers as JSON. Every ₹ amount and % in its text must pass the grounding check or the text is replaced by the template. A what-if answer must be four optional numbers in fixed ranges, and code applies them. Every AI feature has a mock for `AI_MOCK=true` and caches by input hash. The AI is shown plain labels and pre-formatted numbers (`promptFacts`), and the explanation is asked for once on first load, then only on a click, a language change or a typed what-if.
 
 ## AI provider
 

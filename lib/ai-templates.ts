@@ -5,113 +5,120 @@
 // Every number comes straight from the facts. Nothing is calculated here. (The Hindi wording was drafted
 // by an AI assistant: have a native speaker review it before real use.)
 
-import type { ExplainFacts, ScriptFacts, StepFacts } from "./ai-facts";
+import type { ExplainFacts, ScriptFacts } from "./ai-facts";
 import { formatINR } from "./format";
 import type { Language } from "./language";
 
 const inr = formatINR;
 
-function stepText(step: StepFacts, lang: Language): string {
-  if (lang === "hi") {
-    switch (step.source) {
-      case "early settlement":
-        return `अपनी ${inr(step.amountRupees)} की बिक्री का पैसा जल्दी निकालें`;
-      case "credit line":
-        return `क्रेडिट लाइन से ${inr(step.amountRupees)} लें`;
-      case "bank overdraft":
-        return `अपने बैंक ओवरड्राफ्ट से ${inr(step.amountRupees)} निकालें`;
-      default:
-        return `कुछ जोड़े बाद में डिलीवर करवाएँ (${inr(step.amountRupees)} अभी बचेंगे)`;
-    }
-  }
-  switch (step.source) {
-    case "early settlement":
-      return `settle ${inr(step.amountRupees)} of your own sales early`;
-    case "credit line":
-      return `borrow ${inr(step.amountRupees)} on the credit line`;
-    case "bank overdraft":
-      return `draw ${inr(step.amountRupees)} from your bank overdraft`;
-    default:
-      return `have some pairs delivered later (${inr(step.amountRupees)} freed now)`;
-  }
+/** The explanation as three labelled parts, each shown as its own block. */
+export interface ExplanationParts {
+  doThis: string;
+  whyCheapest: string;
+  watchOut: string;
 }
 
-/** 3 to 4 plain sentences: what to do, why it is cheapest, the main risk. */
-export function templateExplanation(facts: ExplainFacts, language: Language): string {
+export const PART_LABELS: Record<Language, Record<keyof ExplanationParts, string>> = {
+  en: { doThis: "Do this", whyCheapest: "Why this is cheapest", watchOut: "Watch out" },
+  hi: { doThis: "यह करें", whyCheapest: "यह सबसे सस्ता क्यों है", watchOut: "ध्यान रखें" },
+};
+
+const sourceName = (source: string, lang: Language): string => {
+  if (lang === "hi") {
+    return (
+      { "early settlement": "अर्ली सेटलमेंट", "credit line": "क्रेडिट लाइन", "bank overdraft": "बैंक ओवरड्राफ्ट" } as Record<string, string>
+    )[source] ?? "स्प्लिट ऑर्डर (कुछ जोड़ी बाद में)";
+  }
+  return source === "split order" ? "split order (some pairs delivered later)" : source;
+};
+
+/** What to do, why it is the cheapest, and what to watch out for. Plain words, same facts in both languages. */
+export function templateExplanationParts(facts: ExplainFacts, language: Language): ExplanationParts {
   const hi = language === "hi";
   const rightSized = facts.recommendedPlan === "right_sized";
   const v = rightSized ? facts.rightSized : facts.keepFull;
-  const other = rightSized ? facts.keepFull : facts.rightSized;
   const r = facts.ratesPercent;
+  const st = facts.stock;
+  const partOrder = rightSized && v.pairs < facts.pairsOrdered;
 
-  // 1. What to do.
-  const doing: string[] = [];
-  if (rightSized && v.pairs < facts.pairsOrdered) {
-    doing.push(hi ? `अभी ${facts.pairsOrdered} में से ${v.pairs} जोड़े का ऑर्डर दें` : `order ${v.pairs} of ${facts.pairsOrdered} pairs now`);
-  }
-  if (v.paysEarlyForDiscount) {
-    doing.push(
-      hi
-        ? `${v.earlyPaymentDiscountPercent}% छूट के लिए दिन ${v.payByDay} तक सप्लायर को भुगतान करें`
-        : `pay the supplier by day ${v.payByDay} for the ${v.earlyPaymentDiscountPercent}% discount`,
-    );
-  }
-  for (const s of v.steps) doing.push(stepText(s, language));
-  const doingText = doing.length ? doing.join(hi ? ", फिर " : ", then ") : "";
-  const noBorrowing = hi
-    ? "आपको कर्ज़ लेने की ज़रूरत नहीं है: आपका कैश इनवॉइस के लिए काफ़ी है।"
-    : "You do not need to borrow: your cash covers the invoice.";
-  const todo = doing.length > 0 ? (hi ? `क्या करें: ${doingText}।` : `Here is what to do: ${doingText}.`) : "";
-  // No funding step means no borrowing at all: say so plainly, whether or not there is something else to do.
-  const s1 = v.steps.length === 0 ? [todo, noBorrowing].filter(Boolean).join(" ") : todo;
+  // 1. Do this: the order, the date, the funding sources with amounts.
+  const order = hi
+    ? partOrder
+      ? `अभी ${facts.pairsOrdered} में से ${v.pairs} जोड़ी का ऑर्डर मंगवाएँ`
+      : `पूरे ${facts.pairsOrdered} जोड़ी का ऑर्डर मंगवाएँ`
+    : partOrder
+      ? `Order ${v.pairs} of ${facts.pairsOrdered} pairs now`
+      : `Order all ${facts.pairsOrdered} pairs`;
+  const pay = v.paysEarlyForDiscount
+    ? hi
+      ? `${v.earlyPaymentDiscountPercent}% छूट पाने के लिए दिन ${v.payByDay} तक सप्लायर को भुगतान करें।`
+      : `pay the supplier by day ${v.payByDay} to get the ${v.earlyPaymentDiscountPercent}% discount.`
+    : hi
+      ? `दिन ${v.payByDay} तक सप्लायर को भुगतान करें।`
+      : `pay the supplier by day ${v.payByDay}.`;
+  const steps = v.steps.map((s) => `${sourceName(s.source, language)} ${inr(s.amountRupees)}`).join(hi ? ", फिर " : ", then ");
+  const funding =
+    v.steps.length === 0
+      ? hi
+        ? "आपको कर्ज़ लेने की ज़रूरत नहीं है: आपका कैश इनवॉइस के लिए काफ़ी है।"
+        : "You do not need to borrow: your cash covers the invoice."
+      : hi
+        ? `नकद की कमी इस तरह पूरी करें: ${steps}।`
+        : `Cover the cash gap with ${steps}.`;
+  const doThis = hi ? `${order} और ${pay} ${funding}` : `${order} and ${pay} ${funding}`;
 
-  // 2. Why it is the cheapest.
-  let s2 = "";
-  if (v.peakShortfallRupees > 0) {
-    s2 = hi
-      ? `यह सबसे सस्ता तरीका है: सबसे बुरे दिन की कमी ${inr(v.peakShortfallRupees)} को पूरा करने में कुल खर्च ${inr(v.fundingCostRupees)} आता है, क्योंकि अर्ली सेटलमेंट सिर्फ ${r.earlySettlementFeePercent}% है (लगभग ${r.earlySettlementAnnualisedPercent}% सालाना), जबकि क्रेडिट लाइन ${r.creditLineAnnualPercent}% सालाना है।`
-      : `It is the cheapest way to cover the worst-day shortfall of ${inr(v.peakShortfallRupees)}: it costs ${inr(v.fundingCostRupees)} in all, because early settlement is only ${r.earlySettlementFeePercent}% (about ${r.earlySettlementAnnualisedPercent}% a year) while the credit line is ${r.creditLineAnnualPercent}% a year.`;
-    if (other.loanRupees !== v.loanRupees) {
-      s2 += hi
-        ? ` दूसरे प्लान में ${inr(other.loanRupees)} का कर्ज़ लेना पड़ेगा।`
-        : ` The other plan would need ${inr(other.loanRupees)} of loans.`;
-    }
-  }
-
-  // 3. The main risk, including unsold stock.
-  const unsold = facts.stock.unsoldPairsIfFullOrder;
-  const pct = facts.stock.unsoldIfFullOrderPercent;
-  let s3: string;
-  if (rightSized) {
-    s3 = hi
-      ? `मुख्य जोखिम: कम जोड़े मँगाने पर अगर बिक्री अनुमान से ज़्यादा हुई तो स्टॉक कम पड़ सकता है; पूरा ऑर्डर रखने पर लगभग ${unsold} जोड़े (${pct}%) बिना बिके रह सकते हैं।`
-      : `The main risk: ordering fewer pairs means you could run short of stock if sales beat the forecast, but if you keep the full order about ${unsold} pairs (${pct}%) may stay unsold.`;
-  } else if (unsold > 0) {
-    s3 = hi
-      ? `मुख्य जोखिम बिना बिका स्टॉक है: अगर बिक्री कम रही तो लगभग ${unsold} जोड़े (${pct}%) बिना बिके रह सकते हैं।`
-      : `The main risk is unsold stock: about ${unsold} pairs (${pct}%) may stay unsold if sales fall short.`;
+  // 2. Why it is the cheapest: total cost against what the discount saves.
+  let whyCheapest: string;
+  if (v.paysEarlyForDiscount && v.netSavingFromEarlyPaymentRupees > 0) {
+    whyCheapest = hi
+      ? v.extraCostOfPayingEarlyRupees > 0
+        ? `कुल फंडिंग खर्च ${inr(v.fundingCostRupees)} है, जो दिन ${facts.dueInDays} पर भुगतान से सिर्फ़ ${inr(v.extraCostOfPayingEarlyRupees)} ज़्यादा है, और ${v.earlyPaymentDiscountPercent}% छूट से ${inr(v.earlyPaymentDiscountRupees)} बचते हैं, इसलिए आपको ${inr(v.netSavingFromEarlyPaymentRupees)} का फ़ायदा होता है।`
+        : `कुल फंडिंग खर्च ${inr(v.fundingCostRupees)} है और ${v.earlyPaymentDiscountPercent}% छूट से ${inr(v.earlyPaymentDiscountRupees)} बचते हैं, इसलिए आपको ${inr(v.netSavingFromEarlyPaymentRupees)} का फ़ायदा होता है।`
+      : v.extraCostOfPayingEarlyRupees > 0
+        ? `Funding costs ${inr(v.fundingCostRupees)} in all, only ${inr(v.extraCostOfPayingEarlyRupees)} more than paying on day ${facts.dueInDays}, and the ${v.earlyPaymentDiscountPercent}% discount saves ${inr(v.earlyPaymentDiscountRupees)}, so you come out ${inr(v.netSavingFromEarlyPaymentRupees)} better off.`
+        : `Funding costs ${inr(v.fundingCostRupees)} in all and the ${v.earlyPaymentDiscountPercent}% discount saves ${inr(v.earlyPaymentDiscountRupees)}, so you come out ${inr(v.netSavingFromEarlyPaymentRupees)} better off.`;
+  } else if (v.peakShortfallRupees > 0) {
+    whyCheapest = hi
+      ? `कुल फंडिंग खर्च ${inr(v.fundingCostRupees)} है, जो आपके विकल्पों में सबसे कम है: अर्ली सेटलमेंट सिर्फ़ ${r.earlySettlementFeePercent}% (लगभग ${r.earlySettlementAnnualisedPercent}% सालाना) है, जबकि क्रेडिट लाइन ${r.creditLineAnnualPercent}% सालाना है।`
+      : `Funding costs ${inr(v.fundingCostRupees)} in all, the lowest of your options: early settlement is only ${r.earlySettlementFeePercent}% (about ${r.earlySettlementAnnualisedPercent}% a year) against ${r.creditLineAnnualPercent}% a year for the credit line.`;
   } else {
-    s3 = hi
-      ? "मुख्य जोखिम यह है कि बिक्री अनुमान से कम रहे, जिससे आपको और कर्ज़ लेना पड़ सकता है।"
-      : "The main risk is that sales fall below the forecast, which would raise the amount you need to borrow.";
+    whyCheapest = hi ? "आपको उधार नहीं लेना है, इसलिए फंडिंग का कोई खर्च नहीं है।" : "You do not need to borrow, so there is no funding cost.";
   }
 
-  const extras: string[] = [];
+  // 3. Watch out: the main risk. Never "0% unsold" without saying it is at expected sales, and the lower-sales case.
+  const u = st.unsoldPairsAtExpectedSales;
+  const lu = st.unsoldPairsAtLowSales;
+  let watchOut: string;
+  if (rightSized) {
+    watchOut = hi
+      ? `कम जोड़ी मँगाने पर अगर बिक्री अनुमान से ज़्यादा रही तो स्टॉक कम पड़ सकता है; पूरा ऑर्डर रखने पर अनुमानित बिक्री पर लगभग ${u} जोड़ी (${st.unsoldAtExpectedSalesPercent}%) बिना बिकी रहतीं।`
+      : `Ordering fewer pairs could leave you short of stock if sales beat the forecast; keeping the full order would leave about ${u} pairs (${st.unsoldAtExpectedSalesPercent}%) unsold at expected sales.`;
+  } else if (u > 0) {
+    watchOut = hi
+      ? `अनुमानित बिक्री पर लगभग ${u} जोड़ी (${st.unsoldAtExpectedSalesPercent}%) बिना बिकी रहेंगी; कम बिक्री पर लगभग ${lu} जोड़ी (${st.unsoldAtLowSalesPercent}%) बिना बिकी रह सकती हैं।`
+      : `At expected sales about ${u} pairs (${st.unsoldAtExpectedSalesPercent}%) stay unsold, and at lower sales about ${lu} pairs (${st.unsoldAtLowSalesPercent}%) could stay unsold.`;
+  } else if (lu > 0) {
+    watchOut = hi
+      ? `अनुमानित बिक्री पर कोई जोड़ी बिना बिकी नहीं रहेगी, पर कम बिक्री पर लगभग ${lu} जोड़ी (${st.unsoldAtLowSalesPercent}%) बिना बिकी रह सकती हैं।`
+      : `At expected sales no pairs stay unsold, but at lower sales about ${lu} pairs (${st.unsoldAtLowSalesPercent}%) could stay unsold.`;
+  } else {
+    watchOut = hi
+      ? "अनुमानित और कम, दोनों बिक्री पर सारी जोड़ी बिक जानी चाहिए; जोखिम यह है कि बिक्री और गिर जाए और आपको ज़्यादा उधार लेना पड़े।"
+      : "At expected sales and at lower sales every pair should sell; the risk is that sales fall even further and you need to borrow more.";
+  }
   if (!v.fullyCovered) {
-    extras.push(
-      hi
-        ? `चेतावनी: यह प्लान कमी का ${inr(v.uncoveredRupees)} पूरा नहीं करता।`
-        : `Warning: this plan leaves ${inr(v.uncoveredRupees)} of the shortfall uncovered.`,
-    );
+    watchOut = (hi ? `चेतावनी: यह प्लान कमी का ${inr(v.uncoveredRupees)} पूरा नहीं करता। ` : `Warning: this plan leaves ${inr(v.uncoveredRupees)} of the cash gap uncovered. `) + watchOut;
   }
   if (facts.lowConfidenceForecast) {
-    extras.push(
-      hi
-        ? "बिक्री का अनुमान अनिश्चित है, इसलिए मंज़ूरी से पहले संख्याएँ दोबारा देख लें।"
-        : "The forecast is uncertain, so check the numbers again before you approve.",
-    );
+    watchOut += hi ? " बिक्री का अनुमान अनिश्चित है, इसलिए मंज़ूरी से पहले संख्याएँ दोबारा देख लें।" : " The forecast is uncertain, so check the numbers again before you approve.";
   }
-  return [s1, s2, s3, ...extras].filter(Boolean).join(" ");
+  return { doThis, whyCheapest, watchOut };
+}
+
+/** The three parts as one paragraph. */
+export function templateExplanation(facts: ExplainFacts, language: Language): string {
+  const p = templateExplanationParts(facts, language);
+  return [p.doThis, p.whyCheapest, p.watchOut].join(" ");
 }
 
 /** Talking points for a phone call to the supplier. One point per line, each starting with "- ". */

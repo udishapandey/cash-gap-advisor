@@ -25,8 +25,8 @@ describe("the facts the AI is given about a plan", () => {
   });
 
   it("include the unsold-stock comparison from the right-sizing", () => {
-    expect(f.stock.unsoldPairsIfFullOrder).toBe(r.stock.unitsCut);
-    expect(f.stock.unsoldIfFullOrderPercent).toBeCloseTo(r.stock.unsoldShare * 100, 1);
+    expect(f.stock.unsoldPairsAtExpectedSales).toBe(r.stock.unitsCut);
+    expect(f.stock.unsoldAtExpectedSalesPercent).toBeCloseTo(r.stock.unsoldShare * 100, 1);
     expect(f.stock.cashSavedByRightSizingRupees).toBe(r.stock.cashSaved);
     expect(f.stock.forecastPairsToSell).toBe(Math.floor(r.stock.demandByScenario.expected));
   });
@@ -81,7 +81,7 @@ describe("the facts the AI is given about a plan", () => {
 
   it("name every money or percent number so the grounding check can find it", () => {
     // Every number whose key ends in Rupees or Percent lands in a pool; counts and days are the only others.
-    const COUNTS = new Set(["pairs", "payByDay", "pairsOrdered", "dueInDays", "forecastPairsToSell", "unsoldPairsIfFullOrder"]);
+    const COUNTS = new Set(["pairs", "payByDay", "pairsOrdered", "dueInDays", "forecastPairsToSell", "unsoldPairsAtExpectedSales", "lowSalesForecastPairs", "unsoldPairsAtLowSales"]);
     const stray: string[] = [];
     const walk = (v: unknown, key: string) => {
       if (typeof v === "number" && !/(Rupees|Percent)$/.test(key) && !COUNTS.has(key)) stray.push(key);
@@ -96,7 +96,7 @@ describe("the facts the AI is given about a plan", () => {
   });
 
   it("put the unsold-stock percentage where a '27%' in the text can be matched to it", () => {
-    expect(collectFactNumbers(f).percents).toContain(f.stock.unsoldIfFullOrderPercent);
+    expect(collectFactNumbers(f).percents).toContain(f.stock.unsoldAtExpectedSalesPercent);
   });
 
   it("show a plan that pays early, and one that doesn't", () => {

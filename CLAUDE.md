@@ -23,7 +23,7 @@ Invoice reading: `extractInvoice` in `lib/ai.ts` (the only AI call that sees a f
 
 Check the AI reader against a real file: `npm run try:extract` (clean sample) or `npm run try:extract -- path/to/file.png`. It times the call and prints the provider's real error if it fails. It makes a live AI call, so run it only when asked (see rule 7).
 
-AI judgement (explanation, call script, typed what-if): `explainPlan`, `callScript` and `interpretWhatIf` in `lib/ai.ts`; facts in `lib/ai-facts.ts`; the number check in `lib/grounding.ts`; what-if ranges in `lib/whatif.ts`; templates (also the mock answers) in `lib/ai-templates.ts`; routes under `app/api/ai/`.
+AI judgement (explanation, call script, typed what-if): `explainPlan` (three parts: do this / why cheapest / watch out), `callScript` and `interpretWhatIf` in `lib/ai.ts`; facts in `lib/ai-facts.ts`; the number check in `lib/grounding.ts`; what-if ranges in `lib/whatif.ts`; templates (also the mock answers) in `lib/ai-templates.ts`; routes under `app/api/ai/`.
 
 Decision journey: `/invoice` → `/gap` → `/options` → `/approve` (screens in `components/*Screen.tsx`, shared state in `components/JourneyProvider.tsx`, rules in `lib/journey.ts`, plain-text "Why this plan" in `lib/explain.ts`). Every number on those screens comes from `runEngine()`. Keep logic that can be tested in `lib/`, not inside components.
 

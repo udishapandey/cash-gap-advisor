@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { merchant } from "./data/merchant";
 import { sampleInvoice } from "./data/invoice";
 import { planFacts, scriptFacts } from "./ai-facts";
-import { templateExplanation, templateScript } from "./ai-templates";
+import { formatINR as inr } from "./format";
+import { templateExplanation, templateExplanationParts, templateScript } from "./ai-templates";
 import { runEngine } from "./engine";
 import { checkGrounding } from "./grounding";
 import type { Language } from "./language";
@@ -24,34 +25,87 @@ describe("the explanation template (also the mock AI answer and the fallback)", 
     }
   });
 
-  it("is three to four sentences, plus a warning only when one applies", () => {
-    for (const drop of [0, 10, 20, 30]) {
-      const text = templateExplanation(planFacts(run(drop)), "en");
-      const sentences = text.split(/(?<=[.])\s+/).filter(Boolean);
-      expect(sentences.length).toBeGreaterThanOrEqual(3);
-      expect(sentences.length).toBeLessThanOrEqual(5);
+  it("has three non-empty parts: what to do, why it is cheapest, what to watch out for", () => {
+    for (const language of BOTH) {
+      for (const drop of ALL_DROPS) {
+        const p = templateExplanationParts(planFacts(run(drop)), language);
+        expect(Object.keys(p)).toEqual(["doThis", "whyCheapest", "watchOut"]);
+        for (const part of Object.values(p)) expect(part.length, `${language} -${drop}%`).toBeGreaterThan(20);
+        expect(templateExplanation(planFacts(run(drop)), language)).toBe(`${p.doThis} ${p.whyCheapest} ${p.watchOut}`);
+      }
     }
   });
 
-  it("says what to do, why it is cheapest and the main risk", () => {
-    const text = templateExplanation(planFacts(run(30)), "en");
-    expect(text).toContain("Here is what to do");
-    expect(text).toContain("cheapest");
-    expect(text).toContain("main risk");
+  it("has the same structure and the same numbers in English and Hindi", () => {
+    for (const drop of [0, 10, 20, 25, 30]) {
+      const facts = planFacts(run(drop));
+      const en = templateExplanationParts(facts, "en");
+      const hi = templateExplanationParts(facts, "hi");
+      for (const k of ["doThis", "whyCheapest", "watchOut"] as const) {
+        const nums = (t: string) => (t.match(/[\d,.]*\d/g) ?? []).sort().join(" ");
+        expect(nums(hi[k]), `${k} at -${drop}%`).toBe(nums(en[k]));
+      }
+    }
+  });
+
+  it("do this: names the order, the pay-by day and every funding source with its exact amount", () => {
+    const facts = planFacts(run(0));
+    const v = facts.keepFull;
+    const { doThis } = templateExplanationParts(facts, "en");
+    expect(doThis).toContain(`Order all ${facts.pairsOrdered} pairs`);
+    expect(doThis).toContain(`by day ${v.payByDay}`);
+    expect(doThis).toContain(`${v.earlyPaymentDiscountPercent}% discount`);
+    expect(v.steps.length).toBeGreaterThan(1);
+    for (const s of v.steps) expect(doThis).toContain(`${s.source} ${inr(s.amountRupees)}`);
+    const hi = templateExplanationParts(facts, "hi").doThis;
+    expect(hi).toContain(`पूरे ${facts.pairsOrdered} जोड़ी का ऑर्डर मंगवाएँ`);
+    expect(hi).toContain(`दिन ${v.payByDay} तक`);
+    expect(hi).toContain(`अर्ली सेटलमेंट ${inr(v.steps[0].amountRupees)}`);
+  });
+
+  it("why cheapest: funding cost against the discount, and the net result", () => {
+    const facts = planFacts(run(0));
+    const v = facts.keepFull;
+    expect(v.paysEarlyForDiscount).toBe(true);
+    const { whyCheapest } = templateExplanationParts(facts, "en");
+    expect(whyCheapest).toContain(inr(v.fundingCostRupees));
+    expect(whyCheapest).toContain(inr(v.earlyPaymentDiscountRupees));
+    expect(whyCheapest).toContain(inr(v.netSavingFromEarlyPaymentRupees));
+    // The sentence adds up: the discount minus the EXTRA cost of paying early is the net saving it states.
+    expect(whyCheapest).toContain(inr(v.extraCostOfPayingEarlyRupees));
+    expect(v.earlyPaymentDiscountRupees - v.extraCostOfPayingEarlyRupees).toBe(v.netSavingFromEarlyPaymentRupees);
+    expect(whyCheapest.split(/(?<=\.)\s/).length).toBe(1);
+  });
+
+  it("watch out: never says 0% without 'at expected sales', and gives the lower-sales figure", () => {
+    for (const drop of ALL_DROPS) {
+      const facts = planFacts(run(drop));
+      for (const language of BOTH) {
+        const { watchOut } = templateExplanationParts(facts, language);
+        if (/(?<![\d.])0\s*%/.test(watchOut)) expect(watchOut, `${language} -${drop}%`).toMatch(/expected sales|अनुमानित बिक्री/);
+      }
+    }
+    const facts = planFacts(run(0));
+    expect(facts.stock.unsoldPairsAtExpectedSales).toBe(0);
+    expect(facts.stock.unsoldPairsAtLowSales).toBeGreaterThan(0);
+    const en = templateExplanationParts(facts, "en").watchOut;
+    expect(en).toContain("At expected sales no pairs stay unsold");
+    expect(en).toContain(`${facts.stock.unsoldPairsAtLowSales} pairs (${facts.stock.unsoldAtLowSalesPercent}%)`);
+    expect(templateExplanationParts(facts, "hi").watchOut).toContain("अनुमानित बिक्री पर कोई जोड़ी बिना बिकी नहीं रहेगी");
   });
 
   it("names the unsold-stock risk from the right-sizing comparison", () => {
     const facts = planFacts(run(30));
     const text = templateExplanation(facts, "en");
     expect(facts.recommendedPlan).toBe("right_sized");
-    expect(text).toContain(`${facts.stock.unsoldPairsIfFullOrder} pairs`);
-    expect(text).toContain(`${facts.stock.unsoldIfFullOrderPercent}%`);
+    expect(text).toContain(`${facts.stock.unsoldPairsAtExpectedSales} pairs`);
+    expect(text).toContain(`${facts.stock.unsoldAtExpectedSalesPercent}%`);
     expect(text).toContain("unsold");
   });
 
   it("describes ordering fewer pairs when the right-sized plan is recommended", () => {
     const facts = planFacts(run(30));
-    expect(templateExplanation(facts, "en")).toContain(`order ${facts.rightSized.pairs} of ${facts.pairsOrdered} pairs now`);
+    expect(templateExplanation(facts, "en")).toContain(`Order ${facts.rightSized.pairs} of ${facts.pairsOrdered} pairs now`);
   });
 
   it("describes the keep-full plan when that is recommended", () => {
@@ -59,7 +113,7 @@ describe("the explanation template (also the mock AI answer and the fallback)", 
     expect(facts.recommendedPlan).toBe("keep_full");
     const text = templateExplanation(facts, "en");
     expect(text).not.toContain("of 500 pairs now");
-    expect(text).toContain("settle");
+    expect(text).toContain("early settlement");
   });
 
   it("says no borrowing is needed when cash covers the invoice", () => {

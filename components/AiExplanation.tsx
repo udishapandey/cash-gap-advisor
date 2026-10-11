@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 import { aiStateFrom } from "@/lib/ai-requests";
 import { stableStringify } from "@/lib/hash";
 import { planFacts } from "@/lib/ai-facts";
-import { templateExplanation } from "@/lib/ai-templates";
-import type { VerifiedTextOutcome } from "@/lib/ai";
+import { PART_LABELS, templateExplanationParts, type ExplanationParts } from "@/lib/ai-templates";
+import type { ExplainOutcome, VerifiedTextOutcome } from "@/lib/ai";
 import type { EngineResult } from "@/lib/engine";
 import type { JourneyState } from "@/lib/journey";
 import type { Language } from "@/lib/language";
@@ -24,10 +24,22 @@ export function isVerifiedTextOutcome(v: unknown): v is VerifiedTextOutcome {
   );
 }
 
+export function isExplainOutcome(v: unknown): v is ExplainOutcome {
+  const p = (v as ExplainOutcome | null)?.parts;
+  return (
+    isVerifiedTextOutcome(v) &&
+    !!p &&
+    typeof p.doThis === "string" &&
+    typeof p.whyCheapest === "string" &&
+    typeof p.watchOut === "string"
+  );
+}
+
 /** What is on screen: the AI's checked text, or the plain template with a small note. Presentational only. */
 export function AiExplanationView({
   status,
   text,
+  parts,
   mock,
   language,
   onLanguage,
@@ -35,6 +47,8 @@ export function AiExplanationView({
 }: {
   status: "loading" | "verified" | "unavailable" | "stale";
   text: string;
+  /** The three labelled blocks. When missing, `text` is shown as one paragraph. */
+  parts?: ExplanationParts;
   mock: boolean;
   language: Language;
   onLanguage: (l: Language) => void;
@@ -64,6 +78,15 @@ export function AiExplanationView({
         <p className="mt-3 text-sm text-muted" aria-live="polite">
           Writing a plain-language explanation…
         </p>
+      ) : parts ? (
+        <dl lang={language === "hi" ? "hi" : "en"} className="mt-3 space-y-3 text-sm leading-relaxed" aria-live="polite">
+          {(["doThis", "whyCheapest", "watchOut"] as const).map((k) => (
+            <div key={k}>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-muted">{PART_LABELS[language][k]}</dt>
+              <dd className="mt-0.5">{parts[k]}</dd>
+            </div>
+          ))}
+        </dl>
       ) : (
         <p lang={language === "hi" ? "hi" : "en"} className="mt-3 text-sm leading-relaxed" aria-live="polite">
           {text}
@@ -119,16 +142,17 @@ export default function AiExplanation({
 
   const request = useMemo(() => (aiState && isArmed ? { state: aiState, language } : null), [aiState, language, isArmed]);
 
-  const resource = useAiResource<VerifiedTextOutcome>({
+  const resource = useAiResource<ExplainOutcome>({
     endpoint: "/api/ai/explain",
     request,
-    isValid: isVerifiedTextOutcome,
+    isValid: isExplainOutcome,
     isCacheable: (o) => o.status === "verified" && !o.mock,
     debounceMs: 600,
   });
 
   // If we couldn't even reach the server, build the same template here: it is plain code.
-  const template = useMemo(() => templateExplanation(planFacts(result), language), [result, language]);
+  const template = useMemo(() => templateExplanationParts(planFacts(result), language), [result, language]);
+  const templateText = [template.doThis, template.whyCheapest, template.watchOut].join(" ");
 
   const chooseLanguage = (l: Language) => {
     setArmed({ stateKey, language: l });
@@ -139,7 +163,8 @@ export default function AiExplanation({
     return (
       <AiExplanationView
         status="stale"
-        text={template}
+        text={templateText}
+        parts={template}
         mock={false}
         language={language}
         onLanguage={chooseLanguage}
@@ -151,8 +176,8 @@ export default function AiExplanation({
     return <AiExplanationView status="loading" text="" mock={false} language={language} onLanguage={chooseLanguage} />;
   }
   if (resource.status === "failed") {
-    return <AiExplanationView status="unavailable" text={template} mock={false} language={language} onLanguage={chooseLanguage} />;
+    return <AiExplanationView status="unavailable" text={templateText} parts={template} mock={false} language={language} onLanguage={chooseLanguage} />;
   }
   const o = resource.value;
-  return <AiExplanationView status={o.status} text={o.text} mock={o.mock} language={language} onLanguage={chooseLanguage} />;
+  return <AiExplanationView status={o.status} text={o.text} parts={o.parts} mock={o.mock} language={language} onLanguage={chooseLanguage} />;
 }

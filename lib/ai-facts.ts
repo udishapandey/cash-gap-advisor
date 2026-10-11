@@ -36,6 +36,10 @@ export interface ViewFacts {
   paysEarlyForDiscount: boolean;
   earlyPaymentDiscountPercent: number;
   earlyPaymentDiscountRupees: number;
+  /** Paying early costs more cash earlier, so more funding. Zero when the plan pays on the due date. */
+  extraCostOfPayingEarlyRupees: number;
+  /** The discount minus that extra cost: how much better off paying early is than paying on the due date. */
+  netSavingFromEarlyPaymentRupees: number;
   fullyCovered: boolean;
   uncoveredRupees: number;
   steps: StepFacts[];
@@ -53,8 +57,12 @@ export interface ExplainFacts {
   rightSized: ViewFacts;
   stock: {
     forecastPairsToSell: number;
-    unsoldPairsIfFullOrder: number;
-    unsoldIfFullOrderPercent: number;
+    unsoldPairsAtExpectedSales: number;
+    unsoldAtExpectedSalesPercent: number;
+    /** The same, if sales come in at the low end of the forecast instead of at the expected level. */
+    lowSalesForecastPairs: number;
+    unsoldPairsAtLowSales: number;
+    unsoldAtLowSalesPercent: number;
     cashSavedByRightSizingRupees: number;
     expectedLostMarginRupees: number;
   };
@@ -83,6 +91,8 @@ function viewFacts(v: ViewResult): ViewFacts {
     paysEarlyForDiscount: early,
     earlyPaymentDiscountPercent: early ? v.invoice.earlyPayDiscountPct : 0,
     earlyPaymentDiscountRupees: early ? v.discount.discountAmount : 0,
+    extraCostOfPayingEarlyRupees: early ? v.discount.extraFundingCost : 0,
+    netSavingFromEarlyPaymentRupees: early ? v.discount.netSaving : 0,
     fullyCovered: plan.fullyCovered,
     uncoveredRupees: plan.uncovered,
     steps: plan.steps.map((s) => ({
@@ -111,8 +121,11 @@ export function planFacts(result: EngineResult): ExplainFacts {
     rightSized: viewFacts(rightSized),
     stock: {
       forecastPairsToSell: Math.floor(demand),
-      unsoldPairsIfFullOrder: stock.unitsCut,
-      unsoldIfFullOrderPercent: round1(stock.unsoldShare * 100),
+      unsoldPairsAtExpectedSales: stock.unitsCut,
+      unsoldAtExpectedSalesPercent: round1(stock.unsoldShare * 100),
+      lowSalesForecastPairs: Math.floor(stock.demandByScenario.low),
+      unsoldPairsAtLowSales: Math.max(0, stock.fullUnits - Math.floor(stock.demandByScenario.low)),
+      unsoldAtLowSalesPercent: round1((Math.max(0, stock.fullUnits - Math.floor(stock.demandByScenario.low)) / stock.fullUnits) * 100),
       cashSavedByRightSizingRupees: stock.cashSaved,
       expectedLostMarginRupees: expectedLostMargin({
         orderUnits: stock.fullUnits,
@@ -214,4 +227,20 @@ export function promptFacts(facts: unknown): unknown {
     return value;
   };
   return walk(facts, "");
+}
+
+/** What the AI sees for the explanation: only the plan being recommended, in plain words with formatted numbers. */
+export function explainPromptFacts(f: ExplainFacts): unknown {
+  return promptFacts({
+    recommendedPlan: f.recommendedPlan,
+    invoiceRupees: f.invoiceRupees,
+    pairsOrdered: f.pairsOrdered,
+    dueInDays: f.dueInDays,
+    salesDropPercent: f.salesDropPercent,
+    cashElsewhereRupees: f.cashElsewhereRupees,
+    plan: f.recommendedPlan === "right_sized" ? f.rightSized : f.keepFull,
+    stock: f.stock,
+    ratesPercent: f.ratesPercent,
+    lowConfidenceForecast: f.lowConfidenceForecast,
+  });
 }

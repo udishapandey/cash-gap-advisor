@@ -4,7 +4,7 @@
 // long each step took and whether the grounding check passed. Never prints the key. Run only when asked (rule 7).
 
 import { readFileSync } from "node:fs";
-import { callScript, explainPlan, extractInvoice, interpretWhatIf } from "../lib/ai";
+import { callScript, explainPlan, extractInvoice, interpretWhatIf, type VerifiedTextOutcome } from "../lib/ai";
 import { merchant } from "../lib/data/merchant";
 import { sampleInvoice } from "../lib/data/invoice";
 import { runEngine } from "../lib/engine";
@@ -51,13 +51,14 @@ const timed = async <T>(label: string, fn: () => Promise<T>): Promise<T | undefi
   }
 };
 
-const engine = () =>
-  runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: 0, cashElsewhere: 0, overdraftRatePct: CONFIG.overdraftRatePct });
+const engine = (drop = 0) =>
+  runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop, cashElsewhere: 0, overdraftRatePct: CONFIG.overdraftRatePct });
 
-const showText = (o: Awaited<ReturnType<typeof explainPlan>>) => {
+const showText = (o: VerifiedTextOutcome & { parts?: object }) => {
   console.log(`  grounding check: ${o.status === "verified" ? "PASSED" : "NOT PASSED (template shown)"}${o.reason ? ` — ${o.reason}` : ""}`);
   if (o.ungrounded?.length) console.log(`  ungrounded: ${JSON.stringify(o.ungrounded)}`);
-  console.log(`  shown to the founder: ${o.text.replace(/\n/g, "\n    ")}`);
+  if (o.parts) for (const [k, v] of Object.entries(o.parts)) console.log(`  ${k.padEnd(12)} ${v}`);
+  else console.log(`  shown to the founder: ${o.text.replace(/\n/g, "\n    ")}`);
 };
 
 async function main() {
@@ -70,8 +71,11 @@ async function main() {
       for (const k of FIELD_KEYS) console.log(`  ${k.padEnd(26)} ${String(r.data[k].value).padEnd(28)} ${r.data[k].confidence}`);
     });
   }
-  await timed("explain-en", async () => showText(await explainPlan(engine(), "en")));
-  await timed("explain-hi", async () => showText(await explainPlan(engine(), "hi")));
+  for (const drop of [0, 25]) {
+    for (const lang of ["en", "hi"] as const) {
+      await timed(`explain-${lang}${drop ? `-${drop}` : ""}`, async () => showText(await explainPlan(engine(drop), lang)));
+    }
+  }
   await timed("script-en", async () => {
     const r = engine();
     const v = r.recommended;

@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { merchant } from "@/lib/data/merchant";
 import { sampleInvoice } from "@/lib/data/invoice";
 import { planFacts, scriptFacts } from "@/lib/ai-facts";
-import { templateExplanation, templateScript } from "@/lib/ai-templates";
+import { templateExplanation, templateExplanationParts, templateScript } from "@/lib/ai-templates";
 import { runEngine } from "@/lib/engine";
-import { AiExplanationView, UNAVAILABLE_NOTE, VERIFIED_LABEL, isVerifiedTextOutcome } from "./AiExplanation";
+import { AiExplanationView, UNAVAILABLE_NOTE, VERIFIED_LABEL, isExplainOutcome, isVerifiedTextOutcome } from "./AiExplanation";
 import { CallScriptView, SCRIPT_UNAVAILABLE_NOTE, SCRIPT_VERIFIED_LABEL } from "./CallScriptPanel";
 import LanguageToggle from "./LanguageToggle";
 import WhatIfAsk, { isWhatIfOutcome } from "./WhatIfAsk";
@@ -59,6 +59,28 @@ describe("the AI explanation on the Options screen", () => {
     expect(html).toContain("Explain this plan");
     expect(html).toContain(explanation);
     expect(html).not.toContain(VERIFIED_LABEL);
+  });
+
+  it.each([
+    ["en", ["Do this", "Why this is cheapest", "Watch out"]],
+    ["hi", ["यह करें", "यह सबसे सस्ता क्यों है", "ध्यान रखें"]],
+  ] as const)("shows the three parts as labelled blocks (%s), with the verified label", (language, labels) => {
+    const parts = templateExplanationParts(planFacts(result), language);
+    const html = renderToStaticMarkup(
+      <AiExplanationView status="verified" text="" parts={parts} mock={false} language={language} onLanguage={noop} />,
+    );
+    for (const label of labels) expect(html).toContain(label);
+    for (const text of Object.values(parts)) expect(html).toContain(text.replace(/&/g, "&amp;"));
+    expect(html).toContain(VERIFIED_LABEL);
+    expect(html.indexOf(labels[0])).toBeLessThan(html.indexOf(labels[1]));
+    expect(html.indexOf(labels[1])).toBeLessThan(html.indexOf(labels[2]));
+  });
+
+  it("an explanation answer must carry its three parts (an old saved answer without them is ignored)", () => {
+    const parts = { doThis: "a", whyCheapest: "b", watchOut: "c" };
+    expect(isExplainOutcome({ status: "verified", text: "a b c", parts })).toBe(true);
+    expect(isExplainOutcome({ status: "verified", text: "a b c" })).toBe(false);
+    expect(isExplainOutcome({ status: "verified", text: "x", parts: { doThis: "a" } })).toBe(false);
   });
 
   it("shows a 'Mock AI' badge in mock mode only", () => {

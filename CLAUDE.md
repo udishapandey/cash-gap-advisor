@@ -25,7 +25,7 @@ Check the AI reader against a real file: `npm run try:extract` (clean sample) or
 
 Decision journey: `/invoice` → `/gap` → `/options` → `/approve` (screens in `components/*Screen.tsx`, shared state in `components/JourneyProvider.tsx`, rules in `lib/journey.ts`, plain-text "Why this plan" in `lib/explain.ts`). Every number on those screens comes from `runEngine()`. Keep logic that can be tested in `lib/`, not inside components.
 
-Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate lives in `config.ts`). Simulated data: `lib/data/`. Every assumption is listed in `docs/ASSUMPTIONS.md`; update it whenever an assumption changes.
+Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate lives in `config.ts`). **Sizing rule: every plan is sized to the peak cumulative shortfall over the whole window from today to the due date (the balance on every day), never to one day's snapshot.** `lib/engine/peak.test.ts` enforces it for every plan, slider value and scenario. Simulated data: `lib/data/`. Every assumption is listed in `docs/ASSUMPTIONS.md`; update it whenever an assumption changes.
 
 ## Rules
 

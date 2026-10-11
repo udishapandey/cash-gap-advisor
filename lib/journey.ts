@@ -246,6 +246,11 @@ export function tenureDays(view: ViewResult): number {
 
 export const SIMULATED_ACCOUNT = "•••• 4321";
 
+/** Shown on the Key Fact Statement: its lender, fees, contacts and cooling-off are placeholders, not a real offer. */
+export const KFS_LABEL = "Illustrative values";
+export const KFS_DISCLAIMER =
+  "Illustrative values: the lender, fees, cooling-off period, grievance contact and account below are placeholders for this concept prototype. They are not a real offer.";
+
 export interface KeyFactStatement {
   lender: string;
   loanAmount: number;

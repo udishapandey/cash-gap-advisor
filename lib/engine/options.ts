@@ -65,7 +65,7 @@ export interface FundingInput {
   merchant: Merchant;
   /** The invoice being paid (already resized if the order was right-sized). */
   invoice: Invoice;
-  /** The scenario (at the day we pay) whose "earned but not yet settled" cash caps early settlement. */
+  /** The scenario whose "earned but not yet settled" cash, on the day the shortfall peaks, caps early settlement. */
   scenario: ScenarioResult;
   /** Pairs forecast to sell this season in the plan scenario. Prices the split order's stock-out risk. */
   demandUnits: number;
@@ -98,7 +98,9 @@ export function buildFundingOptions(input: FundingInput): FundingOption[] {
   const overdraftRatePct = input.overdraftRatePct ?? CONFIG.overdraftRatePct;
   const borrowDays = input.borrowDays ?? CONFIG.borrowDays;
 
-  const earlySettlementCap = round(scenario.earnedNotSettled);
+  // Early settlement can only help on the day the shortfall peaks, so its cap is the prepaid sales earned by
+  // that day that would settle after it.
+  const earlySettlementCap = round(scenario.peak.earnedNotSettled);
 
   // Split order: defer some pairs to a later delivery. The cost is the margin on the
   // deferred pairs that would have sold.

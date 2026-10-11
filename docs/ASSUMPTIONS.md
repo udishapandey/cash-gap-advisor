@@ -108,6 +108,16 @@ Where each value lives in code: `lib/engine/config.ts` (rates and multipliers), 
 | 62 | Reusing an earlier reading | The page fingerprints each uploaded file (SHA-256) and keeps the AI's reading in this browser tab's session storage, the 20 most recent files. Uploading the same file again shows the saved reading labelled "Read earlier" and makes no AI call. "Read again with the AI" forces a new call. Only live readings are saved (not mock, pre-read or manual). Only the extracted fields are stored, never the file | Brief | Decide whether a saved reading should expire. Check what real invoices from one supplier look like when re-sent with small changes (a new hash, so a new reading). |
 | 63 | Hosting limits (Vercel) | The route sets a 60 second maximum duration to cover the 45 second AI budget. Vercel's request body limit for functions is 4.5 MB, below our 5 MB upload limit, so files between 4.5 and 5 MB would be refused there | Claude | Check the plan's limits on Vercel. Lower the upload limit to 4 MB, or upload directly to storage, before relying on large files. |
 
+## The sizing rule: peak cumulative shortfall
+
+| # | Assumption | Value | Source | How we'd verify with real data |
+|---|---|---|---|---|
+| 76 | Every plan is sized to the peak, not one day | The balance is worked out for **every day** from today to the end of the window, with the invoice paid on its payment day. The window ends on the due date (the extended due date for the "ask first" plan). The money a plan must find is the **peak cumulative shortfall**: the lowest the balance falls on any day. A plan of that size keeps the balance at or above zero on every day. This applies to the due-date plan, the pay-early plan, both views (keep full / right-sized) and the extension plan | Brief | Compare with the real daily bank balance over past due dates. Check how often the worst day is not the payment day. |
+| 77 | Why one day is not enough | Paying early (say day 7) moves the invoice earlier but money keeps going out until the due date (day 10). If outflows exceed inflows, the shortfall keeps growing after payment. Sizing to day 7 alone under-borrowed by about ₹39,000 in the right-sized, −30% case. A shortfall can also peak in the middle of the window and be gone by the due date | Observed | n/a |
+| 78 | Funding is assumed available when needed | The plan's funding is assumed to be in place by the day of the peak, and the balance is checked daily, so no day is negative. The day each loan is drawn is not modelled | Claude | Check how quickly each source can really pay out, and whether an earlier shortfall needs money earlier than the peak day. |
+| 79 | Early-settlement cap | Measured on the day the shortfall peaks: prepaid sales earned by that day that would only settle after it | Claude | Compare with what instant settlement really allows on that day. |
+| 80 | Gap range | The low / expected / high gap shown on every screen is the peak in each sales scenario. The cash-gap table also shows the shortfall on the payment day alone, so you can see when the worst day is a different day | Claude | n/a |
+
 ## Decision journey (Phase 3)
 
 | # | Assumption | Value | Source | How we'd verify with real data |
@@ -127,7 +137,7 @@ Where each value lives in code: `lib/engine/config.ts` (rates and multipliers), 
 
 ### Known limitation: the loan still grows as sales drop
 
-With these inputs, right-sizing shrinks the loan a lot **compared with keeping the full order** (about ₹1.72L against ₹3.05L at −30% sales), but the right-sized loan at −30% is still **higher than the loan at 0%** (about ₹1.72L against ₹1.17L). A 30% sales drop cuts forecast cash-in by about ₹2.5L, while right-sizing saves only about ₹1.4L of stock cost. The main reason is that "other outflows" (#1) are fixed. In reality courier, fees and part of ad spend would fall with sales, which would narrow this. Treat the "loan shrinks" claim in the spec as true relative to keeping the full order, not relative to the 0% case, until #1 is replaced with real data.
+With these inputs, right-sizing shrinks the loan a lot **compared with keeping the full order** (about ₹2.11L against ₹3.44L at −30% sales), but the right-sized loan at −30% is still **higher than the loan at 0%** (about ₹2.11L against ₹1.17L). A 30% sales drop cuts forecast cash-in by about ₹2.5L, while right-sizing saves only about ₹1.4L of stock cost. The main reason is that "other outflows" (#1) are fixed. In reality courier, fees and part of ad spend would fall with sales, which would narrow this. Treat the "loan shrinks" claim in the spec as true relative to keeping the full order, not relative to the 0% case, until #1 is replaced with real data. (These figures use the peak-shortfall sizing rule, #76.)
 
 ## Not modelled yet
 

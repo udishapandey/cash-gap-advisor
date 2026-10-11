@@ -1,5 +1,5 @@
 import { formatINR } from "@/lib/format";
-import type { KeyFactStatement } from "@/lib/journey";
+import { KFS_DISCLAIMER, KFS_LABEL, type KeyFactStatement } from "@/lib/journey";
 import { SimulatedTag } from "./ui";
 
 /** The facts a borrower must see before any credit is drawn. Every number comes from `buildKfs`. */
@@ -28,8 +28,9 @@ export default function KeyFactStatementPanel({ kfs }: { kfs: KeyFactStatement }
     <div aria-label="Key Fact Statement" className="rounded-lg border border-slate-300 bg-slate-50 p-4">
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="text-sm font-semibold uppercase tracking-wide">Key Fact Statement</h4>
-        <SimulatedTag />
+        <SimulatedTag>{KFS_LABEL}</SimulatedTag>
       </div>
+      <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">{KFS_DISCLAIMER}</p>
       <dl className="mt-3 divide-y divide-slate-200 text-sm">
         {rows.map(([label, value]) => (
           <div key={label} className="grid gap-1 py-2 sm:grid-cols-[14rem_1fr]">

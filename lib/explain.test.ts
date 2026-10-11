@@ -74,12 +74,12 @@ describe("Why this plan (plain-text template)", () => {
   });
 
   it("says 'costs ₹X less' when paying early is cheaper to fund, never a negative amount", () => {
-    // After a 30% sales drop, the right-sized plan is cheaper to fund early.
-    const r = run({ salesDropPercent: 30 });
-    const view = r.views.rightSized;
+    // A 10% discount at -10% sales: the smaller early invoice more than pays for the longer loan.
+    const r = run({ salesDropPercent: 10 }, { ...sampleInvoice, earlyPayDiscountPct: 10 });
+    const view = r.views.keepFull;
     expect(view.recommended.timing).toBe("pay_early_for_discount");
     expect(view.discount.extraFundingCost).toBeLessThan(0);
-    const out = text(explainPlan(view, r.stock, { salesDropPercent: 30 }));
+    const out = text(explainPlan(view, r.stock, { salesDropPercent: 10 }));
     expect(out).toContain(`funding it costs ${formatINR(-view.discount.extraFundingCost)} less`);
     expect(out).toContain(`a net saving of ${formatINR(view.discount.netSaving)}`);
     expect(out).not.toContain("₹-");
@@ -102,6 +102,39 @@ describe("Why this plan (plain-text template)", () => {
     expect(text(explainPlan(none.views.keepFull, none.stock))).not.toContain("cash elsewhere");
     const some = run({ cashElsewhere: 75_000 }, dueDateInvoice);
     expect(text(explainPlan(some.views.keepFull, some.stock))).toContain(`cash elsewhere ${formatINR(75_000)}`);
+  });
+
+  it("explains when the worst day is not the payment day: sized to the peak", () => {
+    // Right-sized at -30%, paying early: ₹2,91,349 short on day 7, but ₹3,30,719 short by day 10.
+    const r = run({ salesDropPercent: 30 });
+    const view = r.views.rightSized;
+    const out = text(explainPlan(view, r.stock, { salesDropPercent: 30 }));
+    expect(out).toContain("Shortfall on day 7 alone");
+    expect(out).toContain(formatINR(291_349));
+    expect(out).toContain("the worst day is day 10");
+    expect(out).toContain(formatINR(330_719));
+    expect(out).toContain("sized to that peak");
+    expect(out).toContain("never goes below zero on any day up to day 10");
+    expect(out).not.toContain("Expected gap:");
+  });
+
+  it("uses the simple 'Expected gap' line when the payment day is the worst day", () => {
+    const r = run({}, dueDateInvoice);
+    const out = text(explainPlan(r.views.keepFull, r.stock));
+    expect(out).toContain("Expected gap:");
+    expect(out).not.toContain("the worst day is");
+  });
+
+  it("when there is no gap, says how low the balance gets over the whole window", () => {
+    const r = run({ cashElsewhere: 1_000_000 }, dueDateInvoice);
+    const view = r.views.keepFull;
+    // With cash to spare even a tiny discount is worth taking, so the plan being explained pays early:
+    // the figure quoted is the lowest balance on THAT payment path.
+    const path = view.recommended.timing === "pay_early_for_discount" ? view.earlyGap : view.gap;
+    expect(path.scenarios.expected.gap).toBe(0);
+    expect(text(explainPlan(view, r.stock))).toContain(
+      `the lowest your balance gets on any day up to day 10 is ${formatINR(path.scenarios.expected.minBalance)}`,
+    );
   });
 
   it("says plainly when there is no gap", () => {

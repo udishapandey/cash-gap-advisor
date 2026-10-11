@@ -167,7 +167,7 @@ function PlanCard({
         </div>
         <div>
           <dt className="text-xs text-muted">
-            Gap to cover by day {early ? earlyPayDay(view.invoice) : view.invoice.dueInDays}
+            Peak shortfall to cover (any day up to day {early ? view.earlyGap.windowEnd : view.gap.windowEnd})
           </dt>
           <dd className="font-semibold tabular-nums">{formatINR(plan.gap)}</dd>
         </div>

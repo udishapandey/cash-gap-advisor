@@ -39,11 +39,19 @@ export function explainPlan(
   ];
   if (s.cash.cashElsewhere > 0) parts.push(`cash elsewhere ${formatINR(s.cash.cashElsewhere)}`);
   lines.push(`Cash expected by then: ${formatINR(s.cash.totalIn)} = ${parts.join(" + ")}.`);
-  lines.push(
-    s.gap > 0
-      ? `Expected gap: ${formatINR(s.cashOut)} − ${formatINR(s.cash.totalIn)} = ${formatINR(s.gap)}.`
-      : `No gap: expected cash is ${formatINR(s.surplus)} more than is needed.`,
-  );
+  const peakElsewhere = s.gap > s.gapOnPayDay || (s.gap > 0 && s.peak.day !== gap.byDay);
+  if (s.gap === 0) {
+    lines.push(
+      `No gap: the lowest your balance gets on any day up to day ${gap.windowEnd} is ${formatINR(s.minBalance)}, so no funding is needed.`,
+    );
+  } else if (!peakElsewhere) {
+    lines.push(`Expected gap: ${formatINR(s.cashOut)} − ${formatINR(s.cash.totalIn)} = ${formatINR(s.gap)}.`);
+  } else {
+    lines.push(`Shortfall on day ${gap.byDay} alone: ${formatINR(s.cashOut)} − ${formatINR(s.cash.totalIn)} = ${formatINR(s.gapOnPayDay)}.`);
+    lines.push(
+      `But money keeps moving every day, and the worst day is day ${s.peak.day}: ${formatINR(s.gap)} short. The plan is sized to that peak, so your balance never goes below zero on any day up to day ${gap.windowEnd}.`,
+    );
+  }
 
   // 2. How the gap is covered, cheapest first.
   if (plan.steps.length > 0) {

@@ -42,7 +42,7 @@ export default function GapScreen() {
               <SectionTitle aside={<SimulatedTag />}>Your cash gap</SectionTitle>
               <p className="mt-1 text-sm text-muted">
                 {invoice.supplier}: {formatINR(invoice.amount)} for {invoice.units} pairs, due in {invoice.dueInDays}{" "}
-                days. This is how much short you could be on the due date.
+                days. This is the most you could be short on any single day until then.
               </p>
 
               <div className="mt-5">
@@ -133,11 +133,22 @@ export default function GapScreen() {
                         </td>
                       ))}
                     </tr>
+                    <tr>
+                      <td className="px-3 py-2">Shortfall on day {gap.byDay} alone (cash out − cash in)</td>
+                      {cols.map(([name, s]) => (
+                        <td key={name} className={cell}>
+                          {s.gapOnPayDay > 0 ? formatINR(s.gapOnPayDay) : "None"}
+                        </td>
+                      ))}
+                    </tr>
                     <tr className="bg-background font-semibold">
-                      <td className="px-3 py-2">Gap (cash out − cash in)</td>
+                      <td className="px-3 py-2">
+                        Gap to cover: the largest shortfall on any day up to day {gap.windowEnd}
+                      </td>
                       {cols.map(([name, s]) => (
                         <td key={name} className={`${cell} ${s.gap > 0 ? "text-red-700" : "text-green-700"}`}>
                           {s.gap > 0 ? formatINR(s.gap) : "None"}
+                          {s.gap > 0 && <span className="block text-[11px] font-normal text-muted">on day {s.peak.day}</span>}
                         </td>
                       ))}
                     </tr>

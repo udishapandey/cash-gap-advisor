@@ -1,4 +1,3 @@
-import HelloPanel from "@/components/HelloPanel";
 import { merchant, SIMULATED_LABEL } from "@/lib/data/merchant";
 import { sampleInvoice } from "@/lib/data/invoice";
 import { runEngine } from "@/lib/engine";
@@ -78,8 +77,6 @@ export default function Home() {
         </dl>
         <p className="mt-2 text-xs text-amber-700">{SIMULATED_LABEL}: sales, COD and balance are made up.</p>
       </section>
-
-      <HelloPanel />
     </div>
   );
 }

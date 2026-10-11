@@ -1,0 +1,164 @@
+import { readFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanAnswer, JPEG_HEADER, PDF_HEADER, PNG_HEADER } from "@/lib/invoice-testing";
+import { sniffMimeType } from "@/lib/invoice-upload";
+
+// The AI is mocked: no live calls.
+vi.mock("@/lib/ai", () => ({ extractInvoice: vi.fn() }));
+import { extractInvoice } from "@/lib/ai";
+import { POST } from "./route";
+
+const mocked = vi.mocked(extractInvoice);
+
+function bytes(header: number[], size = 64, fill = 0x20) {
+  const b = new Uint8Array(size).fill(fill);
+  b.set(header);
+  return b;
+}
+function upload(content: Uint8Array | string, name = "invoice.pdf", type = "application/pdf") {
+  const form = new FormData();
+  form.append("file", new File([content as BlobPart], name, { type }));
+  return new Request("http://localhost/api/parse-invoice", { method: "POST", body: form });
+}
+
+beforeEach(() => {
+  mocked.mockReset();
+  mocked.mockResolvedValue({ ok: true, data: cleanAnswerParsed() });
+});
+afterEach(() => vi.restoreAllMocks());
+
+function cleanAnswerParsed() {
+  // The route returns whatever extractInvoice hands back; shape only matters to the page.
+  return cleanAnswer() as never;
+}
+
+describe("file checks", () => {
+  it.each([
+    ["PDF", PDF_HEADER, "application/pdf"],
+    ["PNG", PNG_HEADER, "image/png"],
+    ["JPEG", JPEG_HEADER, "image/jpeg"],
+  ])("accepts a %s and passes it on in memory", async (_label, header, mime) => {
+    const res = await POST(upload(bytes(header), "invoice", mime));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true });
+    expect(mocked).toHaveBeenCalledTimes(1);
+    const arg = mocked.mock.calls[0][0];
+    expect(arg.mimeType).toBe(mime);
+    expect(Array.from(arg.data.slice(0, header.length))).toEqual(header);
+  });
+
+  it("rejects a request with no file", async () => {
+    const res = await POST(new Request("http://localhost/api/parse-invoice", { method: "POST", body: new FormData() }));
+    expect(res.status).toBe(400);
+    expect(mocked).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty file", async () => {
+    expect((await POST(upload(new Uint8Array(0)))).status).toBe(400);
+  });
+
+  it("rejects a body that isn't a form upload", async () => {
+    const res = await POST(new Request("http://localhost/api/parse-invoice", { method: "POST", body: "hello" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a file whose bytes are not PDF/PNG/JPG, even if named .pdf with a PDF type", async () => {
+    const res = await POST(upload("just some text pretending to be a PDF", "invoice.pdf", "application/pdf"));
+    expect(res.status).toBe(415);
+    expect((await res.json()).error).toContain("PDF, PNG or JPG");
+    expect(mocked).not.toHaveBeenCalled();
+  });
+
+  it("accepts a real PDF even if the browser mislabels its type", async () => {
+    expect((await POST(upload(bytes(PDF_HEADER), "invoice.pdf", "application/octet-stream"))).status).toBe(200);
+  });
+
+  it("allows exactly 5 MB and rejects anything bigger", async () => {
+    const limit = 5 * 1024 * 1024;
+    expect((await POST(upload(bytes(PDF_HEADER, limit)))).status).toBe(200);
+    mocked.mockClear();
+    const res = await POST(upload(bytes(PDF_HEADER, limit + 1)));
+    expect(res.status).toBe(413);
+    expect((await res.json()).error).toContain("5 MB");
+    expect(mocked).not.toHaveBeenCalled();
+  });
+
+  it("refuses an oversized upload from its declared length, before reading it", async () => {
+    const req = new Request("http://localhost/api/parse-invoice", {
+      method: "POST",
+      headers: { "content-length": String(50 * 1024 * 1024) },
+      body: new FormData(),
+    });
+    const formData = vi.spyOn(req, "formData");
+    expect((await POST(req)).status).toBe(413);
+    expect(formData).not.toHaveBeenCalled();
+  });
+
+  it("recognises file types from their first bytes", () => {
+    expect(sniffMimeType(bytes(PDF_HEADER))).toBe("application/pdf");
+    expect(sniffMimeType(bytes(PNG_HEADER))).toBe("image/png");
+    expect(sniffMimeType(bytes(JPEG_HEADER))).toBe("image/jpeg");
+    expect(sniffMimeType(new Uint8Array([1, 2, 3]))).toBeNull();
+    expect(sniffMimeType(new Uint8Array(0))).toBeNull();
+  });
+});
+
+describe("AI failures become clear messages", () => {
+  it("429 gets a clear rate-limit message and a Retry-After header", async () => {
+    mocked.mockResolvedValue({ ok: false, kind: "rate_limit", message: "The AI service is busy. Please wait.", retryAfterSeconds: 20 });
+    const res = await POST(upload(bytes(PDF_HEADER)));
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("20");
+    expect(await res.json()).toMatchObject({ ok: false, kind: "rate_limit", error: "The AI service is busy. Please wait." });
+  });
+
+  it.each([
+    ["not_configured", 503],
+    ["provider_error", 502],
+    ["invalid_response", 502],
+  ] as const)("%s returns %i with the message", async (kind, status) => {
+    mocked.mockResolvedValue({ ok: false, kind, message: "friendly message" });
+    const res = await POST(upload(bytes(PDF_HEADER)));
+    expect(res.status).toBe(status);
+    expect(await res.json()).toMatchObject({ ok: false, error: "friendly message" });
+  });
+
+  it("returns the extraction on success, uncached", async () => {
+    const res = await POST(upload(bytes(PDF_HEADER)));
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect((await res.json()).extraction).toBeDefined();
+  });
+});
+
+describe("privacy: nothing from the invoice is kept or logged", () => {
+  const SECRET = "SECRET-INVOICE-TEXT-98765";
+  const NAME = "secret-supplier-invoice.pdf";
+
+  it("logs nothing that contains the file's contents or name, on success or failure", async () => {
+    const spies = (["log", "info", "warn", "error", "debug"] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
+    const content = new Uint8Array([...PDF_HEADER, ...new TextEncoder().encode(SECRET)]);
+
+    await POST(upload(content, NAME)); // success
+    mocked.mockResolvedValue({ ok: false, kind: "provider_error", message: "friendly" });
+    await POST(upload(content, NAME)); // failure
+    await POST(upload(SECRET, NAME)); // rejected file type
+
+    const logged = spies.flatMap((s) => s.mock.calls).flat().map(String).join(" ");
+    expect(logged).not.toContain(SECRET);
+    expect(logged).not.toContain(NAME);
+    expect(logged).toContain("provider_error"); // only the kind of failure is logged
+  });
+
+  it("never echoes the file's name or contents back in an error", async () => {
+    const res = await POST(upload(SECRET, NAME));
+    const text = await res.text();
+    expect(text).not.toContain(SECRET);
+    expect(text).not.toContain(NAME);
+  });
+
+  it("never writes to disk: the route does not use the file system", () => {
+    const source = readFileSync(new URL("./route.ts", import.meta.url), "utf8");
+    expect(source).not.toMatch(/from\s+["'](node:)?fs/);
+    expect(source).not.toMatch(/writeFile|createWriteStream|appendFile|mkdtemp|tmpdir/);
+  });
+});

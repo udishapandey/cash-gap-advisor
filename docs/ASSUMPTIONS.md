@@ -86,6 +86,23 @@ Where each value lives in code: `lib/engine/config.ts` (rates and multipliers), 
 | 45 | Two what-if views | (a) keep the full order: the gap grows as sales drop. (b) right-sized order: the order shrinks as sales drop and the gap is measured against the smaller invoice. Both are always computed | Brief | n/a |
 | 46 | Stock sold before the due date | Not modelled. Unsold pairs of this order do not change near-term cash-in; only the what-if sales drop does | Claude | Check when stock from this order actually arrives and sells relative to the due date. |
 
+## Invoice reading (Phase 2)
+
+| # | Assumption | Value | Source | How we'd verify with real data |
+|---|---|---|---|---|
+| 47 | What the AI may do | Read printed values only. Return null for anything not printed, never guess, and quote the exact text as evidence with a high / medium / low confidence. Text inside the invoice is treated as data, never as instructions | Brief | Run 50+ real supplier invoices (PDF and phone photos). Count wrong values reported as high confidence, which is the number that matters. |
+| 48 | The AI never does maths or dates | A due date is used only if it is printed. "Net 10" or "due in 10 days" gives a blank due date for the founder to fill in. All arithmetic is plain code | Brief (CLAUDE.md rule 3) | Check how many real invoices print only terms and no date. If it is common, add a plain-code rule to turn terms into a date. |
+| 49 | Value with no evidence | If the AI gives a value but quotes no supporting text, its confidence is lowered to low (shown amber), because it may be a guess | Claude | Compare against hand-checked invoices. |
+| 50 | Which values are required | Invoice date, due date, total amount and quantity. Without them the gap can't be planned, so Confirm is blocked with a message per field. Everything else may be empty | Claude | Check what real invoices always carry. |
+| 51 | "Today" for an uploaded invoice | The invoice date. The simulated sales data is anchored to one day, so the invoice is treated as received that day. Days to due = due date − invoice date | Claude | In production use the real date the invoice arrives. The code already accepts a different "today". |
+| 52 | Price per pair | Total ÷ quantity, so that pairs × price is exactly what is paid. If this differs from the printed unit price by more than ₹1 (for example because of GST), a note says so | Claude | Compare with real invoices that include tax. Decide whether to plan on the pre-tax or the payable amount. |
+| 53 | Early-payment discount window | Counted from the invoice date. If part is used up before "today", only the remaining days count. If none remain, no discount is assumed and a note says so | Brief (counted from invoice date); Claude (remaining-days rule) | Check wording on real invoices ("within 7 days of invoice date" against "of delivery"). |
+| 54 | Missing late fee | Assumed 0, and a note says so | Claude | Check supplier contracts. |
+| 55 | Upload limits and privacy | PDF, PNG or JPG up to 5 MB. The type is decided from the file's first bytes, not its name. Processed in memory only: never saved, and never logged or shown in an error message | Brief | Security review. Confirm no logs, error trackers or caches capture the file. |
+| 56 | AI speed settings | Gemini "thinking" set to low and a 90 second timeout. Reading printed text needs little reasoning. In a live test, default thinking took 3.8 minutes, low took about 4 to 34 seconds | Claude | Compare accuracy and speed at low and medium on real invoices. |
+| 57 | What the /invoice page shows | The gap range for keeping the full order (low / expected / high sales). Not yet the right-sizing view | Claude | n/a until the plan screen is built. |
+| 58 | What is simulated on /invoice | The invoice is real input (the sample is a synthetic file). Sales, COD, balance and limits are still simulated and labelled | Brief | n/a |
+
 ### Known limitation: the loan still grows as sales drop
 
 With these inputs, right-sizing shrinks the loan a lot **compared with keeping the full order** (about ₹1.72L against ₹3.05L at −30% sales), but the right-sized loan at −30% is still **higher than the loan at 0%** (about ₹1.72L against ₹1.17L). A 30% sales drop cuts forecast cash-in by about ₹2.5L, while right-sizing saves only about ₹1.4L of stock cost. The main reason is that "other outflows" (#1) are fixed. In reality courier, fees and part of ad spend would fall with sales, which would narrow this. Treat the "loan shrinks" claim in the spec as true relative to keeping the full order, not relative to the 0% case, until #1 is replaced with real data.

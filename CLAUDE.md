@@ -19,6 +19,8 @@ Locked spec: `docs/SPEC.md` (source of truth; read it before building any featur
 
 Next.js (App Router) + TypeScript + Tailwind. Run with `npm run dev`. Tests: `npm test` (Vitest).
 
+Invoice reading: `extractInvoice` in `lib/ai.ts` (the only AI call that sees a file), `lib/invoice-extraction.ts` (zod schema, form parsing, mapping into the engine), route `app/api/parse-invoice`, page `/invoice`. Sample invoices are in `public/samples/` (synthetic).
+
 Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate lives in `config.ts`). Simulated data: `lib/data/`. Every assumption is listed in `docs/ASSUMPTIONS.md`; update it whenever an assumption changes.
 
 ## Rules
@@ -28,6 +30,7 @@ Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate live
 3. **All money calculations are plain code, never the LLM.** The LLM may explain or phrase results; it must never compute amounts, totals, gaps or dates.
 4. **Every LLM call goes through `lib/ai.ts`.** No other file imports an AI SDK or calls an AI API.
 5. **Label simulated data as simulated in the UI.** Any fake number, transaction or customer must be visibly marked "Simulated".
+6. **Invoice files are private.** Process them in memory only. Never save one to disk, and never log or echo its contents or file name (including in error messages). The AI only reads printed values: it returns null for anything missing, quotes its evidence, and never calculates amounts or dates.
 
 ## AI provider
 

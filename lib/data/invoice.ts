@@ -1,7 +1,8 @@
 // SIMULATED DATA. A made-up supplier invoice for the demo.
 
 export interface Invoice {
-  simulated: true;
+  /** True for the built-in demo invoice. False for one read from an uploaded file. */
+  simulated: boolean;
   supplier: string;
   invoiceNumber: string;
   units: number; // pairs ordered

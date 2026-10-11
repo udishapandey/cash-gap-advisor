@@ -20,6 +20,7 @@ import {
 } from "@/lib/invoice-extraction";
 import { ACCEPTED_EXTENSIONS, MAX_INVOICE_BYTES } from "@/lib/invoice-upload";
 import Disclosure from "./Disclosure";
+import Stepper from "./Stepper";
 import { useJourney } from "./JourneyProvider";
 
 const STORAGE_KEY = "cga.confirmedInvoice.v1";
@@ -328,6 +329,11 @@ export default function InvoiceFlow() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      <Stepper current="invoice" />
+      <header>
+        <h1 className="font-heading text-2xl font-semibold">Supplier bill</h1>
+        <p className="mt-1 text-sm text-muted">Upload the bill. Check what we read.</p>
+      </header>
       <section className="rounded-xl border border-line bg-card shadow-sm p-5">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">Forward a supplier invoice</h2>
@@ -572,7 +578,7 @@ export default function InvoiceFlow() {
               disabled={reading}
               className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
             >
-              Confirm invoice
+              Confirm bill
             </button>
             {confirmed && <span className="text-sm text-green-700">Confirmed. Saved in this browser tab only.</span>}
           </div>
@@ -600,7 +606,7 @@ export default function InvoiceFlow() {
             href="/gap"
             className="mt-4 inline-block rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
           >
-            Continue to the cash gap →
+            See cash gap
           </Link>
         </section>
       )}

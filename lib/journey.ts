@@ -14,9 +14,9 @@ import type { Language } from "./language";
 // ---------- Steps ----------
 
 export const STEPS = [
-  { id: "invoice", label: "Invoice", href: "/invoice" },
+  { id: "invoice", label: "Bill", href: "/invoice" },
   { id: "gap", label: "Cash gap", href: "/gap" },
-  { id: "options", label: "Options", href: "/options" },
+  { id: "options", label: "Plan", href: "/options" },
   { id: "approve", label: "Approve", href: "/approve" },
   { id: "results", label: "Results", href: "/results" },
 ] as const;
@@ -71,6 +71,7 @@ export const invoiceSchema = z.object({
   earlyPayDiscountPct: z.number().min(0).max(100),
   earlyPayWithinDays: z.number().min(0),
   lateFeePctPerMonth: z.number().min(0).max(100),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 // Each field falls back on its own, so one bad value never throws away the rest.

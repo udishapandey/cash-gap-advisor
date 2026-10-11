@@ -306,6 +306,7 @@ export function toEngineInvoice(
       earlyPayDiscountPct: discountPct,
       earlyPayWithinDays: discountWithinDays,
       lateFeePctPerMonth: c.lateFeePercentPerMonth ?? 0,
+      startDate: today,
     },
   };
 }

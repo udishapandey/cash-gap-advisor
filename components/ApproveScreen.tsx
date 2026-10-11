@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { EngineResult } from "@/lib/engine";
 import { formatINR, formatPct } from "@/lib/format";
+import { backupLine } from "@/lib/plain";
 import {
   approvalBlockers,
   approvalStage,
@@ -23,15 +23,13 @@ import {
 import type { ShellContext } from "./JourneyShell";
 import JourneyShell from "./JourneyShell";
 import KeyFactStatementPanel from "./KeyFactStatement";
-import StandbyLine from "./StandbyLine";
 import { Card, SectionTitle, SimulatedTag } from "./ui";
 
 export default function ApproveScreen() {
   return <JourneyShell step="approve">{(ctx) => <ApproveBody {...ctx} />}</JourneyShell>;
 }
 
-function ApproveBody({ state, result, update, reset }: ShellContext) {
-  const router = useRouter();
+function ApproveBody({ state, result, update }: ShellContext) {
   const view = state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull;
   const planName = state.chosenView === "right_sized" ? "Order fewer pairs" : "Keep full order";
   const plan = view.recommended.plan;
@@ -39,6 +37,7 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
   const blockers = approvalBlockers(view);
   const stage = approvalStage(state);
   const pay = supplierPayment(view);
+  const backup = backupLine(view);
   const kfs = sections.creditLine ? buildKfs(sections.creditLine.amount, tenureDays(view)) : null;
   const overdraftNote = overdraftFirstNote({
     options: view.recommended.timing === "pay_early_for_discount" ? view.earlyOptions : view.options,
@@ -70,16 +69,13 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
       setBusy(null);
     }, 1000);
   }
-  function startAgain() {
-    reset();
-    router.push("/invoice");
-  }
 
-  if (stage === "done") return <Success view={view} pay={pay} result={result} onAgain={startAgain} />;
+  if (stage === "done") return <Success view={view} pay={pay} result={result} />;
 
   if (stage === "pay") {
     return (
       <>
+        <h1 className="font-heading text-2xl font-semibold">Approve plan</h1>
         <Card className="border-green-300">
           <SectionTitle aside={<SimulatedTag />}>Approved ✓</SectionTitle>
           <p className="mt-1 text-sm text-muted">Approved with Touch ID (simulated: no fingerprint was read).</p>
@@ -126,6 +122,8 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
 
   return (
     <>
+      <h1 className="font-heading text-2xl font-semibold">Approve plan</h1>
+
       <Card>
         <SectionTitle aside={<SimulatedTag />}>Review and approve</SectionTitle>
         <p className="mt-1 text-sm text-muted">
@@ -150,13 +148,13 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
             <dd className="text-lg font-semibold tabular-nums">{formatINR(plan.totalCost)}</dd>
           </div>
         </dl>
-        <StandbyLine view={view} />
+        {backup && <p className={`mt-3 text-sm ${backup.warn ? "text-red-700" : "text-muted"}`}>{backup.text}</p>}
         <Link href="/options" className="mt-3 inline-block text-sm text-brand hover:underline">
           ← Change plan
         </Link>
       </Card>
 
-      <Card className="border-l-4 border-l-green-500">
+      <Card className="border-l-4 border-l-brand">
         <SectionTitle>Actions that are not credit</SectionTitle>
         <p className="mt-1 text-sm text-muted">These are not loans. No borrowing is involved.</p>
         {sections.nonCredit.length === 0 ? (
@@ -173,7 +171,7 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
         )}
       </Card>
 
-      <Card className="border-l-4 border-l-red-500" aria-label="Credit">
+      <Card className="border-l-4 border-l-amber-500" aria-label="Credit">
         <SectionTitle aside={<span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">Credit: needs your consent</span>}>
           Credit
         </SectionTitle>
@@ -262,28 +260,24 @@ function Success({
   view,
   pay,
   result,
-  onAgain,
 }: {
   view: EngineResult["views"]["keepFull"];
   pay: number;
   result: EngineResult;
-  onAgain: () => void;
 }) {
   const sections = splitPlan(view, result.stock.fullUnits);
   const kfs = sections.creditLine ? buildKfs(sections.creditLine.amount, tenureDays(view)) : null;
   const plan = view.recommended.plan;
   return (
-    <Card className="border-green-300 text-center">
+    <Card className="text-center">
       <div
         aria-hidden
-        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-2xl text-green-700"
+        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-faded text-2xl text-brand-text"
       >
         ✓
       </div>
-      <h2 className="mt-3 text-xl font-semibold">Supplier paid</h2>
-      <p className="mt-1 text-sm text-muted">
-        <SimulatedTag /> Nothing real happened: this is a concept prototype.
-      </p>
+      <h1 className="mt-3 font-heading text-xl font-semibold">Supplier paid</h1>
+      <p className="mt-1 text-sm text-muted">Simulated. No real money moved.</p>
       <dl className="mx-auto mt-5 max-w-md divide-y divide-line text-left text-sm">
         <div className="flex justify-between py-2">
           <dt className="text-muted">Paid to {view.invoice.supplier}</dt>
@@ -310,19 +304,12 @@ function Success({
           </div>
         )}
       </dl>
-      <div className="mt-6 flex flex-wrap justify-center gap-3">
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-5">
         <Link href="/results" className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover">
-          See how the plan did →
+          See results
         </Link>
-        <button
-          type="button"
-          onClick={onAgain}
-          className="rounded-md border border-brand-border text-brand-text px-5 py-2.5 text-sm font-medium hover:bg-background"
-        >
-          Start another invoice
-        </button>
-        <Link href="/" className="rounded-md border border-brand-border text-brand-text px-5 py-2.5 text-sm font-medium hover:bg-background">
-          Back to the dashboard
+        <Link href="/" className="text-sm font-medium text-brand-text hover:underline">
+          Back to home
         </Link>
       </div>
     </Card>

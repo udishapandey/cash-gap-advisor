@@ -34,3 +34,11 @@
 
 **What I decided:** One headline saving on one stated basis (against the usual way: Razorpay credit line, then your bank's overdraft, paid on the due date, no discount); one day count per plan; a cost is never shown as negative; one top banner replaces the per-item "Simulated" badges; the sidebar is only the app name and Dashboard.
 
+## Day 3 (later) — Mon 12 Oct: Dashboard-style copy
+
+**What AI did:** Claude Code implemented the layout: the dark top bar and sidebar, tabs, stat cards, the five screens, and the tests.
+
+**What went wrong:** Self-review: screens read like an AI explanation. Rewrote copy by hand to Razorpay dashboard patterns (label, number, short caption; detail in tabs). Claude Code implemented layout; copy was written by me.
+
+**What I decided:** One label, one number and one short caption per card; no paragraph on a default view; the reasoning only in tabs, tables or "Why this plan"; one peach banner instead of per-item badges.
+

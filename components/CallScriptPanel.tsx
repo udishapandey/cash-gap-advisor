@@ -104,6 +104,7 @@ export default function CallScriptPanel({
   extensionDays,
   language,
   onLanguage,
+  autoStart = false,
 }: {
   state: JourneyState;
   view: ViewResult;
@@ -111,8 +112,10 @@ export default function CallScriptPanel({
   extensionDays: number;
   language: Language;
   onLanguage: (l: Language) => void;
+  /** Write the script as soon as the panel appears, because the founder already asked for it. */
+  autoStart?: boolean;
 }) {
-  const [requested, setRequested] = useState(false);
+  const [requested, setRequested] = useState(autoStart);
   const [copied, setCopied] = useState(false);
 
   const request = useMemo(() => {

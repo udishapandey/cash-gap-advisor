@@ -41,3 +41,30 @@ export function LowConfidenceBadge({ widthShare }: { widthShare: number }) {
     </span>
   );
 }
+
+/** A dashboard stat: a small label, a big number and a short caption. Red is only for "short" amounts, green only for savings. */
+export function StatCard({
+  label,
+  value,
+  caption,
+  tone = "plain",
+  big = false,
+  children,
+}: {
+  label: string;
+  value: string;
+  caption?: string;
+  tone?: "plain" | "short" | "saved";
+  big?: boolean;
+  children?: ReactNode;
+}) {
+  const colour = tone === "short" ? "text-red-700" : tone === "saved" ? "text-green-700" : "text-foreground";
+  return (
+    <section aria-label={label} className="rounded-xl border border-line bg-card p-5 shadow-sm">
+      <p className="text-sm text-muted">{label}</p>
+      <p className={`mt-1 font-heading font-semibold tabular-nums ${colour} ${big ? "text-4xl" : "text-2xl"}`}>{value}</p>
+      {caption ? <p className="mt-1 text-sm text-muted">{caption}</p> : null}
+      {children}
+    </section>
+  );
+}

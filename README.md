@@ -16,11 +16,11 @@ A small D2C founder (₹10–50L a month on Razorpay, no finance team) gets a �
 
 ## The journey: five screens
 
-**Invoice → Cash gap → Options → Approve → Results**
+**Bill → Cash gap → Plan → Approve → Results**
 
-1. **Invoice.** Upload a PDF or photo. The AI reads it; the founder confirms or edits every field.
+1. **Bill.** Upload a PDF or photo. The AI reads it; the founder confirms or edits every field.
 2. **Cash gap.** The gap as a *range* (low, expected and high sales), including COD cash still in transit and expected returns, with a "low confidence" label when the forecast is wide.
-3. **Options.** Every way to cover the gap, compared by true rupee cost with no fixed ranking. A what-if slider (sales -10/-20/-30%) and a typed question ("What if sales drop 25%?"). A plain-language explanation, and a call script for "ask the supplier for more time". A **Standby** line shows the extra cash that could be needed at low sales.
+3. **Plan.** Every way to cover the gap, compared by true rupee cost with no fixed ranking. A what-if slider (sales -10/-20/-30%) and a typed question ("What if sales drop 25%?"). A plain-language explanation, and a call script for "ask the supplier for more time". A **Standby** line shows the extra cash that could be needed at low sales.
 4. **Approve.** One screen. Credit is kept apart from non-credit actions; the RBI Key Fact Statement is shown before any credit; nothing is pre-selected.
 5. **Results.** After the season (simulated): money saved against the founder's default, sales against the forecast, stock sold and left over, unnecessary borrowing, and what the system learned.
 
@@ -29,7 +29,7 @@ A small D2C founder (₹10–50L a month on Razorpay, no finance team) gets a �
 ```mermaid
 flowchart LR
   subgraph Browser["Browser: the five pages"]
-    PG["Invoice → Cash gap → Options → Approve → Results"]
+    PG["Bill → Cash gap → Plan → Approve → Results"]
   end
 
   subgraph Server["Next.js API routes"]
@@ -124,7 +124,7 @@ Early settlement (getting your own prepaid sales money 2 days sooner) charges 0.
 | Early settlement | 54.75% | 2 | **₹513** |
 | Bank overdraft | 14% | 33 | ₹2,164 |
 
-The money is only needed for 2 days, while a loan runs 33 (30, plus 3 more because paying early for the discount brings the payment forward). The "expensive" option is about four times cheaper. Every funding step on the Options screen shows its yearly rate, the days it is out, and its rupee cost, and says this in numbers when early settlement is cheapest.
+The money is only needed for 2 days, while a loan runs 33 (30, plus 3 more because paying early for the discount brings the payment forward). The "expensive" option is about four times cheaper. The Plan screen shows each source's days and rupee cost, and the All options table shows the yearly rate beside the cost.
 
 ## How to run
 
@@ -146,7 +146,7 @@ Variables (all in `.env.local`, which is git-ignored; never commit a key):
 | `AI_MOCK` | `true` makes every AI feature return a built-in answer after a short pause, with **no API call and no key needed**. Mock answers go through the same grounding check and show a "Mock AI" badge. Use it for development and demos without a quota. **It must never be on in production.** |
 
 ```bash
-npm test                     # 788 tests across 30 files; AI is always mocked, no network
+npm test                     # 796 tests across 30 files; AI is always mocked, no network
 npm run build                # production build
 npm run smoke:ai             # LIVE: calls the real model once per feature. Run sparingly (free-tier quota).
 npm run smoke:ai -- 2 explain-hi   # cap the calls, and run just one step
@@ -189,7 +189,7 @@ Five sample invoices (all synthetic, with different layouts, languages and fine 
 
 ## Designed for a founder, not a finance person
 
-Each screen answers first: **how short am I, what should I do, what does it cost or save me**, in a headline, one number and one button, with the working in a collapsed "See how we worked this out". Finance words are translated ("Get your Razorpay sales money early", "Most you'll be short on any day", "Backup if sales are slow"), a cost is never shown as a negative number, and there is one headline saving on one stated basis. Before and after screenshots of Options and Results are in [`docs/redesign/`](docs/redesign/).
+Every screen reads like a Razorpay dashboard page: a label, a number, a short caption, and the detail in tabs and tables. There is no explanatory paragraph on a default view. The copy was written by hand; the numbers come from the engine. Screenshots of Home, Cash gap, Plan and Results are in [`docs/redesign-v2/`](docs/redesign-v2/).
 
 ## Visual style
 

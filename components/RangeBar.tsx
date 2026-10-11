@@ -36,9 +36,9 @@ export default function RangeBar({ best, expected, worst }: { best: number; expe
       <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
         {(
           [
-            ["High sales (1.7x)", best, "bg-green-600"],
-            ["Expected (1.4x)", expected, "bg-navy"],
-            ["Low sales (1.1x)", worst, "bg-red-600"],
+            ["High sales", best, "bg-green-600"],
+            ["Expected", expected, "bg-navy"],
+            ["Low sales", worst, "bg-red-600"],
           ] as const
         ).map(([label, value, dot]) => (
           <div key={label}>

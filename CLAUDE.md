@@ -35,7 +35,7 @@ Design tokens come from Razorpay's open-source Blade design system (MIT): `@razo
 
 ## Screens
 
-Every screen answers first (one headline, one number, one button) and puts the working in a collapsed "See how we worked this out" (`components/Disclosure.tsx`). Use the plain words in `lib/plain.ts` for anything the founder reads (never "early settlement", "peak shortfall", "funding cost", "standby", "annualised"); engine identifiers keep their names. Show one headline saving, on one basis (`SAVING_BASIS`), and one day count per plan. Never show a negative cost.
+The copy on the screens was written by hand by the product owner, in Razorpay dashboard patterns: a label (max 4 words), a number, a caption (max 8 words), and detail in tabs and tables. Use it verbatim, bind numbers to engine values, and do not add explanatory sentences, notes or tooltips. Rules for any default view: no brackets, "because", "n/a", em dashes, "Note:" or colons inside a sentence; sentence case; buttons are verbs. Reasoning goes only in tabs, tables or "Why this plan". The words are in `lib/plain.ts` and `lib/results.ts`; engine identifiers keep their names. Show one headline saving, on one basis, and one day count per plan. Never show a negative cost. Red is only for "short" amounts, green only for savings. `components/ux.test.tsx` checks the copy and scans the visible text against these rules.
 
 ## Rules
 
@@ -43,7 +43,7 @@ Every screen answers first (one headline, one number, one button) and puts the w
 2. **`.env.local` stays in `.gitignore`.**
 3. **All money calculations are plain code, never the LLM.** The LLM may explain or phrase results; it must never compute amounts, totals, gaps or dates.
 4. **Every LLM call goes through `lib/ai.ts`.** No other file imports an AI SDK or calls an AI API.
-5. **Label simulated data as simulated in the UI.** One banner at the top of every page says "Concept prototype · all merchant data is simulated" (a product decision: it replaced the per-item "Simulated" badges). Keep that banner on every page.
+5. **Label simulated data as simulated in the UI.** One banner at the top of every page says "Concept prototype. All merchant data is simulated." (a product decision: it replaced the per-item "Simulated" badges). Keep that banner on every page.
 6. **Invoice files are private.** Process them in memory only. Never save one to disk, and never log or echo its contents or file name (including in error messages). The AI only reads printed values: it returns null for anything missing, quotes its evidence, and never calculates amounts or dates.
 7. **Live AI calls only to verify, and only on Flash-Lite.** Tests use mocks; for development use `AI_MOCK=true`. To verify a change against the real model (`npm run smoke:ai`, `npm run try:extract`, `npm run eval:extract`, which makes exactly 5 calls), up to 10 live Flash-Lite calls per verification are pre-approved (its free limit is 500 a day); ask before using more. Never use the larger Flash fallback model for testing (about 20 requests a day): `smoke:ai` switches it off. Don't make live calls for any other reason.
 8. **Credit is separate and never pre-selected.** Credit is shown apart from non-credit actions, with a Key Fact Statement before approval. No plan, consent box or approval is ever pre-chosen, and the founder approves every credit action.

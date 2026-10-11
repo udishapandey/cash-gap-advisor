@@ -39,7 +39,7 @@ describe("Why this plan (plain-text template)", () => {
   it("says why an option was not used", () => {
     const r = run({}, dueDateInvoice);
     const out = text(explainPlanTemplate(r.views.keepFull, r.stock));
-    expect(out).toContain("Not used: Deliver some pairs later");
+    expect(out).toContain("Not used: Split the order");
     expect(out).toContain("left out because you keep the full order");
     expect(out).toContain("Not used: Razorpay credit line");
     expect(out).toContain("cheaper sources covered the gap");

@@ -1,105 +1,126 @@
-// The plain-language, answer-first layout: one banner instead of per-item "Simulated" badges, a minimal sidebar, English by
-// default, and the working tucked into disclosures.
+// The Razorpay-dashboard style: a label, a number, a short caption, and the detail in tabs and tables.
+// These tests pin the copy that was written by hand, and scan the screens' visible text against the copy rules.
 
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_JOURNEY } from "@/lib/journey";
+import { DEFAULT_JOURNEY, STEPS } from "@/lib/journey";
 import Disclosure from "./Disclosure";
-import { SimulatedTag } from "./ui";
+import Tabs from "./Tabs";
+import { SimulatedTag, StatCard } from "./ui";
 
 const read = (p: string) => readFileSync(p, "utf8");
 
-describe("one banner, no per-item Simulated badges", () => {
-  it("the layout has the single banner, and the footer is kept", () => {
-    const layout = read("app/layout.tsx");
-    expect(layout).toContain("Concept prototype · all merchant data is simulated");
-    expect(layout.split("all merchant data is simulated")).toHaveLength(2); // exactly once
+/** The words a founder can see in a file: JSX text, plus label, caption and title attributes. Code and comments are left out. */
+function visibleText(file: string): string[] {
+  const src = read(file).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const out: string[] = [];
+  for (const m of src.matchAll(/>([^<>{}=]+)</g)) if (/[A-Za-z]{2}/.test(m[1]) && !/[;]/.test(m[1])) out.push(m[1].replace(/\s+/g, " ").trim());
+  for (const m of src.matchAll(/\b(?:label|caption|title|placeholder)="([^"]+)"/g)) out.push(m[1]);
+  return out;
+}
+const FORBIDDEN = /\(|\)|because|n\/a|—|Note:|[A-Za-z]:\s/i;
+const DEFAULT_SCREENS = ["app/page.tsx", "components/GapScreen.tsx", "components/OptionsScreen.tsx", "components/ResultsScreen.tsx"];
+
+describe("the shell", () => {
+  const layout = read("app/layout.tsx");
+  it("has one peach banner, a dark top bar with the app name, and the footer", () => {
+    expect(layout).toContain("Concept prototype. All merchant data is simulated.");
+    expect(layout.split("All merchant data is simulated")).toHaveLength(2);
+    expect(layout).toContain("bg-navy");
+    expect(layout).toContain(">Cash Gap Advisor</header>");
     expect(layout).toContain("Concept prototype for the Razorpay x ISB challenge");
-    expect(layout).not.toMatch(/Simulated data/); // the old header pill is gone
+    expect(layout).not.toMatch(/<img|next\/image|<Image/); // no Razorpay logo or wordmark
   });
-  it("the old per-item badge renders nothing", () => {
-    expect(renderToStaticMarkup(<SimulatedTag />)).toBe("");
-    expect(renderToStaticMarkup(<SimulatedTag>Your input</SimulatedTag>)).toBe("");
-  });
-  it("no screen draws its own SIMULATED badge", () => {
-    for (const f of ["app/page.tsx", "components/OptionsScreen.tsx", "components/ResultsScreen.tsx", "components/ApproveScreen.tsx", "components/GapScreen.tsx", "components/InvoiceFlow.tsx"]) {
-      expect(read(f), f).not.toMatch(/uppercase[^"]*>\s*Simulated/);
-    }
-  });
-});
-
-describe("the sidebar", () => {
-  it("is just the app name and Dashboard: no step list (the stepper at the top of each screen stays)", () => {
+  it("the sidebar has Home and Supplier bills, and nothing else", () => {
     const nav = read("components/NavLinks.tsx");
-    expect(nav).toContain("Dashboard");
-    expect(nav).not.toMatch(/STEPS|stepStatus|Decision journey/);
-    expect(read("components/Stepper.tsx")).toContain("STEPS");
-    expect(read("components/JourneyShell.tsx")).toContain("<Stepper");
+    expect(nav).toContain('label: "Home"');
+    expect(nav).toContain('label: "Supplier bills"');
+    expect(nav.match(/label: "/g)).toHaveLength(2);
+    expect(layout).toContain("<NavLinks />");
   });
-});
-
-describe("language", () => {
-  it("is English by default; Hindi stays a toggle", () => {
+  it("the tracker reads Bill, Cash gap, Plan, Approve, Results", () => {
+    expect(STEPS.map((s) => s.label)).toEqual(["Bill", "Cash gap", "Plan", "Approve", "Results"]);
+    expect(read("components/JourneyShell.tsx")).toContain("<Stepper");
+    expect(read("components/InvoiceFlow.tsx")).toContain('<Stepper current="invoice"');
+  });
+  it("the old per-item badge renders nothing, and English is the default", () => {
+    expect(renderToStaticMarkup(<SimulatedTag />)).toBe("");
     expect(DEFAULT_JOURNEY.language).toBe("en");
   });
 });
 
-describe("the disclosure", () => {
-  it("is closed by default and shows its title", () => {
-    const html = renderToStaticMarkup(<Disclosure title="See how we worked this out">The working</Disclosure>);
-    expect(html).toContain("<details");
-    expect(html).not.toMatch(/<details[^>]*\bopen\b/);
-    expect(html).toContain("See how we worked this out");
-    expect(html).toContain("The working");
+describe("the copy, as written", () => {
+  const has = (file: string, ...texts: string[]) => {
+    const src = read(file);
+    for (const t of texts) expect(src, `${file}: ${t}`).toContain(t);
+  };
+  it("Home", () => {
+    has("app/page.tsx", "Overview", "Next {invoice.dueInDays} days", 'label="Upcoming supplier bill"', 'label="Cash coming in"', 'label="Cash going out"', 'label="Likely short"', "Plan this payment");
   });
-  it("opens when asked to", () => {
-    expect(renderToStaticMarkup(<Disclosure title="t" open>x</Disclosure>)).toMatch(/<details[^>]*\bopen=""/);
+  it("Bill", () => {
+    has("components/InvoiceFlow.tsx", "Supplier bill", "Upload the bill. Check what we read.", "Confirm bill");
+    expect(read("components/InvoiceFlow.tsx")).not.toContain("Evidence:"); // the quote is a hover icon now
   });
-  it("lazy keeps its content out of the page until it is opened (so an AI call inside never runs while it is closed)", () => {
-    const closed = renderToStaticMarkup(<Disclosure title="Full AI explanation" lazy>SECRET CONTENT</Disclosure>);
-    expect(closed).not.toContain("SECRET CONTENT");
-    const open = renderToStaticMarkup(<Disclosure title="Full AI explanation" lazy open>SECRET CONTENT</Disclosure>);
-    expect(open).toContain("SECRET CONTENT");
+  it("Cash gap", () => {
+    has("components/GapScreen.tsx", "Cash gap", "How short you could be before the due date.", 'label="Likely short"', "Could be", '"Summary"', '"Cash in"', '"Cash out"', '"Low sales"', '"Expected"', '"High sales"', "Adjust", "Other cash you can use", "Your bank's overdraft rate", "See funding plan");
+    expect(read("components/GapScreen.tsx")).not.toContain("hint=");
   });
-});
-
-describe("the screens answer first, with the proof in disclosures", () => {
-  it("Options: a recommended-plan card, the supplier nudge, then three collapsed sections", () => {
+  it("Plan", () => {
+    has("components/OptionsScreen.tsx", "Recommended plan", "Approve plan", "Why this plan", "Ask for {days} more days", "Could remove", "Get call script", '"All options"', '"If sales drop"', "Source", "Amount", "Days", "Total cost");
+    has("lib/plain.ts", "Early settlement is costly per year, but you need it for only", "No cost unless used.", "better off than borrowing the usual way", "Settle your sales early", "Your bank overdraft", "Razorpay credit line");
+  });
+  it("Plan shows the explanation only when asked, and has no extra links", () => {
     const o = read("components/OptionsScreen.tsx");
-    expect(o.indexOf("<HeroCard")).toBeLessThan(o.indexOf("<SupplierNudge"));
-    expect(o.indexOf("<SupplierNudge")).toBeLessThan(o.indexOf('title="Compare every option"'));
-    for (const t of ['title="Compare every option"', 'title="What if sales are lower?"', 'title="Full AI explanation"']) expect(o).toContain(t);
-    expect(o).toContain("Approve this plan");
-    expect(o).toContain("Compare other ways");
-    expect(o).toContain("Before you borrow: ask the supplier for more days");
+    expect(o).toContain("{whyOpen && (");
+    expect(o).not.toContain("Back to cash gap");
   });
-  it("Results: a hero line, three tiles, what I learned, and the working collapsed", () => {
-    const r = read("components/ResultsScreen.tsx");
-    for (const t of ["Money saved", "Borrowed more than needed", "Forecast accuracy", "What I learned", "See how we worked this out"]) expect(r).toContain(t);
-    expect(r.indexOf("<Hero")).toBeLessThan(r.indexOf("<Tiles"));
-    expect(r.indexOf("<Tiles")).toBeLessThan(r.indexOf("<Disclosure"));
+  it("Approve", () => {
+    has("components/ApproveScreen.tsx", "Supplier paid", "Simulated. No real money moved.", "See results", "Back to home");
+    expect(read("components/ApproveScreen.tsx")).not.toContain("Start another invoice");
   });
-  it("Cash gap and Dashboard collapse their working", () => {
-    expect(read("components/GapScreen.tsx")).toContain('<Disclosure title="See how we worked this out"');
-    expect(read("app/page.tsx")).toContain('<Disclosure title="See how we worked this out"');
-  });
-  it("Invoice: the five things that matter first, the rest under More details", () => {
-    const f = read("components/InvoiceFlow.tsx");
-    expect(f).toContain("MAIN_FIELDS");
-    expect(f).toContain('title="More details"');
+  it("Results", () => {
+    has("components/ResultsScreen.tsx", "After Diwali", "As forecast", "15% lower", "15% higher", "Next time", "Details", "Plan another bill");
+    has("lib/results.ts", '"You saved"', '"Borrowed"', '"Pairs sold"', '"Forecast"', "On target");
+    expect(read("components/ResultsScreen.tsx")).not.toMatch(/sold out/i);
   });
 });
 
-describe("plain labels on every screen", () => {
-  it("no screen shows the old finance words as a label", () => {
-    const screens = ["app/page.tsx", "components/OptionsScreen.tsx", "components/ResultsScreen.tsx", "components/ApproveScreen.tsx", "components/GapScreen.tsx", "components/StandbyLine.tsx"];
-    for (const f of screens) {
-      const text = read(f)
-        .split("\n")
-        .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l) && !/import /.test(l))
-        .join("\n");
-      expect(text, f).not.toMatch(/>\s*Peak shortfall|>\s*Standby|Total funding cost|Right-size order|>\s*Early settlement|>\s*Annualised/);
-    }
+describe("the copy rules, on every default view", () => {
+  it.each(DEFAULT_SCREENS)("%s has no brackets, because, n/a, em dashes, notes or colons in a sentence", (file) => {
+    const bad = visibleText(file).filter((t) => FORBIDDEN.test(t));
+    expect(bad).toEqual([]);
+  });
+  it.each(DEFAULT_SCREENS)("%s has no paragraph on the default view: every text is a label or a short sentence", (file) => {
+    for (const t of visibleText(file)) expect(t.split(/\s+/).length, t).toBeLessThanOrEqual(12);
+  });
+  it("the Approve and Bill screens add none of the forbidden words either (their KFS and consent text is left as it is)", () => {
+    expect(read("components/ApproveScreen.tsx")).not.toMatch(/Start another invoice|Continue to approve/);
+  });
+});
+
+describe("the building blocks", () => {
+  it("a stat card is a label, a number and a short caption; red only for short, green only for savings", () => {
+    const short = renderToStaticMarkup(<StatCard label="Likely short" value="₹2,27,621" tone="short" />);
+    expect(short).toContain("text-red-700");
+    expect(short).toContain("Likely short");
+    const saved = renderToStaticMarkup(<StatCard label="You saved" value="₹11,310" caption="₹10,000 discount + ₹1,310 lower interest" tone="saved" />);
+    expect(saved).toContain("text-green-700");
+    expect(saved).toContain("₹10,000 discount + ₹1,310 lower interest");
+    const plain = renderToStaticMarkup(<StatCard label="Cash coming in" value="₹13,22,379" />);
+    expect(plain).not.toMatch(/text-red-700|text-green-700/);
+  });
+  it("tabs show the first tab and keep the others hidden", () => {
+    const html = renderToStaticMarkup(
+      <Tabs label="t" tabs={[{ id: "a", label: "Summary", content: "ONE" }, { id: "b", label: "Cash in", content: "TWO" }]} />,
+    );
+    expect(html).toContain('role="tablist"');
+    expect(html).toMatch(/aria-selected="true"[^>]*>Summary/);
+    expect(html).toMatch(/hidden=""[^>]*>TWO|<div[^>]*hidden=""[^>]*>TWO/);
+  });
+  it("a disclosure is closed by default, and lazy keeps its content out until opened", () => {
+    expect(renderToStaticMarkup(<Disclosure title="Details">x</Disclosure>)).not.toMatch(/<details[^>]*\bopen\b/);
+    expect(renderToStaticMarkup(<Disclosure title="Why this plan" lazy>SECRET</Disclosure>)).not.toContain("SECRET");
+    expect(renderToStaticMarkup(<Disclosure title="Why this plan" lazy open>SECRET</Disclosure>)).toContain("SECRET");
   });
 });

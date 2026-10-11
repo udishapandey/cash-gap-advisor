@@ -1,34 +1,75 @@
 "use client";
 
 import Link from "next/link";
-import { merchant } from "@/lib/data/merchant";
-import { CONFIG } from "@/lib/engine/config";
 import type { ScenarioResult } from "@/lib/engine/gap";
-import { formatCompactINR, formatINR } from "@/lib/format";
-import Disclosure from "./Disclosure";
+import { formatINR } from "@/lib/format";
 import JourneyShell from "./JourneyShell";
 import NumberField from "./NumberField";
 import RangeBar from "./RangeBar";
-import { Card, LowConfidenceBadge, SectionTitle, SimulatedTag } from "./ui";
+import Tabs from "./Tabs";
+import { Card, StatCard } from "./ui";
 
-type Row = { label: string; tag?: "Simulated" | "Your input"; value: (s: ScenarioResult) => number };
+type Row = { label: string; value: (s: ScenarioResult) => number; strong?: boolean; short?: boolean };
 
-const ROWS: Row[] = [
-  { label: "Bank balance today", tag: "Simulated", value: (s) => s.cash.bankBalance },
-  { label: "Prepaid sales already in transit", tag: "Simulated", value: (s) => s.cash.settlementsInTransit },
-  { label: "Forecast prepaid sales that settle in time", tag: "Simulated", value: (s) => s.cash.forecastPrepaid },
-  {
-    label: `COD in transit, minus expected returns (${Math.round(merchant.codReturnRate * 100)}%)`,
-    tag: "Simulated",
-    value: (s) => s.cash.codPayouts,
-  },
-  { label: "Cash available elsewhere", tag: "Your input", value: (s) => s.cash.cashElsewhere },
+const SUMMARY: Row[] = [
+  { label: "Cash coming in", value: (s) => s.cash.totalIn },
+  { label: "Cash going out", value: (s) => s.cashOut },
+  { label: "Likely short", value: (s) => s.gap, strong: true, short: true },
 ];
+
+const CASH_IN: Row[] = [
+  { label: "Bank balance", value: (s) => s.cash.bankBalance },
+  { label: "Sales in transit", value: (s) => s.cash.settlementsInTransit },
+  { label: "Forecast sales", value: (s) => s.cash.forecastPrepaid },
+  { label: "COD after returns", value: (s) => s.cash.codPayouts },
+  { label: "Other cash", value: (s) => s.cash.cashElsewhere },
+  { label: "Total", value: (s) => s.cash.totalIn, strong: true },
+];
+
+const CASH_OUT: Row[] = [
+  { label: "Supplier bill", value: (s) => s.invoiceDue },
+  { label: "Other costs", value: (s) => s.otherOutflows },
+  { label: "Total", value: (s) => s.cashOut, strong: true },
+];
+
+function Table({ rows, cols }: { rows: Row[]; cols: readonly (readonly [string, ScenarioResult])[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[28rem] text-sm">
+        <thead>
+          <tr className="border-b border-line text-xs text-muted">
+            <th className="px-3 py-2 text-left font-medium" />
+            {cols.map(([name]) => (
+              <th key={name} className="px-3 py-2 text-right font-medium">
+                {name}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {rows.map((row) => (
+            <tr key={row.label} className={row.strong ? "font-semibold" : ""}>
+              <td className="px-3 py-2">{row.label}</td>
+              {cols.map(([name, s]) => {
+                const v = row.value(s);
+                return (
+                  <td key={name} className={`px-3 py-2 text-right tabular-nums ${row.short && v > 0 ? "text-red-700" : ""}`}>
+                    {formatINR(v)}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function GapScreen() {
   return (
     <JourneyShell step="gap">
-      {({ state, invoice, result, update }) => {
+      {({ state, result, update }) => {
         const gap = result.views.keepFull.gap;
         const { low, expected, high } = gap.scenarios;
         const cols = [
@@ -36,168 +77,66 @@ export default function GapScreen() {
           ["Expected", expected],
           ["High sales", high],
         ] as const;
-        const cell = "px-3 py-2 text-right tabular-nums";
         return (
           <>
-            <Card>
-              <p className="text-sm text-muted">
-                {invoice.supplier}: {formatINR(invoice.amount)} for {invoice.units} pairs, due in {invoice.dueInDays} days.
-              </p>
-              {gap.gapMax === 0 ? (
-                <h2 className="mt-2 font-heading text-3xl font-semibold">You have enough cash.</h2>
-              ) : (
-                <>
-                  <h2 className="mt-2 font-heading text-3xl font-semibold">
-                    You may be short about {formatCompactINR(gap.gapExpected)}
-                  </h2>
-                  <p className="mt-1 text-sm text-muted">
-                    Depending on sales, it could be {formatCompactINR(gap.gapMin)} to {formatCompactINR(gap.gapMax)}.
-                  </p>
-                </>
-              )}
+            <header>
+              <h1 className="font-heading text-2xl font-semibold">Cash gap</h1>
+              <p className="mt-1 text-sm text-muted">How short you could be before the due date.</p>
+            </header>
 
-              <div className="mt-5">
-                {gap.gapMax === 0 ? (
-                  <p className="rounded-md bg-green-50 px-4 py-3 text-sm text-green-800">
-                    No gap: in every sales scenario you expect to have enough cash on the due date.
-                  </p>
-                ) : (
+            <StatCard
+              big
+              tone="short"
+              label="Likely short"
+              value={formatINR(gap.gapExpected)}
+              caption={gap.gapMax === 0 ? "Enough cash in every case" : `Could be ${formatINR(gap.gapMin)} to ${formatINR(gap.gapMax)}`}
+            >
+              {gap.gapMax > 0 && (
+                <div className="mt-5">
                   <RangeBar best={gap.gapMin} expected={gap.gapExpected} worst={gap.gapMax} />
-                )}
-              </div>
+                </div>
+              )}
+              {gap.lowConfidence && (
+                <span className="mt-4 inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">Low confidence</span>
+              )}
+            </StatCard>
 
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <p className="text-sm">
-                  Gap range: <strong>{formatINR(gap.gapMin)}</strong> to <strong>{formatINR(gap.gapMax)}</strong>
-                </p>
-                {gap.lowConfidence && <LowConfidenceBadge widthShare={gap.widthShare} />}
-              </div>
-              <p className="mt-2 text-xs text-muted">
-                {state.salesDropPercent > 0
-                  ? `Assuming sales are ${state.salesDropPercent}% lower than the forecast. Change this on the Options screen.`
-                  : "No sales drop assumed. You can test a drop on the Options screen."}
-              </p>
+            <Card>
+              <Tabs
+                label="Cash gap detail"
+                tabs={[
+                  { id: "summary", label: "Summary", content: <Table rows={SUMMARY} cols={cols} /> },
+                  { id: "in", label: "Cash in", content: <Table rows={CASH_IN} cols={cols} /> },
+                  { id: "out", label: "Cash out", content: <Table rows={CASH_OUT} cols={cols} /> },
+                ]}
+              />
             </Card>
 
-            <Disclosure title="See how we worked this out" hint="where the cash comes from">
-              <p className="mt-1 text-sm text-muted">
-                Cash expected by day {gap.byDay}, in each sales scenario. Sales, COD payouts and the bank balance
-                are made up for {merchant.name}.
-              </p>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full min-w-[34rem] text-sm">
-                  <thead>
-                    <tr className="border-b border-line text-xs text-muted">
-                      <th className="px-3 py-2 text-left font-medium">Cash in</th>
-                      {cols.map(([name, s]) => (
-                        <th key={name} className="px-3 py-2 text-right font-medium">
-                          {name} ({s.uplift}x)
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line">
-                    {ROWS.map((row) => (
-                      <tr key={row.label}>
-                        <td className="px-3 py-2">
-                          {row.label} {row.tag && <SimulatedTag>{row.tag}</SimulatedTag>}
-                        </td>
-                        {cols.map(([name, s]) => (
-                          <td key={name} className={cell}>
-                            {formatINR(row.value(s))}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                    <tr className="font-semibold">
-                      <td className="px-3 py-2">Total cash in</td>
-                      {cols.map(([name, s]) => (
-                        <td key={name} className={cell}>
-                          {formatINR(s.cash.totalIn)}
-                        </td>
-                      ))}
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-2">Invoice due</td>
-                      {cols.map(([name, s]) => (
-                        <td key={name} className={cell}>
-                          {formatINR(s.invoiceDue)}
-                        </td>
-                      ))}
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-2">
-                        Other money going out before then <SimulatedTag />
-                      </td>
-                      {cols.map(([name, s]) => (
-                        <td key={name} className={cell}>
-                          {formatINR(s.otherOutflows)}
-                        </td>
-                      ))}
-                    </tr>
-                    <tr className="font-semibold">
-                      <td className="px-3 py-2">Total cash out</td>
-                      {cols.map(([name, s]) => (
-                        <td key={name} className={cell}>
-                          {formatINR(s.cashOut)}
-                        </td>
-                      ))}
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-2">Shortfall on day {gap.byDay} alone (cash out − cash in)</td>
-                      {cols.map(([name, s]) => (
-                        <td key={name} className={cell}>
-                          {s.gapOnPayDay > 0 ? formatINR(s.gapOnPayDay) : "None"}
-                        </td>
-                      ))}
-                    </tr>
-                    <tr className="bg-background font-semibold">
-                      <td className="px-3 py-2">
-                        Gap to cover: the largest shortfall on any day up to day {gap.windowEnd}
-                      </td>
-                      {cols.map(([name, s]) => (
-                        <td key={name} className={`${cell} ${s.gap > 0 ? "text-red-700" : "text-green-700"}`}>
-                          {s.gap > 0 ? formatINR(s.gap) : "None"}
-                          {s.gap > 0 && <span className="block text-[11px] font-normal text-muted">on day {s.peak.day}</span>}
-                        </td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </Disclosure>
-
             <Card>
-              <SectionTitle>Tell us what you know</SectionTitle>
-              <p className="mt-1 text-sm text-muted">Change either one and everything is worked out again.</p>
+              <h2 className="text-sm font-semibold">Adjust</h2>
               <div className="mt-4 grid gap-5 sm:grid-cols-2">
                 <NumberField
                   id="cash-elsewhere"
-                  label="Cash available elsewhere"
+                  label="Other cash you can use"
                   prefix="₹"
                   value={state.cashElsewhere}
                   onCommit={(v) => update({ cashElsewhere: v })}
                   max={1_000_000_000}
-                  hint="Another account or savings you could use. Reduces the gap rupee for rupee."
                 />
                 <NumberField
                   id="overdraft-rate"
                   label="Your bank's overdraft rate"
-                  suffix="% a year"
+                  suffix="%"
                   value={state.overdraftRatePct}
                   onCommit={(v) => update({ overdraftRatePct: v })}
                   max={100}
-                  hint={`Used to price your own overdraft (limit ${formatINR(merchant.overdraftLimit)}, simulated). Default ${CONFIG.overdraftRatePct}%.`}
                 />
               </div>
             </Card>
 
-            <div className="flex justify-end">
-              <Link
-                href="/options"
-                className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
-              >
-                See your options →
+            <div>
+              <Link href="/options" className="inline-block rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover">
+                See funding plan
               </Link>
             </div>
           </>

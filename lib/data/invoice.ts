@@ -12,6 +12,8 @@ export interface Invoice {
   earlyPayDiscountPct: number; // % off if paid within `earlyPayWithinDays`
   earlyPayWithinDays: number;
   lateFeePctPerMonth: number; // % of the amount per 30 days overdue
+  /** The calendar date (YYYY-MM-DD) that day 0 falls on, so day counts can be shown as dates. Optional: the built-in demo has none. */
+  startDate?: string;
 }
 
 export const sampleInvoice: Invoice = {

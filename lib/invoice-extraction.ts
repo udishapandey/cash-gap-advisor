@@ -140,6 +140,12 @@ export function parseExtraction(raw: unknown): ParseExtractionResult {
   };
 }
 
+/** An extraction with nothing found, used for manual entry. Every field is empty. */
+export function emptyExtraction(): InvoiceExtraction {
+  const blank = { value: null, evidence: null, confidence: "low" as const };
+  return Object.fromEntries(FIELD_KEYS.map((k) => [k, { ...blank }])) as unknown as InvoiceExtraction;
+}
+
 // ---------- The form the founder confirms ----------
 
 export type FormValues = Record<FieldKey, string>;

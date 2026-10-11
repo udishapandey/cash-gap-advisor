@@ -21,7 +21,7 @@ Next.js (App Router) + TypeScript + Tailwind. Run with `npm run dev`. Tests: `np
 
 Invoice reading: `extractInvoice` in `lib/ai.ts` (the only AI call that sees a file), `lib/invoice-extraction.ts` (zod schema, form parsing, mapping into the engine), route `app/api/parse-invoice`, page `/invoice`. Sample invoices are in `public/samples/` (synthetic).
 
-Check the AI reader against a real file: `npm run try:extract` (clean sample) or `npm run try:extract -- path/to/file.png`. It times the call and prints the provider's real error if it fails. Each call uses the free quota (20 a day per model on `gemini-3.8-flash`), so don't loop it.
+Check the AI reader against a real file: `npm run try:extract` (clean sample) or `npm run try:extract -- path/to/file.png`. It times the call and prints the provider's real error if it fails. It makes a live AI call, so run it only when asked (see rule 7).
 
 Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate lives in `config.ts`). Simulated data: `lib/data/`. Every assumption is listed in `docs/ASSUMPTIONS.md`; update it whenever an assumption changes.
 
@@ -33,9 +33,14 @@ Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate live
 4. **Every LLM call goes through `lib/ai.ts`.** No other file imports an AI SDK or calls an AI API.
 5. **Label simulated data as simulated in the UI.** Any fake number, transaction or customer must be visibly marked "Simulated".
 6. **Invoice files are private.** Process them in memory only. Never save one to disk, and never log or echo its contents or file name (including in error messages). The AI only reads printed values: it returns null for anything missing, quotes its evidence, and never calculates amounts or dates.
+7. **No live AI calls unless the founder asks.** Tests use mocks. For development use `AI_MOCK=true`. Don't run `npm run try:extract` or any live extraction on your own: the free tier allows 20 requests a day per model.
 
 ## AI provider
 
-`lib/ai.ts` reads `AI_PROVIDER` (`gemini` default, or `claude`). Optional overrides: `GEMINI_MODEL`
-(default `gemini-3.8-flash`), `GEMINI_FALLBACK_MODEL` (default `gemini-3.5-flash-lite`, or `off`), `CLAUDE_MODEL`.
-Keys: `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`. Invoice reading waits at most 45 seconds with at most one retry.
+`lib/ai.ts` reads `AI_PROVIDER` (`gemini` default, or `claude`). Variables: `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`,
+`GEMINI_MODEL` (default `gemini-3.5-flash-lite`), `GEMINI_FALLBACK_MODEL` (default: the other Gemini model, so
+`gemini-3.8-flash` when the main one is Flash-Lite; `off` to disable), `CLAUDE_MODEL`.
+
+Invoice reading waits at most 45 seconds with at most one retry on the fallback model (on 429, 5xx, timeout, network
+error or empty answer). `AI_MOCK=true` returns the pre-read sample after 1.5 seconds with no API call: use it for
+development. It must never be on in production.

@@ -127,6 +127,21 @@ describe("AI failures become clear messages", () => {
     expect(await res.json()).toMatchObject({ ok: false, error: "friendly message" });
   });
 
+  it("tells the page when the result came from mock mode, so it can say so", async () => {
+    expect((await (await POST(upload(bytes(PDF_HEADER)))).json()).mock).toBe(false);
+    mocked.mockResolvedValue({ ok: true, data: cleanAnswerParsed(), model: "mock", attempts: 0, mock: true });
+    expect((await (await POST(upload(bytes(PDF_HEADER)))).json()).mock).toBe(true);
+  });
+
+  it("only an AI failure carries a kind, which is how the page knows to offer the fallbacks", async () => {
+    mocked.mockResolvedValue({ ok: false, kind: "rate_limit", message: "limit" });
+    expect((await (await POST(upload(bytes(PDF_HEADER)))).json()).kind).toBe("rate_limit");
+    // A bad file is not an AI failure: no kind.
+    const bad = await (await POST(upload("not a pdf"))).json();
+    expect(bad.ok).toBe(false);
+    expect(bad).not.toHaveProperty("kind");
+  });
+
   it("returns the extraction on success, uncached", async () => {
     const res = await POST(upload(bytes(PDF_HEADER)));
     expect(res.headers.get("Cache-Control")).toBe("no-store");

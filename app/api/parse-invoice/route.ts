@@ -4,6 +4,9 @@ import { MAX_INVOICE_BYTES, sniffMimeType } from "@/lib/invoice-upload";
 // Privacy: the uploaded invoice is processed in memory only. It is never written to disk,
 // and neither its contents nor its filename are ever logged.
 
+// Vercel: allow the full 45s AI budget plus a margin.
+export const maxDuration = 60;
+
 const MULTIPART_OVERHEAD = 64 * 1024;
 
 const STATUS: Record<ExtractInvoiceFailure["kind"], number> = {
@@ -53,5 +56,5 @@ export async function POST(request: Request) {
       result.retryAfterSeconds ? { "Retry-After": String(result.retryAfterSeconds) } : {},
     );
   }
-  return json({ ok: true, extraction: result.data }, 200);
+  return json({ ok: true, extraction: result.data, mock: result.mock === true }, 200);
 }

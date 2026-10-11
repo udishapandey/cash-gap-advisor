@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeFailure, extractInvoice, type InvoiceFile } from "./ai";
+import { describeFailure, extractInvoice, isMockAi, type InvoiceFile } from "./ai";
+import { preReadSampleExtraction } from "./data/sample-extraction";
 import { FIELD_KEYS } from "./invoice-extraction";
 import { cleanAnswer, field, PDF_HEADER, PNG_HEADER } from "./invoice-testing";
 
@@ -43,6 +44,7 @@ beforeEach(() => {
   // A blank value in .env.local must behave like "not set".
   vi.stubEnv("GEMINI_MODEL", "");
   vi.stubEnv("GEMINI_FALLBACK_MODEL", "");
+  vi.stubEnv("AI_MOCK", "");
   vi.stubEnv("CLAUDE_MODEL", "");
 });
 afterEach(() => {
@@ -61,13 +63,13 @@ describe("extractInvoice with Gemini (default)", () => {
     if (r.ok) {
       expect(r.data.totalAmount).toEqual({ value: 500000, evidence: "5,00,000.00", confidence: "high" });
       expect(r.data.dueDate.value).toBe("2026-10-21");
-      expect(r.model).toBe("gemini-3.8-flash");
+      expect(r.model).toBe("gemini-3.5-flash-lite"); // Flash-Lite is the default
       expect(r.attempts).toBe(1);
     }
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const { url, headers, body } = sent(fetchMock);
-    expect(url).toContain("gemini-3.8-flash:generateContent");
+    expect(url).toContain("gemini-3.5-flash-lite:generateContent");
     expect(headers["x-goog-api-key"]).toBe("test-gemini-key");
     expect(body.generationConfig.responseMimeType).toBe("application/json");
     const inline = body.contents[0].parts.find((p: { inlineData?: unknown }) => p.inlineData).inlineData;
@@ -147,17 +149,17 @@ describe("extractInvoice with Gemini (default)", () => {
 });
 
 describe("thinking is switched off or kept to the minimum", () => {
-  it("uses 'low' on gemini-3.8-flash, which rejects 'minimal'", async () => {
-    const fetchMock = mockFetch(() => geminiReply(cleanAnswer()));
-    await extractInvoice(pdf);
-    expect(sent(fetchMock).body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "low" });
-  });
-
-  it("uses 'minimal' on Flash-Lite", async () => {
-    vi.stubEnv("GEMINI_MODEL", "gemini-3.5-flash-lite");
+  it("uses 'minimal' on Flash-Lite, the default", async () => {
     const fetchMock = mockFetch(() => geminiReply(cleanAnswer()));
     await extractInvoice(pdf);
     expect(sent(fetchMock).body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "minimal" });
+  });
+
+  it("uses 'low' on gemini-3.8-flash, which rejects 'minimal'", async () => {
+    vi.stubEnv("GEMINI_MODEL", "gemini-3.8-flash");
+    const fetchMock = mockFetch(() => geminiReply(cleanAnswer()));
+    await extractInvoice(pdf);
+    expect(sent(fetchMock).body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "low" });
   });
 
   it("uses a budget of 0 on Gemini 2.5 models", async () => {
@@ -168,11 +170,11 @@ describe("thinking is switched off or kept to the minimum", () => {
   });
 });
 
-describe("when the main model is down: one retry on Flash-Lite", () => {
+describe("when the main model fails: one retry on the other model", () => {
   it.each([
     [503, "UNAVAILABLE", "The model is overloaded. Please try again later."],
     [500, "INTERNAL", "Internal error."],
-  ])("a %i %s from Flash is retried once on gemini-3.5-flash-lite", async (status, type, message) => {
+  ])("a %i %s from the main model is retried once on gemini-3.8-flash", async (status, type, message) => {
     const fetchMock = mockFetchSequence(
       () => geminiError(status, type, message),
       () => geminiReply(cleanAnswer()),
@@ -180,14 +182,34 @@ describe("when the main model is down: one retry on Flash-Lite", () => {
     const r = await extractInvoice(pdf);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(modelOf(sent(fetchMock, 0).url)).toBe("gemini-3.5-flash-lite");
+    expect(modelOf(sent(fetchMock, 1).url)).toBe("gemini-3.8-flash");
+    expect(sent(fetchMock, 1).body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "low" });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.model).toBe("gemini-3.8-flash");
+      expect(r.attempts).toBe(2);
+    }
+  });
+
+  it("if you choose gemini-3.8-flash as the main model, Flash-Lite is the fallback", async () => {
+    vi.stubEnv("GEMINI_MODEL", "gemini-3.8-flash");
+    const fetchMock = mockFetchSequence(
+      () => geminiError(503, "UNAVAILABLE", "overloaded"),
+      () => geminiReply(cleanAnswer()),
+    );
+    const r = await extractInvoice(pdf);
     expect(modelOf(sent(fetchMock, 0).url)).toBe("gemini-3.8-flash");
     expect(modelOf(sent(fetchMock, 1).url)).toBe("gemini-3.5-flash-lite");
     expect(sent(fetchMock, 1).body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "minimal" });
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.model).toBe("gemini-3.5-flash-lite");
-      expect(r.attempts).toBe(2);
-    }
+    if (r.ok) expect(r.model).toBe("gemini-3.5-flash-lite");
+  });
+
+  it("a blank GEMINI_MODEL in .env.local falls back to the default model", async () => {
+    vi.stubEnv("GEMINI_MODEL", "   ".trim());
+    const fetchMock = mockFetch(() => geminiReply(cleanAnswer()));
+    await extractInvoice(pdf);
+    expect(modelOf(sent(fetchMock).url)).toBe("gemini-3.5-flash-lite");
   });
 
   it("retries once only: never a third try, and the failure lists both attempts", async () => {
@@ -199,8 +221,8 @@ describe("when the main model is down: one retry on Flash-Lite", () => {
     if (!r.ok) {
       expect(r.message).toContain("503");
       expect(r.detail?.attempts.map((a) => [a.model, a.status, a.providerStatus])).toEqual([
-        ["gemini-3.8-flash", 503, "UNAVAILABLE"],
         ["gemini-3.5-flash-lite", 503, "UNAVAILABLE"],
+        ["gemini-3.8-flash", 503, "UNAVAILABLE"],
       ]);
     }
   });
@@ -265,18 +287,32 @@ describe("when the main model is down: one retry on Flash-Lite", () => {
   });
 });
 
-describe("rate limits and bad requests are not retried", () => {
-  it("429 shows a clear usage-limit message, with the wait time, and makes one request only", async () => {
+describe("rate limits are retried on the other model; bad requests are not", () => {
+  it("a 429 on the main model falls back to the other model and succeeds", async () => {
+    const fetchMock = mockFetchSequence(
+      () => geminiError(429, "RESOURCE_EXHAUSTED", "Quota exceeded."),
+      () => geminiReply(cleanAnswer()),
+    );
+    const r = await extractInvoice(pdf);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(modelOf(sent(fetchMock, 0).url)).toBe("gemini-3.5-flash-lite");
+    expect(modelOf(sent(fetchMock, 1).url)).toBe("gemini-3.8-flash");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.model).toBe("gemini-3.8-flash");
+  });
+
+  it("a 429 on both models is two requests, then a clear usage-limit message with the wait time", async () => {
     const fetchMock = mockFetch(() =>
       geminiError(429, "RESOURCE_EXHAUSTED", "Quota exceeded. SECRET-BODY", { "Retry-After": "17" }),
     );
     const r = await extractInvoice(pdf);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // never a third
     expect(r).toMatchObject({ ok: false, kind: "rate_limit", retryAfterSeconds: 17 });
     if (!r.ok) {
       expect(r.message).toBe("AI usage limit reached. Please try again in a minute.");
       expect(r.message).not.toContain("SECRET-BODY"); // the provider's text is logged, never shown to the founder
       expect(r.detail).toMatchObject({ status: 429, providerStatus: "RESOURCE_EXHAUSTED" });
+      expect(r.detail?.attempts).toHaveLength(2);
     }
   });
 
@@ -295,9 +331,8 @@ describe("rate limits and bad requests are not retried", () => {
         ],
       },
     };
-    const fetchMock = mockFetch(() => new Response(JSON.stringify(body), { status: 429 }));
+    mockFetch(() => new Response(JSON.stringify(body), { status: 429 }));
     const r = await extractInvoice(pdf);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(r).toMatchObject({ ok: false, kind: "rate_limit", retryAfterSeconds: 48785 });
     if (!r.ok) {
       expect(r.message).toBe("The AI's free daily limit has been reached. It resets in about 14 hours.");
@@ -422,12 +457,13 @@ describe("the real error is recorded, safely", () => {
         status: 503,
         providerStatus: "UNAVAILABLE",
         providerMessage: "This model is currently experiencing high demand.",
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-3.8-flash", // the last model tried
       });
       const line = describeFailure(r);
       expect(line).toContain("http=503");
       expect(line).toContain("type=UNAVAILABLE");
       expect(line).toContain("high demand");
+      expect(line).toContain("gemini-3.5-flash-lite:503:UNAVAILABLE");
       expect(line).toContain("gemini-3.8-flash:503:UNAVAILABLE");
       expect(line).toContain("total=");
     }
@@ -462,6 +498,66 @@ describe("the real error is recorded, safely", () => {
     const r = await extractInvoice(pdf);
     expect(r).toMatchObject({ ok: false, kind: "provider_error" });
     if (!r.ok) expect(r.detail).toMatchObject({ status: 502 });
+  });
+});
+
+describe("AI_MOCK=true: development mock mode", () => {
+  beforeEach(() => {
+    vi.stubEnv("AI_MOCK", "true");
+    vi.useFakeTimers();
+  });
+
+  it("returns the pre-read sample after 1.5 seconds, with no API call", async () => {
+    const fetchMock = mockFetch(() => geminiReply(cleanAnswer()));
+    let done = false;
+    const promise = extractInvoice(pdf).then((r) => {
+      done = true;
+      return r;
+    });
+
+    await vi.advanceTimersByTimeAsync(1_499);
+    expect(done).toBe(false); // still waiting
+    await vi.advanceTimersByTimeAsync(1);
+    const r = await promise;
+
+    expect(done).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ ok: true, model: "mock", attempts: 0, mock: true });
+    if (r.ok) {
+      expect(r.data).toEqual(preReadSampleExtraction);
+      expect(r.data.totalAmount.value).toBe(500000);
+    }
+  });
+
+  it("needs no API key", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
+    vi.stubEnv("AI_PROVIDER", "claude");
+    const promise = extractInvoice(pdf);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(await promise).toMatchObject({ ok: true, mock: true });
+  });
+
+  it("is on only for the value true (any case, spaces ignored)", () => {
+    for (const on of ["true", "TRUE", " True "]) {
+      vi.stubEnv("AI_MOCK", on);
+      expect(isMockAi()).toBe(true);
+    }
+    for (const off of ["false", "", "1", "yes", "0"]) {
+      vi.stubEnv("AI_MOCK", off);
+      expect(isMockAi()).toBe(false);
+    }
+  });
+
+  it("is off when AI_MOCK is not set, and then the real AI is called", async () => {
+    vi.unstubAllEnvs();
+    vi.stubEnv("AI_PROVIDER", "gemini");
+    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key");
+    vi.stubEnv("AI_MOCK", "");
+    const fetchMock = mockFetch(() => geminiReply(cleanAnswer()));
+    const r = await extractInvoice(pdf);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(r).not.toHaveProperty("mock", true);
   });
 });
 

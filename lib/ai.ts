@@ -2,12 +2,16 @@
 // Switch providers by setting AI_PROVIDER in .env.local ("gemini" or "claude").
 // No other file should import an AI SDK or call an AI API directly.
 
+import { preReadSampleExtraction } from "./data/sample-extraction";
 import { FIELD_KEYS, parseExtraction, type FieldKey, type InvoiceExtraction } from "./invoice-extraction";
 
 type Provider = "gemini" | "claude";
 
 // Defaults can be overridden with GEMINI_MODEL / CLAUDE_MODEL in .env.local.
-const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"; // free-tier Flash model
+const GEMINI_FLASH = "gemini-3.8-flash";
+const GEMINI_FLASH_LITE = "gemini-3.5-flash-lite";
+// Flash-Lite is the default: it is fast and has its own free quota, and the founder checks every field anyway.
+const DEFAULT_GEMINI_MODEL = GEMINI_FLASH_LITE;
 const DEFAULT_CLAUDE_MODEL = "claude-haiku-5-5";
 
 function getProvider(): Provider {
@@ -115,7 +119,14 @@ export interface ExtractInvoiceFailure {
 }
 
 export type ExtractInvoiceResult =
-  | { ok: true; data: InvoiceExtraction; model: string; attempts: number }
+  | {
+      ok: true;
+      data: InvoiceExtraction;
+      model: string;
+      attempts: number;
+      /** True when AI_MOCK is on: the saved sample was returned and no AI was called. */
+      mock?: boolean;
+    }
   | ExtractInvoiceFailure;
 
 const INVOICE_SYSTEM_PROMPT = `You read supplier invoices for a cash-flow planning tool and return structured data.
@@ -145,7 +156,6 @@ const INVOICE_DEADLINE_MS = 45_000;
 const FIRST_ATTEMPT_MS = 30_000; // leaves at least 15s for the retry
 const MIN_RETRY_MS = 5_000;
 
-const DEFAULT_GEMINI_FALLBACK_MODEL = "gemini-3.5-flash-lite"; // free-tier Flash-Lite
 
 const FIELD_TYPES: Record<FieldKey, "string" | "number" | "integer"> = {
   supplierName: "string",
@@ -310,7 +320,9 @@ async function failedResponse(res: Response): Promise<Attempt> {
   return {
     ok: false,
     failure: providerFailure(res, info),
-    retryable: res.status >= 500, // 429 and 4xx are not fixed by another model or another try
+    // Another model has its own quota and may be up, so 429 and 5xx are worth one retry on it.
+    // Other 4xx errors (bad request, bad key) would fail the same way again.
+    retryable: res.status >= 500 || res.status === 429,
     status: res.status,
     providerStatus: info.providerStatus,
     providerMessage: info.providerMessage,
@@ -438,9 +450,9 @@ async function claudeAttempt(file: InvoiceFile, model: string, key: string, time
 type RawResult = { ok: true; raw: unknown; model: string; attempts: number } | ExtractInvoiceFailure;
 
 /**
- * Try the models in order within one time budget. A model that is down, overloaded or too slow
- * is followed by at most one retry on the next model. Rate limits (429) and bad requests (4xx)
- * stop straight away, because another try would not help.
+ * Try the models in order within one time budget. A model that is down, overloaded, rate-limited
+ * (429) or too slow is followed by at most one retry on the next model. Bad requests and bad keys
+ * (other 4xx) stop straight away, because another try would fail the same way.
  */
 async function runAttempts(
   models: string[],
@@ -481,7 +493,9 @@ async function runAttempts(
 
 function geminiModels(): string[] {
   const primary = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
-  const fallback = process.env.GEMINI_FALLBACK_MODEL || DEFAULT_GEMINI_FALLBACK_MODEL;
+  // The fallback is "the other model": a model can't back itself up.
+  const otherModel = /flash-lite/.test(primary) ? GEMINI_FLASH : GEMINI_FLASH_LITE;
+  const fallback = process.env.GEMINI_FALLBACK_MODEL || otherModel;
   return fallback === "off" || fallback === primary ? [primary] : [primary, fallback];
 }
 
@@ -498,13 +512,27 @@ async function claudeExtractInvoice(file: InvoiceFile): Promise<RawResult> {
   return runAttempts([model], (m, timeoutMs) => claudeAttempt(file, m, key, timeoutMs));
 }
 
+const MOCK_DELAY_MS = 1_500;
+
+/** AI_MOCK=true: development mode. extractInvoice returns the pre-read sample and calls no AI. */
+export function isMockAi(): boolean {
+  return (process.env.AI_MOCK ?? "").trim().toLowerCase() === "true";
+}
+
 /**
  * Read an invoice (PDF, PNG or JPG) with the configured provider and return structured fields,
  * each with { value, evidence, confidence }. Never throws for expected problems: rate limits,
  * a missing key, timeouts, or an answer that fails validation all come back as { ok: false, message }.
- * Waits at most 45 seconds in total.
+ * Waits at most 45 seconds in total. With AI_MOCK=true it returns the pre-read sample after a short
+ * pause, without calling any AI.
  */
 export async function extractInvoice(file: InvoiceFile): Promise<ExtractInvoiceResult> {
+  if (isMockAi()) {
+    await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
+    const parsed = parseExtraction(preReadSampleExtraction);
+    if (!parsed.ok) return fail("invalid_response", parsed.message);
+    return { ok: true, data: parsed.data, model: "mock", attempts: 0, mock: true };
+  }
   let provider: Provider;
   try {
     provider = getProvider();

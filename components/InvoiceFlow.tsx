@@ -5,9 +5,11 @@ import type { Invoice } from "@/lib/data/invoice";
 import { merchant, SIMULATED_LABEL } from "@/lib/data/merchant";
 import { preReadSampleExtraction } from "@/lib/data/sample-extraction";
 import { runEngine } from "@/lib/engine";
+import { hashBytes, readCached, writeCached } from "@/lib/extraction-cache";
 import { formatINR } from "@/lib/format";
 import {
   FIELDS,
+  emptyExtraction,
   parseConfirmed,
   parseExtraction,
   toEngineInvoice,
@@ -23,18 +25,37 @@ const STORAGE_KEY = "cga.confirmedInvoice.v1";
 const SAMPLE_URL = "/samples/invoice-clean.pdf";
 // The server gives up after 45 seconds; the page waits a little longer so it can show the server's message.
 const CLIENT_TIMEOUT_MS = 50_000;
-// Offer the pre-read sample when a read is taking this long.
-const OFFER_FALLBACK_AFTER_S = 10;
 const SLOW_AFTER_S = 15;
 
 type Phase = "idle" | "reading" | "review";
-type Source = "live" | "pre-read";
+/** Where the values on screen came from. */
+type Source = "live" | "cached" | "mock" | "pre-read" | "manual";
+const SOURCES: Source[] = ["live", "cached", "mock", "pre-read", "manual"];
 type Edited = Partial<Record<FieldKey, boolean>>;
 
 interface Confirmed {
   invoice: Invoice;
   notes: string[];
 }
+
+const SOURCE_NOTICE: Record<Exclude<Source, "live">, { title: string; text: string }> = {
+  cached: {
+    title: "Read earlier",
+    text: "This file was already read in this browser tab, so the saved result is shown and the AI was not called.",
+  },
+  mock: {
+    title: "Mock AI",
+    text: "Development mode: these are saved sample values, returned without calling the AI.",
+  },
+  "pre-read": {
+    title: "Pre-read — AI unavailable",
+    text: "These values were saved from an earlier reading of the synthetic sample invoice. The AI did not read a file just now.",
+  },
+  manual: {
+    title: "Manual entry",
+    text: "The AI did not read this invoice. Type the values from your invoice. Fields marked * are needed to plan the cash gap.",
+  },
+};
 
 function Spinner() {
   return (
@@ -48,6 +69,8 @@ function Spinner() {
 export default function InvoiceFlow() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
+  /** True only after the AI failed to read a file. The fallback buttons are shown only then. */
+  const [aiFailed, setAiFailed] = useState(false);
   const [extraction, setExtraction] = useState<InvoiceExtraction | null>(null);
   const [values, setValues] = useState<FormValues | null>(null);
   const [edited, setEdited] = useState<Edited>({});
@@ -55,9 +78,25 @@ export default function InvoiceFlow() {
   const [confirmed, setConfirmed] = useState<Confirmed | null>(null);
   const [dragging, setDragging] = useState(false);
   const [source, setSource] = useState<Source>("live");
+  const [mockAi, setMockAi] = useState(false);
+  const [lastFile, setLastFile] = useState<File | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // Is development mock mode on? (AI_MOCK=true on the server.)
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/ai-status")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled) setMockAi(d?.mock === true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Restore a confirmed invoice from this browser tab's session, if there is one.
   useEffect(() => {
@@ -75,7 +114,7 @@ export default function InvoiceFlow() {
         setExtraction(restored.data);
         setValues(saved.values);
         setEdited(saved.edited ?? {});
-        setSource(saved.source === "pre-read" ? "pre-read" : "live");
+        setSource(SOURCES.includes(saved.source) ? saved.source : "live");
         setConfirmed({ invoice: mapped.invoice, notes: mapped.notes });
         setPhase("review");
       } catch {
@@ -92,8 +131,25 @@ export default function InvoiceFlow() {
     [confirmed],
   );
 
-  async function readFile(file: File) {
+  /** Put values on screen for the founder to check, whatever their source. */
+  function showExtraction(next: InvoiceExtraction, from: Source) {
+    setExtraction(next);
+    setValues(toFormValues(next));
+    setEdited({});
+    setFormErrors({});
+    setConfirmed(null);
+    setSource(from);
     setError(null);
+    setAiFailed(false);
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch {}
+    setPhase("review");
+  }
+
+  async function readFile(file: File, opts: { force?: boolean } = {}) {
+    setError(null);
+    setAiFailed(false);
     const name = file.name.toLowerCase();
     if (!/\.(pdf|png|jpe?g)$/.test(name)) {
       setError("Please upload a PDF, PNG or JPG invoice.");
@@ -102,6 +158,20 @@ export default function InvoiceFlow() {
     if (file.size > MAX_INVOICE_BYTES) {
       setError("That file is too large. Please upload an invoice under 5 MB.");
       return;
+    }
+    setLastFile(file);
+
+    // Same file as before? Reuse the earlier reading instead of calling the AI. (Not in mock mode.)
+    const hash = mockAi ? null : await hashBytes(await file.arrayBuffer());
+    if (hash && !opts.force) {
+      try {
+        const hit = readCached(sessionStorage, hash);
+        if (hit) {
+          showExtraction(hit, "cached");
+          if (fileInput.current) fileInput.current.value = "";
+          return;
+        }
+      } catch {}
     }
 
     abortRef.current?.abort();
@@ -125,55 +195,50 @@ export default function InvoiceFlow() {
           (data?.error ?? "Something went wrong reading the invoice. Please try again.") +
             (res.status === 429 && wait && Number(wait) <= 120 ? ` (Try again in about ${wait} seconds.)` : ""),
         );
+        // Only an AI failure (the server says which kind) offers the fallbacks. A wrong file type or size does not.
+        setAiFailed(Boolean(data?.kind));
         setPhase(extraction ? "review" : "idle");
         return;
       }
       const parsed = parseExtraction(data.extraction);
       if (!parsed.ok) {
         setError(parsed.message);
+        setAiFailed(true);
         setPhase(extraction ? "review" : "idle");
         return;
       }
-      setExtraction(parsed.data);
-      setValues(toFormValues(parsed.data));
-      setEdited({});
-      setFormErrors({});
-      setSource("live");
-      try {
-        sessionStorage.removeItem(STORAGE_KEY);
-      } catch {}
-      setPhase("review");
+      const isMock = data.mock === true;
+      if (!isMock && hash) writeCached(sessionStorage, hash, parsed.data);
+      showExtraction(parsed.data, isMock ? "mock" : "live");
     } catch (e) {
-      if (controller.signal.aborted) return; // the founder chose the pre-read sample instead
+      if (controller.signal.aborted) return; // the founder started something else
       setError(
         e instanceof Error && e.name === "TimeoutError"
-          ? "The AI took too long to respond. Please try again, or continue with the pre-read sample."
+          ? "The AI took too long to respond."
           : "Couldn't reach the server. Please check your connection and try again.",
       );
+      setAiFailed(true);
       setPhase(extraction ? "review" : "idle");
     } finally {
       if (fileInput.current) fileInput.current.value = "";
     }
   }
 
-  /** Skip the AI: use values saved from an earlier reading of the synthetic sample invoice. */
+  /** After an AI failure: values saved from an earlier reading of the synthetic sample invoice. */
   function usePreReadSample() {
     abortRef.current?.abort();
-    setError(null);
-    setExtraction(preReadSampleExtraction);
-    setValues(toFormValues(preReadSampleExtraction));
-    setEdited({});
-    setFormErrors({});
-    setConfirmed(null);
-    setSource("pre-read");
-    try {
-      sessionStorage.removeItem(STORAGE_KEY);
-    } catch {}
-    setPhase("review");
+    showExtraction(preReadSampleExtraction, "pre-read");
+  }
+
+  /** After an AI failure: an empty form for the founder to fill in. */
+  function enterManually() {
+    abortRef.current?.abort();
+    showExtraction(emptyExtraction(), "manual");
   }
 
   async function useSample() {
     setError(null);
+    setAiFailed(false);
     try {
       const res = await fetch(SAMPLE_URL);
       if (!res.ok) throw new Error();
@@ -223,6 +288,8 @@ export default function InvoiceFlow() {
     setFormErrors({});
     setConfirmed(null);
     setError(null);
+    setAiFailed(false);
+    setLastFile(null);
     try {
       sessionStorage.removeItem(STORAGE_KEY);
     } catch {}
@@ -241,7 +308,17 @@ export default function InvoiceFlow() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <section className="rounded-xl border border-line bg-card p-5">
-        <h2 className="text-lg font-semibold">Forward a supplier invoice</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold">Forward a supplier invoice</h2>
+          {mockAi && (
+            <span
+              title="AI_MOCK is on: saved sample values are returned and no AI is called."
+              className="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800"
+            >
+              Mock AI
+            </span>
+          )}
+        </div>
         <p className="mt-1 text-sm text-muted">
           Upload a PDF, PNG or JPG (up to 5 MB). The AI reads it and you check every field before anything is
           planned. The file is processed in memory and never saved.
@@ -311,19 +388,34 @@ export default function InvoiceFlow() {
               {error}
             </p>
           )}
-          {(error || (reading && elapsed >= OFFER_FALLBACK_AFTER_S)) && (
+          {aiFailed && !reading && (
             <div className="mt-3 rounded-md border border-line px-3 py-3">
-              <button
-                type="button"
-                onClick={usePreReadSample}
-                className="rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-blue-50"
-              >
-                Continue with pre-read sample
-              </button>
-              <p className="mt-2 text-xs text-muted">
-                Uses values saved from an earlier reading of the synthetic sample invoice. The AI will not read a
-                file this time.
-              </p>
+              <p className="text-sm font-medium">The AI couldn&apos;t read this invoice. You can still continue:</p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={usePreReadSample}
+                  className="rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-blue-50"
+                >
+                  Continue with pre-read sample
+                </button>
+                <button
+                  type="button"
+                  onClick={enterManually}
+                  className="rounded-md border border-line px-4 py-2 text-sm font-medium hover:bg-background"
+                >
+                  Enter invoice manually
+                </button>
+              </div>
+              <ul className="mt-3 space-y-1 text-xs text-muted">
+                <li>
+                  <strong>Pre-read — AI unavailable:</strong> values saved from an earlier reading of the synthetic
+                  sample invoice. The AI will not read a file this time.
+                </li>
+                <li>
+                  <strong>Manual:</strong> an empty form to type the values from your invoice.
+                </li>
+              </ul>
             </div>
           )}
         </div>
@@ -334,16 +426,34 @@ export default function InvoiceFlow() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">
-                {source === "pre-read" ? "Check the pre-read sample" : "Check what the AI read"}
+                {source === "manual"
+                  ? "Enter the invoice manually"
+                  : source === "pre-read"
+                    ? "Check the pre-read sample"
+                    : "Check what the AI read"}
               </h2>
-              <p className="mt-1 text-sm text-muted">
-                Edit anything that is wrong. Fields marked in amber were unclear or missing.
-              </p>
-              {source === "pre-read" && (
-                <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Pre-read sample: these values were saved from an earlier reading of the synthetic sample invoice.
-                  The AI did not read a file just now.
+              {source !== "manual" && (
+                <p className="mt-1 text-sm text-muted">
+                  Edit anything that is wrong. Fields marked in amber were unclear or missing.
                 </p>
+              )}
+              {source !== "live" && (
+                <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <strong>{SOURCE_NOTICE[source].title}:</strong> {SOURCE_NOTICE[source].text}
+                  {source === "cached" && lastFile && (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        onClick={() => void readFile(lastFile, { force: true })}
+                        disabled={reading}
+                        className="font-medium text-brand underline disabled:opacity-50"
+                      >
+                        Read again with the AI
+                      </button>
+                    </>
+                  )}
+                </div>
               )}
             </div>
             <button type="button" onClick={startOver} className="shrink-0 text-sm text-brand hover:underline">
@@ -355,7 +465,8 @@ export default function InvoiceFlow() {
             {FIELDS.map((meta) => {
               const f = extraction[meta.key];
               const isEdited = edited[meta.key];
-              const needsCheck = !isEdited && (f.confidence !== "high" || f.value === null);
+              const needsCheck =
+                source !== "manual" && !isEdited && (f.confidence !== "high" || f.value === null);
               const id = `field-${meta.key}`;
               const err = formErrors[meta.key];
               return (
@@ -389,6 +500,8 @@ export default function InvoiceFlow() {
                   <p className="mt-2 text-xs text-muted">
                     {isEdited ? (
                       "Edited by you."
+                    ) : source === "manual" ? (
+                      <>Type this from your invoice. {meta.hint}</>
                     ) : f.value === null ? (
                       <>Not found on the invoice. {meta.hint}</>
                     ) : f.evidence ? (
@@ -425,6 +538,9 @@ export default function InvoiceFlow() {
             {confirmed.invoice.supplier}: {formatINR(confirmed.invoice.amount)} for {confirmed.invoice.units} pairs,
             due in {confirmed.invoice.dueInDays} days.
           </p>
+          {source !== "live" && (
+            <p className="mt-1 text-xs text-muted">Values from: {SOURCE_NOTICE[source].title.toLowerCase()}.</p>
+          )}
 
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {(

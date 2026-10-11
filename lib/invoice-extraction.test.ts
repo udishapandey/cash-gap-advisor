@@ -5,6 +5,7 @@ import { preReadSampleExtraction, PRE_READ_SAMPLE_LABEL } from "./data/sample-ex
 import { runEngine } from "./engine";
 import {
   daysBetween,
+  emptyExtraction,
   parseConfirmed,
   parseExtraction,
   toEngineInvoice,
@@ -309,5 +310,40 @@ describe("the pre-read sample (fallback when the AI is slow or down)", () => {
     const gap = runEngine({ merchant, invoice: mapped.invoice }).views.keepFull.gap;
     expect(gap.gapExpected).toBe(227_621);
     expect(mapped.notes).toEqual([]);
+  });
+});
+
+describe("manual entry (an empty form)", () => {
+  it("has all ten fields empty, with nothing found and low confidence", () => {
+    const e = emptyExtraction();
+    expect(Object.keys(e)).toHaveLength(10);
+    for (const f of Object.values(e)) expect(f).toEqual({ value: null, evidence: null, confidence: "low" });
+  });
+
+  it("is a valid extraction shape, and gives a form with every field blank", () => {
+    expect(parseExtraction(emptyExtraction()).ok).toBe(true);
+    expect(Object.values(toFormValues(emptyExtraction())).every((v) => v === "")).toBe(true);
+  });
+
+  it("cannot be confirmed until the four required fields are filled in", () => {
+    const r = parseConfirmed(toFormValues(emptyExtraction()));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(Object.keys(r.errors).sort()).toEqual(["dueDate", "invoiceDate", "quantity", "totalAmount"]);
+  });
+
+  it("works through to the engine once the founder types the invoice in", () => {
+    const form = {
+      ...toFormValues(emptyExtraction()),
+      invoiceDate: "2026-10-11",
+      dueDate: "2026-10-21",
+      totalAmount: "5,00,000",
+      quantity: "500",
+    };
+    const confirmed = parseConfirmed(form);
+    if (!confirmed.ok) throw new Error("should be valid");
+    const mapped = toEngineInvoice(confirmed.data);
+    if (!mapped.ok) throw new Error(mapped.error);
+    expect(mapped.invoice).toMatchObject({ amount: 500000, units: 500, unitPrice: 1000, dueInDays: 10 });
+    expect(runEngine({ merchant, invoice: mapped.invoice }).views.keepFull.gap.gapExpected).toBe(227_621);
   });
 });

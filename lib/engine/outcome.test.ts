@@ -46,13 +46,58 @@ describe("money saved", () => {
     }
   });
 
-  it("uses the founder's default: draw the whole gap on the credit line, pay on the due date, no discount", () => {
+  it("uses the founder's default: credit line up to its limit, then the bank overdraft, paid on the due date, no discount", () => {
     const r = run(0);
     const o = outcomeFor(r, "keep_full", SIMULATED_OUTCOMES.as_forecast);
     const credit = r.views.keepFull.options.find((x) => x.id === "credit_line")!;
     expect(o.cost.default.amount).toBe(r.views.keepFull.duePlan.gap);
+    expect(o.cost.default.credit.amount).toBe(o.cost.default.amount); // small enough to fit on the credit line
+    expect(o.cost.default.overdraft.amount).toBe(0);
     expect(o.cost.default.fundsCost).toBe(Math.round(r.views.keepFull.duePlan.gap * credit.costRate));
     expect(o.cost.default.netCost).toBe(o.cost.default.fundsCost); // never takes the discount
+    expect(o.cost.default.label).toContain("Credit line up to its limit, then your bank overdraft");
+    expect(o.cost.default.label).toContain("no early-payment discount");
+  });
+
+  it("goes to the bank overdraft for what the credit line's limit cannot cover", () => {
+    const r = run(20);
+    const o = outcomeFor(r, "keep_full", SIMULATED_OUTCOMES.as_forecast, 20);
+    const d = o.cost.default;
+    expect(d.amount).toBeGreaterThan(merchant.creditLineLimit);
+    expect(d.credit.amount).toBe(merchant.creditLineLimit);
+    expect(d.overdraft.amount).toBe(d.amount - merchant.creditLineLimit);
+    const od = r.views.keepFull.options.find((x) => x.id === "bank_overdraft")!;
+    expect(d.overdraft.cost).toBe(Math.round(d.overdraft.amount * od.costRate));
+    expect(d.fundsCost).toBe(d.credit.cost + d.overdraft.cost);
+  });
+
+  it("the default can always be drawn: never more than either limit, credit used first, nothing lost", () => {
+    for (const cash of [0, 100_000, 400_000]) {
+      for (const drop of DROPS.concat([4, 5, 6, 15])) {
+        const r = run(drop, cash);
+        for (const view of VIEWS) {
+          for (const id of OUTCOME_IDS) {
+            const d = outcomeFor(r, view, SIMULATED_OUTCOMES[id], drop, cash).cost.default;
+            const label = `${view} ${id} -${drop}% cash ${cash}`;
+            expect(d.credit.amount, label).toBeLessThanOrEqual(merchant.creditLineLimit);
+            expect(d.overdraft.amount, label).toBeLessThanOrEqual(merchant.overdraftLimit);
+            expect(d.credit.amount + d.overdraft.amount + d.uncovered, label).toBe(d.amount);
+            if (d.overdraft.amount > 0) expect(d.credit.amount, label).toBe(merchant.creditLineLimit);
+            expect(d.uncovered, label).toBeGreaterThanOrEqual(0);
+            expect(d.coversWholeGap, label).toBe(d.uncovered === 0);
+            expect(d.coversWholeGap, label).toBe(d.amount <= merchant.creditLineLimit + merchant.overdraftLimit);
+          }
+        }
+      }
+    }
+  });
+
+  it("says so when even credit line plus overdraft cannot cover the default's gap", () => {
+    const r = run(25);
+    const d = outcomeFor(r, "right_sized", SIMULATED_OUTCOMES.as_forecast, 25).cost.default;
+    expect(d.amount).toBeGreaterThan(merchant.creditLineLimit + merchant.overdraftLimit);
+    expect(d.coversWholeGap).toBe(false);
+    expect(d.uncovered).toBe(d.amount - merchant.creditLineLimit - merchant.overdraftLimit);
   });
 
   it("the plan's net cost is its funds cost minus the discount it earned", () => {
@@ -65,12 +110,22 @@ describe("money saved", () => {
     expect(o.cost.plan.netCost).toBe(o.cost.plan.fundsCost - o.cost.plan.discountCaptured);
   });
 
-  it("is positive for the demo plan, and says when the default could not really be drawn", () => {
+  it("is positive for the demo plan", () => {
     expect(outcomeFor(run(0), "keep_full", SIMULATED_OUTCOMES.as_forecast).cost.moneySaved).toBeGreaterThan(0);
-    const big = outcomeFor(run(25), "right_sized", SIMULATED_OUTCOMES.as_forecast, 25);
-    expect(big.cost.default.amount).toBeGreaterThan(merchant.creditLineLimit);
-    expect(big.cost.default.exceedsCreditLimit).toBe(true);
-    expect(outcomeFor(run(0), "keep_full", SIMULATED_OUTCOMES.as_forecast).cost.default.exceedsCreditLimit).toBe(false);
+  });
+
+  it("splits exactly into cheaper funding plus the early-payment discount captured", () => {
+    for (const drop of DROPS) {
+      const r = run(drop);
+      for (const view of VIEWS) {
+        for (const id of OUTCOME_IDS) {
+          const c = outcomeFor(r, view, SIMULATED_OUTCOMES[id], drop).cost;
+          expect(c.fromCheaperFunding, `${view} ${id} -${drop}%`).toBe(c.default.fundsCost - c.plan.fundsCost);
+          expect(c.moneySaved, `${view} ${id} -${drop}%`).toBe(c.fromCheaperFunding + c.plan.discountCaptured);
+          expect(c.moneySaved).toBe(c.default.netCost - c.plan.netCost);
+        }
+      }
+    }
   });
 
   it("is zero when nothing needs funding and the plan takes no discount", () => {
@@ -244,5 +299,28 @@ describe("computeOutcome is a pure function", () => {
     const b = outcomeFor(r, "right_sized", SIMULATED_OUTCOMES.lower_15, 25);
     expect(a).toEqual(b);
     expect(JSON.stringify(r)).toBe(before);
+  });
+});
+
+describe("a top-up at lower sales is drawn from standby", () => {
+  it("is the part of the uncovered need that unused credit-line headroom covers", () => {
+    const r = run(0);
+    const o = outcomeFor(r, "keep_full", SIMULATED_OUTCOMES.lower_15);
+    expect(o.borrowing.underFunded).toBeGreaterThan(0);
+    expect(o.borrowing.drawnFromStandby).toBe(o.borrowing.underFunded); // 15% lower is well inside the standby
+    expect(o.borrowing.beyondStandby).toBe(0);
+  });
+  it("says what is beyond the headroom when the need outgrows it", () => {
+    const r = run(30);
+    const o = outcomeFor(r, "keep_full", { salesVsForecast: 0.6, codReturnRate: 0.3 }, 30);
+    const headroom = Math.max(0, merchant.creditLineLimit - (r.views.keepFull.recommended.plan.steps.find((s) => s.optionId === "credit_line")?.amount ?? 0));
+    expect(o.borrowing.drawnFromStandby).toBe(Math.min(o.borrowing.underFunded, headroom));
+    expect(o.borrowing.beyondStandby).toBe(o.borrowing.underFunded - o.borrowing.drawnFromStandby);
+    expect(o.borrowing.beyondStandby).toBeGreaterThan(0);
+  });
+  it("is nothing when the plan covered the real need", () => {
+    const o = outcomeFor(run(0), "keep_full", SIMULATED_OUTCOMES.as_forecast);
+    expect(o.borrowing.drawnFromStandby).toBe(0);
+    expect(o.borrowing.beyondStandby).toBe(0);
   });
 });

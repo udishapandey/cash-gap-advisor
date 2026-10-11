@@ -22,6 +22,7 @@ import {
 import type { Language } from "@/lib/language";
 import type { AppliedWhatIf } from "@/lib/whatif";
 import AiExplanation from "./AiExplanation";
+import StandbyLine from "./StandbyLine";
 import CallScriptPanel from "./CallScriptPanel";
 import JourneyShell from "./JourneyShell";
 import WhatIfAsk from "./WhatIfAsk";
@@ -264,6 +265,7 @@ function PlanCard({
           })}
         </ul>
       )}
+      <StandbyLine view={view} />
       {!plan.fullyCovered && (
         <p role="alert" className="mt-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
           This plan covers only {formatINR(plan.covered)} of the gap. {formatINR(plan.uncovered)} is not covered.

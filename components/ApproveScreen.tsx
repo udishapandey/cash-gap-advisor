@@ -21,6 +21,7 @@ import {
 import type { ShellContext } from "./JourneyShell";
 import JourneyShell from "./JourneyShell";
 import KeyFactStatementPanel from "./KeyFactStatement";
+import StandbyLine from "./StandbyLine";
 import { Card, SectionTitle, SimulatedTag } from "./ui";
 
 export default function ApproveScreen() {
@@ -142,6 +143,7 @@ function ApproveBody({ state, result, update, reset }: ShellContext) {
             <dd className="text-lg font-semibold tabular-nums">{formatINR(plan.totalCost)}</dd>
           </div>
         </dl>
+        <StandbyLine view={view} />
         <Link href="/options" className="mt-3 inline-block text-sm text-brand hover:underline">
           ← Change plan
         </Link>

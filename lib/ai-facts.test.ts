@@ -235,7 +235,8 @@ describe("the facts behind the results summary", () => {
     expect(f.moneySavedRupees).toBe(Math.abs(o.cost.moneySaved));
     expect(f.moneyDirection).toBe("saved");
     expect(f).toMatchObject({ salesDirection: "below", salesVsForecastPercent: 15, pairsOrdered: o.stock.ordered, pairsSold: o.stock.sold, pairsLeftOver: o.stock.leftOver });
-    expect(f.uncoveredNeedRupees).toBe(o.borrowing.underFunded);
+    expect(f.drawnFromStandbyRupees).toBe(o.borrowing.drawnFromStandby);
+    expect(f.beyondStandbyRupees).toBe(o.borrowing.beyondStandby);
     expect(f.nextUpliftTimes).toBe(o.learned.uplift.after);
   });
 

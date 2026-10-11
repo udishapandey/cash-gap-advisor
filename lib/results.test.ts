@@ -5,7 +5,7 @@ import { runEngine } from "./engine";
 import { computeOutcome, OUTCOME_IDS, SIMULATED_OUTCOMES } from "./engine/outcome";
 import { formatINR, formatSignedINR } from "./format";
 import { DEFAULT_JOURNEY } from "./journey";
-import { heroLine, learnedLines, outcomeForState } from "./results";
+import { heroBasis, heroLine, learnedLines, outcomeForState } from "./results";
 
 const run = (drop = 0) => runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop });
 const state = (drop = 0, chosenView: "keep_full" | "right_sized" | null = "keep_full") => ({ ...DEFAULT_JOURNEY, salesDropPercent: drop, chosenView });
@@ -32,17 +32,40 @@ describe("outcomeForState", () => {
 });
 
 describe("the hero line", () => {
-  it("says what the plan saved against drawing the full amount on the credit line", () => {
+  it("splits the total into cheaper funding and the early-payment discount captured", () => {
     const o = at("as_forecast");
     expect(o.cost.moneySaved).toBeGreaterThan(0);
-    expect(heroLine(o)).toBe(`You saved ${formatINR(o.cost.moneySaved)} compared with drawing the full amount on your credit line.`);
+    expect(o.cost.plan.discountCaptured).toBeGreaterThan(0);
+    expect(heroLine(o)).toBe(
+      `${formatINR(o.cost.moneySaved)} better off: ${formatSignedINR(o.cost.fromCheaperFunding)} from cheaper funding + ${formatINR(o.cost.plan.discountCaptured)} early-payment discount captured`,
+    );
   });
-  it("is honest when the plan cost more, or the same", () => {
+  it("the two parts add up to the total in the sentence", () => {
+    for (const id of OUTCOME_IDS) {
+      const o = at(id);
+      expect(o.cost.fromCheaperFunding + o.cost.plan.discountCaptured).toBe(o.cost.moneySaved);
+    }
+  });
+  it("leaves out the discount part when the plan took no discount", () => {
+    const r = runEngine({ merchant, invoice: { ...sampleInvoice, earlyPayDiscountPct: 0 } });
+    const o = outcomeForState(r, state(0), "as_forecast")!;
+    expect(o.cost.plan.discountCaptured).toBe(0);
+    expect(heroLine(o)).not.toContain("discount");
+    expect(heroLine(o)).toContain("from cheaper funding");
+  });
+  it("is honest when the plan was worse off, or the same", () => {
     const o = at("as_forecast");
-    const worse = { ...o, cost: { ...o.cost, moneySaved: -450 } };
+    const worse = { ...o, cost: { ...o.cost, moneySaved: -450, fromCheaperFunding: -450, plan: { ...o.cost.plan, discountCaptured: 0 } } };
     const same = { ...o, cost: { ...o.cost, moneySaved: 0 } };
-    expect(heroLine(worse)).toBe("The plan cost ₹450 more than drawing the full amount on your credit line.");
-    expect(heroLine(same)).toBe("The plan cost the same as drawing the full amount on your credit line.");
+    expect(heroLine(worse)).toBe("₹450 worse off: −₹450 from cheaper funding");
+    expect(heroLine(same)).toContain("No better or worse off");
+  });
+  it("says what it is compared with, and is candid when even credit line plus overdraft cannot cover the default's gap", () => {
+    expect(heroBasis(at("as_forecast"))).toContain("credit line up to its limit, then your bank overdraft");
+    const big = at("as_forecast", 25);
+    expect(big.cost.default.coversWholeGap).toBe(false);
+    expect(heroBasis(big)).toContain(`${formatINR(big.cost.default.uncovered)} short`);
+    expect(heroBasis(big)).toContain("your saving is, if anything, bigger");
   });
 });
 

@@ -5,6 +5,9 @@ import { sampleInvoice } from "@/lib/data/invoice";
 import { planFacts, scriptFacts } from "@/lib/ai-facts";
 import { templateExplanation, templateExplanationParts, templateScript } from "@/lib/ai-templates";
 import { runEngine } from "@/lib/engine";
+import { standbyFor } from "@/lib/engine/standby";
+import { formatINR } from "@/lib/format";
+import StandbyLine from "./StandbyLine";
 import { ResultsSummaryView } from "./ResultsSummary";
 import { AiExplanationView, UNAVAILABLE_NOTE, VERIFIED_LABEL, isExplainOutcome, isVerifiedTextOutcome } from "./AiExplanation";
 import { CallScriptView, SCRIPT_UNAVAILABLE_NOTE, SCRIPT_VERIFIED_LABEL } from "./CallScriptPanel";
@@ -186,5 +189,37 @@ describe("the results summary view", () => {
   });
   it("marks Hindi text as Hindi", () => {
     expect(renderToStaticMarkup(<ResultsSummaryView status="verified" text="x" mock={false} language="hi" onLanguage={noop} />)).toContain('lang="hi"');
+  });
+});
+
+describe("the Standby line", () => {
+  const covered = runEngine({ merchant, invoice: sampleInvoice }).views.keepFull;
+  const short = runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: 30 }).views.keepFull;
+  it("shows the amount, the day and the headroom, and says ₹0 cost unless drawn", () => {
+    const sb = standbyFor(covered);
+    const html = renderToStaticMarkup(<StandbyLine view={covered} />);
+    expect(html).toContain("Standby:");
+    expect(html).toContain(formatINR(sb.amount));
+    expect(html).toContain(`around day ${sb.day}`);
+    expect(html).toContain(`headroom (${formatINR(sb.headroom)}) covers it`);
+    expect(html).toContain("₹0 cost unless drawn");
+    expect(html).toContain("Never drawn automatically");
+    expect(html).not.toContain("Warning");
+  });
+  it("shows a warning when unused headroom cannot cover it", () => {
+    const sb = standbyFor(short);
+    expect(sb.coveredByHeadroom).toBe(false);
+    const html = renderToStaticMarkup(<StandbyLine view={short} />);
+    expect(html).toContain("Warning");
+    expect(html).toContain(`${formatINR(sb.shortBy)} short`);
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("for the part the headroom covers");
+    expect(html).not.toContain("if drawn in full");
+  });
+  it("says none is needed when the plan covers even low sales", () => {
+    const rich = runEngine({ merchant, invoice: sampleInvoice, cashElsewhere: 5_000_000 }).views.keepFull;
+    const html = renderToStaticMarkup(<StandbyLine view={rich} />);
+    expect(html).toContain("none needed");
+    expect(html).not.toContain("Warning");
   });
 });

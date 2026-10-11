@@ -303,9 +303,11 @@ export interface ResultsFacts {
   pairsLeftOver: number;
   /** Pairs customers wanted that the order did not cover. */
   pairsMissed: number;
-  /** Borrowed beyond the real peak need; and the real peak need the plan did not cover. */
+  /** Borrowed beyond the real peak need. */
   unnecessaryBorrowingRupees: number;
-  uncoveredNeedRupees: number;
+  /** The part of the real need the plan did not cover that would be drawn from standby (unused credit-line headroom), and the part beyond even that. */
+  drawnFromStandbyRupees: number;
+  beyondStandbyRupees: number;
   usualUpliftTimes: number;
   nextUpliftTimes: number;
   codAssumedPercent: number;
@@ -326,7 +328,8 @@ export function resultsFacts(o: OutcomeResult): ResultsFacts {
     pairsLeftOver: o.stock.leftOver,
     pairsMissed: o.stock.missedPairs,
     unnecessaryBorrowingRupees: o.borrowing.unnecessary,
-    uncoveredNeedRupees: o.borrowing.underFunded,
+    drawnFromStandbyRupees: o.borrowing.drawnFromStandby,
+    beyondStandbyRupees: o.borrowing.beyondStandby,
     usualUpliftTimes: o.learned.uplift.before,
     nextUpliftTimes: o.learned.uplift.after,
     codAssumedPercent: o.learned.codReturnRate.assumedPercent,

@@ -298,13 +298,23 @@ describe("the results summary template (also the mock AI answer and the fallback
     expect(text).toContain("all 500 pairs sold");
   });
 
-  it("adds a second sentence only when the plan left part of the real need uncovered", () => {
+  it("adds a second sentence only when cash would have been drawn from standby, and says it that way", () => {
     const short = factsAt("lower_15");
-    expect(short.uncoveredNeedRupees).toBeGreaterThan(0);
-    expect(templateSummary(short, "en")).toContain(`left ${inr(short.uncoveredNeedRupees)} of the real cash need uncovered`);
+    expect(short.drawnFromStandbyRupees).toBeGreaterThan(0);
+    const text = templateSummary(short, "en");
+    expect(text).toContain(`${inr(short.drawnFromStandbyRupees)} of the extra cash needed would have been drawn from standby`);
+    expect(text).not.toContain("uncovered");
     const fine = factsAt("as_forecast");
-    expect(fine.uncoveredNeedRupees).toBe(0);
+    expect(fine.drawnFromStandbyRupees).toBe(0);
     expect(templateSummary(fine, "en").split(/(?<=\.)\s/).length).toBe(1);
+  });
+
+  it("also says how much was beyond what standby could cover", () => {
+    const f = { ...factsAt("lower_15"), beyondStandbyRupees: 12_345 };
+    expect(templateSummary(f, "en")).toContain(`A further ${inr(12_345)} was more than the standby could cover`);
+    expect(templateSummary(f, "hi")).toContain(inr(12_345));
+    expect(checkGrounding(templateSummary(f, "en"), f).ok).toBe(true);
+    expect(checkGrounding(templateSummary(f, "hi"), f).ok).toBe(true);
   });
 
   it("is honest when the plan cost more", () => {

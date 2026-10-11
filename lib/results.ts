@@ -4,7 +4,7 @@ import type { Merchant } from "./data/merchant";
 import { merchant as simulatedMerchant } from "./data/merchant";
 import type { EngineResult } from "./engine";
 import { computeOutcome, SIMULATED_OUTCOMES, type OutcomeId, type OutcomeResult } from "./engine/outcome";
-import { formatINR } from "./format";
+import { formatINR, formatSignedINR } from "./format";
 import type { JourneyState } from "./journey";
 
 /** The outcome of the approved plan under one simulated result. Null until a plan is chosen. */
@@ -28,12 +28,24 @@ export function outcomeForState(
 
 const times = (n: number) => `${n}x`;
 
-/** The headline: what the plan saved against drawing the whole gap on the credit line. */
+/**
+ * The headline, split into its two parts: money saved by cheaper funding, and the early-payment discount the plan
+ * captured (the default never takes it). The two parts add up to the total exactly.
+ */
 export function heroLine(o: OutcomeResult): string {
-  const saved = o.cost.moneySaved;
-  if (saved > 0) return `You saved ${formatINR(saved)} compared with drawing the full amount on your credit line.`;
-  if (saved === 0) return "The plan cost the same as drawing the full amount on your credit line.";
-  return `The plan cost ${formatINR(-saved)} more than drawing the full amount on your credit line.`;
+  const total = o.cost.moneySaved;
+  const parts = [`${formatSignedINR(o.cost.fromCheaperFunding)} from cheaper funding`];
+  if (o.cost.plan.discountCaptured > 0) parts.push(`${formatINR(o.cost.plan.discountCaptured)} early-payment discount captured`);
+  if (total > 0) return `${formatINR(total)} better off: ${parts.join(" + ")}`;
+  if (total === 0) return "No better or worse off than drawing the full amount on your credit line";
+  return `${formatINR(-total)} worse off: ${parts.join(" + ")}`;
+}
+
+/** What the hero number is measured against, in words. */
+export function heroBasis(o: OutcomeResult): string {
+  return o.cost.default.coversWholeGap
+    ? "Compared with the default: credit line up to its limit, then your bank overdraft for the rest, paid on the due date with no discount."
+    : `Compared with the default: credit line up to its limit, then your bank overdraft. Even those two cannot cover the whole gap (${formatINR(o.cost.default.uncovered)} short), so the default's cost is understated and your saving is, if anything, bigger.`;
 }
 
 /** "What I learned": plain sentences about the sales forecast and the COD return rate. */

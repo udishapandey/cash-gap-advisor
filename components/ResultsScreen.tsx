@@ -2,10 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { merchant } from "@/lib/data/merchant";
 import { OUTCOME_IDS, SIMULATED_OUTCOMES, type OutcomeId, type OutcomeResult } from "@/lib/engine/outcome";
 import { formatINR, formatSignedINR } from "@/lib/format";
-import { heroLine, learnedLines, outcomeForState } from "@/lib/results";
+import { heroBasis, heroLine, learnedLines, outcomeForState } from "@/lib/results";
 import type { Language } from "@/lib/language";
 import JourneyShell, { type ShellContext } from "./JourneyShell";
 import ResultsSummary from "./ResultsSummary";
@@ -103,9 +102,7 @@ function Hero({ o }: { o: OutcomeResult }) {
     <Card aria-label="Money saved" className={saved >= 0 ? "border-green-300 bg-green-50/60" : "border-red-300 bg-red-50/60"}>
       <p className="text-2xl font-semibold leading-snug sm:text-3xl">{heroLine(o)}</p>
       <p className="mt-2 text-sm text-muted">
-        Drawing the whole gap on the credit line would have cost {formatINR(o.cost.default.netCost)}. Your plan cost{" "}
-        {formatSignedINR(o.cost.plan.netCost)}
-        {o.cost.plan.discountCaptured > 0 && ` (after earning a ${formatINR(o.cost.plan.discountCaptured)} early-payment discount)`}.
+        {heroBasis(o)} The default cost {formatINR(o.cost.default.netCost)}; your plan cost {formatSignedINR(o.cost.plan.netCost)}.
       </p>
     </Card>
   );
@@ -184,7 +181,7 @@ function StockCard({ o }: { o: OutcomeResult }) {
 }
 
 function CostCard({ o }: { o: OutcomeResult }) {
-  const { plan, default: def, moneySaved } = o.cost;
+  const { plan, default: def, moneySaved, fromCheaperFunding } = o.cost;
   const row = "flex justify-between gap-3 py-1.5";
   return (
     <Card aria-label="Cost of funds">
@@ -196,7 +193,7 @@ function CostCard({ o }: { o: OutcomeResult }) {
         </div>
         {plan.topUpCost > 0 && (
           <div className={`${row} text-xs text-muted`}>
-            <dt>…including a top-up for cash the plan left uncovered</dt>
+            <dt>…including the cost of cash drawn from standby</dt>
             <dd className="tabular-nums">{formatINR(plan.topUpCost)}</dd>
           </div>
         )}
@@ -211,18 +208,30 @@ function CostCard({ o }: { o: OutcomeResult }) {
           <dd className="tabular-nums">{formatSignedINR(plan.netCost)}</dd>
         </div>
         <div className={`${row} font-medium`}>
-          <dt>Default: {formatINR(def.amount)} on the credit line, pay on the due date</dt>
+          <dt>
+            Default: {formatINR(def.credit.amount)} on the credit line
+            {def.overdraft.amount > 0 && ` + ${formatINR(def.overdraft.amount)} on your bank overdraft`}, paid on the due date
+          </dt>
           <dd className="tabular-nums">{formatINR(def.netCost)}</dd>
+        </div>
+        <div className={row}>
+          <dt>…of the saving, from cheaper funding</dt>
+          <dd className="tabular-nums">{formatSignedINR(fromCheaperFunding)}</dd>
+        </div>
+        <div className={row}>
+          <dt>…and from the early-payment discount</dt>
+          <dd className="tabular-nums">{formatINR(plan.discountCaptured)}</dd>
         </div>
         <div className={`${row} font-semibold`}>
           <dt>Money saved</dt>
           <dd className="tabular-nums">{formatSignedINR(moneySaved)}</dd>
         </div>
       </dl>
-      {def.exceedsCreditLimit && (
-        <p className="mt-2 text-xs text-muted">
-          The default would need more than your {formatINR(merchant.creditLineLimit)} credit limit, so it could not really have been drawn:
-          it is shown only as the comparison.
+      <p className="mt-2 text-xs text-muted">The default: {def.label}.</p>
+      {!def.coversWholeGap && (
+        <p className="mt-1 text-xs text-amber-800">
+          Credit line and overdraft together cannot cover the default&apos;s whole gap: {formatINR(def.uncovered)} would be left
+          unpaid. Its cost above covers only what it could draw, so your real saving is, if anything, bigger.
         </p>
       )}
     </Card>
@@ -244,8 +253,10 @@ function BorrowingCard({ o }: { o: OutcomeResult }) {
       </p>
       {b.underFunded > 0 && (
         <p role="alert" className="mt-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
-          The real need was {formatINR(b.underFunded)} more than the plan covered. You would have needed a top-up; its cost is
-          in the figures above.
+          The real need was {formatINR(b.underFunded)} more than the plan covered.{" "}
+          {b.drawnFromStandby > 0 && <>{formatINR(b.drawnFromStandby)} would have been drawn from standby (unused credit-line headroom). </>}
+          {b.beyondStandby > 0 && <>{formatINR(b.beyondStandby)} is more than the standby headroom could cover. </>}
+          The cost is in the figures above.
         </p>
       )}
       {b.unnecessary === 0 && b.underFunded === 0 && (

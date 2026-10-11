@@ -200,9 +200,17 @@ export function templateSummary(f: ResultsFacts, language: Language): string {
       ? `${f.pairsLeftOver} of ${f.pairsOrdered} pairs were left over`
       : `all ${f.pairsOrdered} pairs sold`;
   const main = hi ? `${money}; ${sales} और ${stock}।` : `${money}; ${sales} and ${stock}.`;
-  if (f.uncoveredNeedRupees <= 0) return main;
-  const warn = hi
-    ? ` असली नकदी की ज़रूरत का ${inr(f.uncoveredNeedRupees)} प्लान में कवर नहीं था, इसलिए उतना और उधार लेना पड़ता।`
-    : ` The plan left ${inr(f.uncoveredNeedRupees)} of the real cash need uncovered, so it would have needed a top-up.`;
+  if (f.drawnFromStandbyRupees <= 0 && f.beyondStandbyRupees <= 0) return main;
+  let warn = "";
+  if (f.drawnFromStandbyRupees > 0) {
+    warn += hi
+      ? ` प्लान के बाद ज़रूरी बची नकदी में से ${inr(f.drawnFromStandbyRupees)} स्टैंडबाय (न निकाली गई क्रेडिट लाइन की गुंजाइश) से निकालने पड़ते।`
+      : ` ${inr(f.drawnFromStandbyRupees)} of the extra cash needed would have been drawn from standby (unused credit-line headroom).`;
+  }
+  if (f.beyondStandbyRupees > 0) {
+    warn += hi
+      ? ` ${inr(f.beyondStandbyRupees)} स्टैंडबाय की गुंजाइश से भी ज़्यादा था।`
+      : ` A further ${inr(f.beyondStandbyRupees)} was more than the standby could cover.`;
+  }
   return main + warn;
 }

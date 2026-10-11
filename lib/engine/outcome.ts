@@ -12,6 +12,7 @@ import type { Merchant } from "../data/merchant";
 import { CONFIG } from "./config";
 import { computeGap } from "./gap";
 import type { ViewResult } from "./index";
+import { standbyFor } from "./standby";
 import type { RightSizing } from "./stock";
 
 // ---------- The simulated outcomes the founder can pick ----------
@@ -81,10 +82,31 @@ export interface OutcomeResult {
   cost: {
     /** fundsCost includes `topUpCost`: the credit-line cost of any real peak need the approved plan did not cover. */
     plan: { fundsCost: number; topUpCost: number; discountCaptured: number; netCost: number };
-    /** Draw the whole gap on the credit line and pay on the due date, with no early-payment discount. */
-    default: { amount: number; fundsCost: number; netCost: number; exceedsCreditLimit: boolean };
+    /**
+     * The default: draw the gap on the credit line up to its limit, then on the founder's bank overdraft for the rest,
+     * and pay on the due date with no early-payment discount. It never draws more than a source's limit.
+     */
+    default: {
+      /** The gap the default has to cover. */
+      amount: number;
+      credit: { amount: number; cost: number };
+      overdraft: { amount: number; cost: number };
+      /**
+       * What neither source can cover. The default is always drawable (it never takes more than either limit), but
+       * above the two limits together it cannot cover the whole gap. Its cost then covers only what it can draw, so
+       * the saving shown is understated, never overstated.
+       */
+      uncovered: number;
+      coversWholeGap: boolean;
+      fundsCost: number;
+      netCost: number;
+      /** What the default is, in words, for the screen. */
+      label: string;
+    };
     /** default.netCost - plan.netCost, exactly. Positive means the plan was cheaper. */
     moneySaved: number;
+    /** moneySaved = fromCheaperFunding + discountCaptured, exactly. */
+    fromCheaperFunding: number;
   };
   borrowing: {
     borrowed: number;
@@ -95,6 +117,9 @@ export interface OutcomeResult {
     unnecessary: number;
     /** The real peak need that the plan did not cover. */
     underFunded: number;
+    /** The part of that drawn from standby (unused credit-line headroom), and the part beyond even that. */
+    drawnFromStandby: number;
+    beyondStandby: number;
   };
   learned: {
     /** `vsEstimatePercent`: observed against the system's own 1.4x estimate, signed. */
@@ -153,7 +178,13 @@ export function computeOutcome(input: OutcomeInput): OutcomeResult {
     plannedPeakNeed: plan.gap,
     unnecessary: Math.max(0, plan.borrowed - loanNeeded),
     underFunded: Math.max(0, actualPeakNeed - plan.covered),
+    drawnFromStandby: 0,
+    beyondStandby: 0,
   };
+  // A top-up at lower sales is drawn from standby: unused credit-line headroom, undrawn until needed.
+  const standby = standbyFor(approved);
+  borrowing.drawnFromStandby = Math.min(borrowing.underFunded, standby.headroom);
+  borrowing.beyondStandby = borrowing.underFunded - borrowing.drawnFromStandby;
 
   // --- Cost of funds: the plan against drawing the whole gap on the credit line ---
   // The plan's loans and fees were fixed at approval, so its cost is the cost as approved, plus the credit-line cost
@@ -167,18 +198,30 @@ export function computeOutcome(input: OutcomeInput): OutcomeResult {
   const planNet = fundsCost - discountCaptured;
 
   const creditLine = fullOrder.options.find((o) => o.id === "credit_line");
+  const overdraftLine = fullOrder.options.find((o) => o.id === "bank_overdraft");
   const defaultActualNeed = computeGap({ ...actualConditions, invoice: fullOrder.invoice, byDay: fullOrder.invoice.dueInDays }).scenarios.expected.gap;
-  const defaultAmount = Math.max(fullOrder.duePlan.gap, defaultActualNeed);
-  const defaultCost = creditLine ? round(defaultAmount * creditLine.costRate) : 0;
+  const defaultGap = Math.max(fullOrder.duePlan.gap, defaultActualNeed);
+  // Credit line first, up to its limit; the bank overdraft for the rest, up to its limit. Never more than either can give.
+  const creditAmount = Math.min(defaultGap, creditLine?.maxAmount ?? 0);
+  const overdraftAmount = Math.min(defaultGap - creditAmount, overdraftLine?.maxAmount ?? 0);
+  const creditCost = round(creditAmount * (creditLine?.costRate ?? 0));
+  const overdraftCost = round(overdraftAmount * (overdraftLine?.costRate ?? 0));
+  const defaultCost = creditCost + overdraftCost;
+  const uncovered = defaultGap - creditAmount - overdraftAmount;
   const cost: OutcomeResult["cost"] = {
     plan: { fundsCost, topUpCost, discountCaptured, netCost: planNet },
     default: {
-      amount: defaultAmount,
+      amount: defaultGap,
+      credit: { amount: creditAmount, cost: creditCost },
+      overdraft: { amount: overdraftAmount, cost: overdraftCost },
+      uncovered,
+      coversWholeGap: uncovered === 0,
       fundsCost: defaultCost,
       netCost: defaultCost,
-      exceedsCreditLimit: creditLine ? defaultAmount > creditLine.maxAmount : false,
+      label: "Credit line up to its limit, then your bank overdraft for the rest, paid on the due date, with no early-payment discount",
     },
     moneySaved: defaultCost - planNet,
+    fromCheaperFunding: defaultCost - fundsCost,
   };
 
   // --- What the system learned: move each estimate part of the way toward what was seen ---

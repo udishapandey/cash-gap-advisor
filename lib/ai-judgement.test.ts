@@ -758,6 +758,8 @@ describe("summariseOutcome: one line on how the plan did", () => {
     await summariseOutcome(facts, "hi");
     const system = systemText(fetchMock);
     expect(system).toContain("ONE sentence");
+    expect(system).toContain("drawn from standby");
+    expect(system).toContain("SECOND sentence");
     expect(system).toContain("Hindi");
     expect(system).toContain("compared with drawing the full amount on the credit line");
     expect(system).toContain("Copy them EXACTLY");

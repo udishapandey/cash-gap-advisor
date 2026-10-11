@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import type { Invoice } from "@/lib/data/invoice";
-import { merchant, SIMULATED_LABEL } from "@/lib/data/merchant";
 import { preReadSampleExtraction } from "@/lib/data/sample-extraction";
-import { runEngine } from "@/lib/engine";
 import { hashBytes, readCached, writeCached } from "@/lib/extraction-cache";
 import { formatINR } from "@/lib/format";
 import {
@@ -20,6 +19,7 @@ import {
   type InvoiceExtraction,
 } from "@/lib/invoice-extraction";
 import { ACCEPTED_EXTENSIONS, MAX_INVOICE_BYTES } from "@/lib/invoice-upload";
+import { useJourney } from "./JourneyProvider";
 
 const STORAGE_KEY = "cga.confirmedInvoice.v1";
 const SAMPLE_URL = "/samples/invoice-clean.pdf";
@@ -67,6 +67,7 @@ function Spinner() {
 }
 
 export default function InvoiceFlow() {
+  const journey = useJourney();
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   /** True only after the AI failed to read a file. The fallback buttons are shown only then. */
@@ -126,10 +127,18 @@ export default function InvoiceFlow() {
     };
   }, []);
 
-  const result = useMemo(
-    () => (confirmed ? runEngine({ merchant, invoice: confirmed.invoice }) : null),
-    [confirmed],
-  );
+  // The confirmed invoice also lives in the journey, so the later steps can use it. If this page restored
+  // a confirmed invoice that the journey doesn't have yet, hand it over.
+  const { ready, state: journeyState, setInvoice, clearInvoice } = journey;
+  useEffect(() => {
+    if (confirmed && ready && journeyState.invoice === null) setInvoice(confirmed.invoice, confirmed.notes);
+  }, [confirmed, ready, journeyState.invoice, setInvoice]);
+
+  /** The invoice is being replaced or edited: it is no longer confirmed, here or in the journey. */
+  function unconfirm() {
+    setConfirmed(null);
+    clearInvoice();
+  }
 
   /** Put values on screen for the founder to check, whatever their source. */
   function showExtraction(next: InvoiceExtraction, from: Source) {
@@ -137,7 +146,7 @@ export default function InvoiceFlow() {
     setValues(toFormValues(next));
     setEdited({});
     setFormErrors({});
-    setConfirmed(null);
+    unconfirm();
     setSource(from);
     setError(null);
     setAiFailed(false);
@@ -179,7 +188,7 @@ export default function InvoiceFlow() {
     abortRef.current = controller;
     setPhase("reading");
     setElapsed(0);
-    setConfirmed(null);
+    unconfirm();
     try {
       const body = new FormData();
       body.append("file", file);
@@ -253,7 +262,7 @@ export default function InvoiceFlow() {
     setValues((v) => (v ? { ...v, [key]: value } : v));
     setEdited((e) => ({ ...e, [key]: true }));
     setFormErrors((e) => ({ ...e, [key]: undefined }));
-    setConfirmed(null); // any change means the founder must confirm again
+    unconfirm(); // any change means the founder must confirm again
   }
 
   function confirm() {
@@ -272,6 +281,7 @@ export default function InvoiceFlow() {
     setError(null);
     setFormErrors({});
     setConfirmed({ invoice: mapped.invoice, notes: mapped.notes });
+    setInvoice(mapped.invoice, mapped.notes);
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ extraction, values, edited, source }));
     } catch {
@@ -286,7 +296,7 @@ export default function InvoiceFlow() {
     setValues(null);
     setEdited({});
     setFormErrors({});
-    setConfirmed(null);
+    unconfirm();
     setError(null);
     setAiFailed(false);
     setLastFile(null);
@@ -531,9 +541,9 @@ export default function InvoiceFlow() {
         </section>
       )}
 
-      {confirmed && result && (
-        <section className="rounded-xl border border-line bg-card p-5">
-          <h2 className="text-lg font-semibold">Cash gap for this invoice</h2>
+      {confirmed && (
+        <section className="rounded-xl border border-green-300 bg-card p-5">
+          <h2 className="text-lg font-semibold">Invoice confirmed ✓</h2>
           <p className="mt-1 text-sm text-muted">
             {confirmed.invoice.supplier}: {formatINR(confirmed.invoice.amount)} for {confirmed.invoice.units} pairs,
             due in {confirmed.invoice.dueInDays} days.
@@ -541,47 +551,19 @@ export default function InvoiceFlow() {
           {source !== "live" && (
             <p className="mt-1 text-xs text-muted">Values from: {SOURCE_NOTICE[source].title.toLowerCase()}.</p>
           )}
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {(
-              [
-                ["Low sales", result.views.keepFull.gap.scenarios.low],
-                ["Expected sales", result.views.keepFull.gap.scenarios.expected],
-                ["High sales", result.views.keepFull.gap.scenarios.high],
-              ] as const
-            ).map(([label, s]) => (
-              <div key={label} className="rounded-lg border border-line p-3">
-                <p className="text-xs uppercase tracking-wide text-muted">
-                  {label} ({s.uplift}x)
-                </p>
-                <p className="mt-1 text-xl font-semibold">{formatINR(s.gap)}</p>
-                <p className="text-xs text-muted">{s.gap === 0 ? "No gap" : "short by the due date"}</p>
-              </div>
-            ))}
-          </div>
-
-          <p className="mt-4 text-sm">
-            Gap range: <strong>{formatINR(result.views.keepFull.gap.gapMin)}</strong> to{" "}
-            <strong>{formatINR(result.views.keepFull.gap.gapMax)}</strong>
-          </p>
-          {result.views.keepFull.gap.lowConfidence && (
-            <p className="mt-2 inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
-              Low confidence: wide forecast range
-            </p>
-          )}
-
           {confirmed.notes.length > 0 && (
-            <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-muted">
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted">
               {confirmed.notes.map((n) => (
                 <li key={n}>{n}</li>
               ))}
             </ul>
           )}
-
-          <p className="mt-4 text-xs text-amber-700">
-            {SIMULATED_LABEL}: sales, COD payouts and bank balance for {merchant.name} are made up. The invoice
-            is the only real input.
-          </p>
+          <Link
+            href="/gap"
+            className="mt-4 inline-block rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
+          >
+            Continue to the cash gap →
+          </Link>
         </section>
       )}
     </div>

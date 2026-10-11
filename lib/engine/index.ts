@@ -27,6 +27,8 @@ export interface EngineInput {
   invoice: Invoice;
   /** What-if: forecast sales are this % lower. 0 = no change. */
   salesDropPercent?: number;
+  /** Cash the founder has available elsewhere (another account, savings). Default 0. */
+  cashElsewhere?: number;
   /** Which sales scenario the plan and the order size are built for. Default: expected. */
   planScenario?: Scenario;
   overdraftRatePct?: number;
@@ -94,7 +96,8 @@ function computeView(
   const exclude: OptionId[] = [...(input.exclude ?? []), ...(id === "keep_full" ? (["split_order"] as OptionId[]) : [])];
 
   const common = { merchant, invoice, demandUnits: demand, overdraftRatePct: input.overdraftRatePct };
-  const gapAt = (byDay?: number) => computeGap({ merchant, invoice, salesDropPercent, byDay });
+  const gapAt = (byDay?: number) =>
+    computeGap({ merchant, invoice, salesDropPercent, byDay, cashElsewhere: input.cashElsewhere });
 
   const gap = gapAt();
   const earlyGap = gapAt(earlyDay);

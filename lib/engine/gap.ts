@@ -1,6 +1,6 @@
 // The cash-gap engine. Plain TypeScript, no AI. All amounts in ₹.
 //
-// Cash available by day D = bank balance
+// Cash available by day D = bank balance + cash the founder has elsewhere
 //   + prepaid sales already placed that settle by D          (settlements in transit)
 //   + forecast prepaid sales that settle by D                (placed by day D - T)
 //   + COD cash arriving by D x (1 - return rate)
@@ -18,6 +18,8 @@ export interface GapInput {
   salesDropPercent?: number;
   /** Measure the gap at this day (default: the invoice due date). */
   byDay?: number;
+  /** Cash the founder has available elsewhere (another account, savings). Added to cash in. Default 0. */
+  cashElsewhere?: number;
 }
 
 export interface CashBreakdown {
@@ -25,6 +27,7 @@ export interface CashBreakdown {
   settlementsInTransit: number;
   forecastPrepaid: number;
   codPayouts: number; // already net of returns
+  cashElsewhere: number; // entered by the founder, not simulated
   totalIn: number;
 }
 
@@ -87,9 +90,9 @@ export function codArrivalShare(
 
 function computeScenario(
   scenario: Scenario,
-  input: Required<Pick<GapInput, "merchant" | "invoice" | "byDay" | "salesDropPercent">>,
+  input: Required<Pick<GapInput, "merchant" | "invoice" | "byDay" | "salesDropPercent" | "cashElsewhere">>,
 ): ScenarioResult {
-  const { merchant, invoice, byDay, salesDropPercent } = input;
+  const { merchant, invoice, byDay, salesDropPercent, cashElsewhere } = input;
   const uplift = CONFIG.scenarioUplift[scenario];
   const forecastFactor = uplift * (1 - salesDropPercent / 100);
   const base = baselineDaily(merchant);
@@ -123,9 +126,11 @@ function computeScenario(
     settlementsInTransit: round(inTransit),
     forecastPrepaid: round(forecastPrepaid),
     codPayouts: round(codGross * (1 - merchant.codReturnRate)),
+    cashElsewhere: round(cashElsewhere),
     totalIn: 0,
   };
-  cash.totalIn = cash.bankBalance + cash.settlementsInTransit + cash.forecastPrepaid + cash.codPayouts;
+  cash.totalIn =
+    cash.bankBalance + cash.settlementsInTransit + cash.forecastPrepaid + cash.codPayouts + cash.cashElsewhere;
 
   const invoiceDue = round(amountDueOn(invoice, byDay));
   const otherOutflows = round(merchant.otherOutflowsPerDay * byDay);
@@ -148,7 +153,8 @@ function computeScenario(
 export function computeGap(input: GapInput): GapResult {
   const byDay = input.byDay ?? input.invoice.dueInDays;
   const salesDropPercent = Math.min(100, Math.max(0, input.salesDropPercent ?? 0));
-  const args = { merchant: input.merchant, invoice: input.invoice, byDay, salesDropPercent };
+  const cashElsewhere = Math.max(0, input.cashElsewhere ?? 0);
+  const args = { merchant: input.merchant, invoice: input.invoice, byDay, salesDropPercent, cashElsewhere };
 
   const scenarios = Object.fromEntries(
     SCENARIOS.map((s) => [s, computeScenario(s, args)]),

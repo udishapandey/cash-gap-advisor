@@ -23,6 +23,8 @@ Invoice reading: `extractInvoice` in `lib/ai.ts` (the only AI call that sees a f
 
 Check the AI reader against a real file: `npm run try:extract` (clean sample) or `npm run try:extract -- path/to/file.png`. It times the call and prints the provider's real error if it fails. It makes a live AI call, so run it only when asked (see rule 7).
 
+Decision journey: `/invoice` → `/gap` → `/options` → `/approve` (screens in `components/*Screen.tsx`, shared state in `components/JourneyProvider.tsx`, rules in `lib/journey.ts`, plain-text "Why this plan" in `lib/explain.ts`). Every number on those screens comes from `runEngine()`. Keep logic that can be tested in `lib/`, not inside components.
+
 Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate lives in `config.ts`). Simulated data: `lib/data/`. Every assumption is listed in `docs/ASSUMPTIONS.md`; update it whenever an assumption changes.
 
 ## Rules
@@ -34,6 +36,7 @@ Money engine: `lib/engine/` (`gap.ts`, `options.ts`, `index.ts`; every rate live
 5. **Label simulated data as simulated in the UI.** Any fake number, transaction or customer must be visibly marked "Simulated".
 6. **Invoice files are private.** Process them in memory only. Never save one to disk, and never log or echo its contents or file name (including in error messages). The AI only reads printed values: it returns null for anything missing, quotes its evidence, and never calculates amounts or dates.
 7. **No live AI calls unless the founder asks.** Tests use mocks. For development use `AI_MOCK=true`. Don't run `npm run try:extract` or any live extraction on your own: the free tier allows 20 requests a day per model.
+8. **Credit is separate and never pre-selected.** Credit is shown apart from non-credit actions, with a Key Fact Statement before approval. No plan, consent box or approval is ever pre-chosen, and the founder approves every credit action.
 
 ## AI provider
 

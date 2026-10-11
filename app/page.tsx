@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { merchant, SIMULATED_LABEL } from "@/lib/data/merchant";
 import { sampleInvoice } from "@/lib/data/invoice";
 import { runEngine } from "@/lib/engine";
@@ -25,6 +26,12 @@ export default function Home() {
         <p className="text-sm text-muted">
           Supplier invoice of {formatINR(sampleInvoice.amount)} due in {gap.byDay} days
         </p>
+        <Link
+          href="/invoice"
+          className="mt-3 inline-block rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+        >
+          Got a supplier bill you can&apos;t fully pay? Start here →
+        </Link>
       </div>
 
       <section className="grid gap-4 sm:grid-cols-3">

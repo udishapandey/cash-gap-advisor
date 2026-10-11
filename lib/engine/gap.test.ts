@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { merchant } from "../data/merchant";
 import { sampleInvoice } from "../data/invoice";
 import { amountDueOn, codArrivalShare, computeGap } from "./gap";
+import { runEngine } from "./index";
 import { flatMerchant } from "./testing";
 
 describe("COD arrival timing (5-9 day payout delay)", () => {
@@ -109,5 +110,45 @@ describe("early-payment discount in the amount due", () => {
     expect(amountDueOn(sampleInvoice, 7)).toBe(490_000);
     expect(amountDueOn(sampleInvoice, 8)).toBe(500_000);
     expect(amountDueOn(sampleInvoice, 10)).toBe(500_000);
+  });
+});
+
+describe("cash available elsewhere", () => {
+  const m = flatMerchant();
+  it("adds to cash in, one for one, and shrinks the gap by the same amount", () => {
+    const base = computeGap({ merchant: m, invoice: sampleInvoice });
+    const more = computeGap({ merchant: m, invoice: sampleInvoice, cashElsewhere: 50_000 });
+    expect(more.scenarios.expected.cash.cashElsewhere).toBe(50_000);
+    expect(more.scenarios.expected.cash.totalIn).toBe(base.scenarios.expected.cash.totalIn + 50_000);
+    expect(more.gapExpected).toBe(base.gapExpected - 50_000); // 249,600 -> 199,600
+    expect(more.gapMax).toBe(base.gapMax - 50_000); // 422,400 -> 372,400
+    expect(more.gapMin).toBe(base.gapMin - 50_000); // 76,800 -> 26,800
+  });
+  it("never lets a gap go below zero: extra cash beyond the gap becomes a surplus", () => {
+    const more = computeGap({ merchant: m, invoice: sampleInvoice, cashElsewhere: 100_000 });
+    expect(more.gapMin).toBe(0); // 76,800 - 100,000 would be negative
+    expect(more.scenarios.high.surplus).toBe(23_200);
+  });
+  it("defaults to zero and ignores a negative amount", () => {
+    const base = computeGap({ merchant: m, invoice: sampleInvoice });
+    expect(base.scenarios.expected.cash.cashElsewhere).toBe(0);
+    expect(computeGap({ merchant: m, invoice: sampleInvoice, cashElsewhere: -500 })).toEqual(base);
+  });
+  it("turns a gap into a surplus once it is big enough", () => {
+    const g = computeGap({ merchant: m, invoice: sampleInvoice, cashElsewhere: 1_000_000 });
+    expect(g.gapExpected).toBe(0);
+    expect(g.scenarios.expected.surplus).toBe(750_400);
+  });
+  it("reaches the whole engine, so the plan shrinks too", () => {
+    const base = runEngine({ merchant, invoice: sampleInvoice });
+    const more = runEngine({ merchant, invoice: sampleInvoice, cashElsewhere: 150_000 });
+    expect(more.views.keepFull.gap.gapExpected).toBe(base.views.keepFull.gap.gapExpected - 150_000);
+    expect(more.views.keepFull.loan).toBeLessThan(base.views.keepFull.loan);
+  });
+  it("is also used when measuring the early-payment day and the extension day", () => {
+    const more = runEngine({ merchant, invoice: sampleInvoice, cashElsewhere: 150_000 });
+    const base = runEngine({ merchant, invoice: sampleInvoice });
+    expect(more.views.keepFull.earlyGap.gapExpected).toBe(base.views.keepFull.earlyGap.gapExpected - 150_000);
+    expect(more.views.keepFull.askFirst.gapAtExtendedDate).toBeLessThanOrEqual(base.views.keepFull.askFirst.gapAtExtendedDate);
   });
 });

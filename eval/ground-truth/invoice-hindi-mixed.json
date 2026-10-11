@@ -1,0 +1,23 @@
+{
+  "file": "public/samples/invoice-hindi-mixed.png",
+  "printedText": "eval/printed-text/invoice-hindi-mixed.txt",
+  "layout": "Handwritten-looking notes on ruled notebook paper, slightly crooked. Every label is Hindi and English ('बिल नं. / Bill No'); Hindi and English both appear in values. Dates are DD-MM-YYYY. The discount appears once in Hindi and once in English.",
+  "notes": "The supplier name is printed in both scripts; either is accepted.",
+  "alsoAccept": {
+    "supplierName": [
+      "श्री लक्ष्मी फुटवियर"
+    ]
+  },
+  "fields": {
+    "supplierName": "Shri Laxmi Footwear",
+    "invoiceNumber": "SLF-318",
+    "invoiceDate": "2026-10-12",
+    "dueDate": "2026-10-24",
+    "totalAmount": 490000,
+    "quantity": 350,
+    "unitPrice": 1400,
+    "earlyPaymentDiscountPercent": 3,
+    "earlyPaymentDiscountDays": 7,
+    "lateFeePercentPerMonth": 2
+  }
+}

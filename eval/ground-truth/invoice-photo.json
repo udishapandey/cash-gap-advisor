@@ -1,0 +1,18 @@
+{
+  "file": "public/samples/invoice-photo.png",
+  "printedText": "eval/printed-text/invoice-photo.txt",
+  "layout": "The same invoice as invoice-clean.pdf, photographed at an angle on a table (perspective, shadow, lower resolution for the small print).",
+  "notes": "Same printed text and same answers as the clean PDF. Tests how much a poor photo costs.",
+  "fields": {
+    "supplierName": "Shree Ganesh Footwear Pvt Ltd",
+    "invoiceNumber": "SGF/26-27/0142",
+    "invoiceDate": "2026-10-11",
+    "dueDate": "2026-10-21",
+    "totalAmount": 500000,
+    "quantity": 500,
+    "unitPrice": 1000,
+    "earlyPaymentDiscountPercent": 2,
+    "earlyPaymentDiscountDays": 7,
+    "lateFeePercentPerMonth": 1.5
+  }
+}

@@ -1,0 +1,21 @@
+SYNTHETIC SAMPLE | NOT A REAL INVOICE | Created for the Cash Gap Advisor prototype
+Shree Ganesh Footwear Pvt Ltd
+Plot 14, Footwear Park, Agra, Uttar Pradesh 282001
+Phone: 00000 00000 | accounts@example.invalid
+INVOICE
+Invoice No: SGF/26-27/0142
+Invoice date: 11 Oct 2026
+Due date: 21 Oct 2026
+BILL TO
+Rahul's shoe brand
+Hyderabad, Telangana
+Description Qty Rate (₹) Amount (₹)
+Festive footwear range, assorted sizes 500 pairs 1,000.00 5,00,000.00
+Total ₹ 5,00,000.00
+Rupees Five Lakh Only
+PAYMENT DETAILS
+Bank: Synthetic Bank Ltd A/c name: Shree Ganesh Footwear Pvt Ltd
+A/c no: 0000 0000 0000 IFSC: SYNT0000000
+Authorised signatory (synthetic)
+2% discount if paid within 7 days of invoice date. Late payment charged at 1.5% per month.
+Synthetic document generated for a prototype. Names, addresses and bank details are fictional.

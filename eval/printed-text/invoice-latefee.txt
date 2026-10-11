@@ -1,0 +1,38 @@
+BHARAT SOLE & SPORTS PVT LTD
+Plot 9, Industrial Focal Point, Ludhiana, Punjab 141010
+INVOICE
+SYNTHETIC SAMPLE  |  NOT A REAL INVOICE  |  Created for the Cash Gap Advisor prototype
+Invoice number
+BSS-2026-0907
+Invoice date
+12 Oct 2026
+Customer
+Rahul's shoe brand, Hyderabad
+Payment terms
+Due within 15 days of invoice date
+No.
+Item
+Qty
+Rate (₹)
+Amount (₹)
+1
+Running shoe, style RS-11
+300 pairs
+900.00
+2,70,000.00
+2
+Rubber slipper, style SL-02
+200 pairs
+650.00
+1,30,000.00
+Total quantity
+500 pairs
+Grand total
+₹ 4,00,000.00
+(Rupees Four Lakh only)
+Terms of payment
+Late payment charge: 1.5% per month on the overdue amount.
+Please quote the invoice number with your payment.
+Bank: Synthetic Bank Ltd   A/c name: Bharat Sole & Sports Pvt Ltd   A/c no: 0000 0000 0000   IFSC: SYNT0000000
+Authorised signatory (synthetic)
+Synthetic document generated for a prototype. Names, addresses and bank details are fictional.

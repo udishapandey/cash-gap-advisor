@@ -1,0 +1,18 @@
+{
+  "file": "public/samples/invoice-hidden-discount.pdf",
+  "printedText": "eval/printed-text/invoice-hidden-discount.txt",
+  "layout": "Serif letterhead, 'Tax invoice' with an HSN column. The 2.5% / 5-day early-payment discount appears ONLY as term 3 of 5 in tiny grey footer type. The late fee (2% per month) is in normal-size payment terms.",
+  "notes": "Tests whether the model finds a clause buried in fine print.",
+  "fields": {
+    "supplierName": "Mehta Leather Works LLP",
+    "invoiceNumber": "MLW/2627/0318",
+    "invoiceDate": "2026-10-12",
+    "dueDate": "2026-10-22",
+    "totalAmount": 500000,
+    "quantity": 400,
+    "unitPrice": 1250,
+    "earlyPaymentDiscountPercent": 2.5,
+    "earlyPaymentDiscountDays": 5,
+    "lateFeePercentPerMonth": 2
+  }
+}

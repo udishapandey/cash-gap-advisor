@@ -1,0 +1,614 @@
+{
+  "model": "gemini-3.5-flash-lite",
+  "at": "2026-10-11T18:36:50.504Z",
+  "calls": 5,
+  "totalMs": 13067,
+  "invoices": [
+    {
+      "name": "invoice-clean",
+      "file": "public/samples/invoice-clean.pdf",
+      "layout": "Clean PDF: the baseline. Dates, totals and the discount/late-fee line are all printed plainly (the discount and late fee sit in a small footer line).",
+      "ok": true,
+      "modelUsed": "gemini-3.5-flash-lite",
+      "ms": 2489,
+      "score": {
+        "fieldsCorrect": 10,
+        "fieldsTotal": 10,
+        "fields": [
+          {
+            "key": "supplierName",
+            "expected": "Shree Ganesh Footwear Pvt Ltd",
+            "got": "Shree Ganesh Footwear Pvt Ltd",
+            "correct": true,
+            "evidence": "Shree Ganesh Footwear Pvt Ltd",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "invoiceNumber",
+            "expected": "SGF/26-27/0142",
+            "got": "SGF/26-27/0142",
+            "correct": true,
+            "evidence": "SGF/26-27/0142",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "invoiceDate",
+            "expected": "2026-10-11",
+            "got": "2026-10-11",
+            "correct": true,
+            "evidence": "11 Oct 2026",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "dueDate",
+            "expected": "2026-10-21",
+            "got": "2026-10-21",
+            "correct": true,
+            "evidence": "21 Oct 2026",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "totalAmount",
+            "expected": 500000,
+            "got": 500000,
+            "correct": true,
+            "evidence": "5,00,000.00",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "quantity",
+            "expected": 500,
+            "got": 500,
+            "correct": true,
+            "evidence": "500 pairs",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "unitPrice",
+            "expected": 1000,
+            "got": 1000,
+            "correct": true,
+            "evidence": "1,000.00",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "earlyPaymentDiscountPercent",
+            "expected": 2,
+            "got": 2,
+            "correct": true,
+            "evidence": "2%",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "earlyPaymentDiscountDays",
+            "expected": 7,
+            "got": 7,
+            "correct": true,
+            "evidence": "7 days",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "lateFeePercentPerMonth",
+            "expected": 1.5,
+            "got": 1.5,
+            "correct": true,
+            "evidence": "1.5%",
+            "evidenceExact": true,
+            "confidence": "high"
+          }
+        ],
+        "discount": {
+          "present": true,
+          "outcome": "caught"
+        },
+        "lateFee": {
+          "present": true,
+          "outcome": "caught"
+        },
+        "evidenceAllExact": true,
+        "evidenceChecked": 10,
+        "evidenceBad": [],
+        "confidence": {
+          "high": 10,
+          "medium": 0,
+          "low": 0
+        },
+        "wrongButHigh": 0
+      }
+    },
+    {
+      "name": "invoice-photo",
+      "file": "public/samples/invoice-photo.png",
+      "layout": "The same invoice as invoice-clean.pdf, photographed at an angle on a table (perspective, shadow, lower resolution for the small print).",
+      "ok": true,
+      "modelUsed": "gemini-3.5-flash-lite",
+      "ms": 2787,
+      "score": {
+        "fieldsCorrect": 10,
+        "fieldsTotal": 10,
+        "fields": [
+          {
+            "key": "supplierName",
+            "expected": "Shree Ganesh Footwear Pvt Ltd",
+            "got": "Shree Ganesh Footwear Pvt Ltd",
+            "correct": true,
+            "evidence": "Shree Ganesh Footwear Pvt Ltd",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "invoiceNumber",
+            "expected": "SGF/26-27/0142",
+            "got": "SGF/26-27/0142",
+            "correct": true,
+            "evidence": "SGF/26-27/0142",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "invoiceDate",
+            "expected": "2026-10-11",
+            "got": "2026-10-11",
+            "correct": true,
+            "evidence": "11 Oct 2026",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "dueDate",
+            "expected": "2026-10-21",
+            "got": "2026-10-21",
+            "correct": true,
+            "evidence": "21 Oct 2026",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "totalAmount",
+            "expected": 500000,
+            "got": 500000,
+            "correct": true,
+            "evidence": "5,00,000.00",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "quantity",
+            "expected": 500,
+            "got": 500,
+            "correct": true,
+            "evidence": "500",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "unitPrice",
+            "expected": 1000,
+            "got": 1000,
+            "correct": true,
+            "evidence": "1,000.00",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "earlyPaymentDiscountPercent",
+            "expected": 2,
+            "got": 2,
+            "correct": true,
+            "evidence": "2%",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "earlyPaymentDiscountDays",
+            "expected": 7,
+            "got": 7,
+            "correct": true,
+            "evidence": "7 days",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "lateFeePercentPerMonth",
+            "expected": 1.5,
+            "got": 1.5,
+            "correct": true,
+            "evidence": "1.5% per month",
+            "evidenceExact": true,
+            "confidence": "high"
+          }
+        ],
+        "discount": {
+          "present": true,
+          "outcome": "caught"
+        },
+        "lateFee": {
+          "present": true,
+          "outcome": "caught"
+        },
+        "evidenceAllExact": true,
+        "evidenceChecked": 10,
+        "evidenceBad": [],
+        "confidence": {
+          "high": 10,
+          "medium": 0,
+          "low": 0
+        },
+        "wrongButHigh": 0
+      }
+    },
+    {
+      "name": "invoice-hidden-discount",
+      "file": "public/samples/invoice-hidden-discount.pdf",
+      "layout": "Serif letterhead, 'Tax invoice' with an HSN column. The 2.5% / 5-day early-payment discount appears ONLY as term 3 of 5 in tiny grey footer type. The late fee (2% per month) is in normal-size payment terms.",
+      "ok": true,
+      "modelUsed": "gemini-3.5-flash-lite",
+      "ms": 2494,
+      "score": {
+        "fieldsCorrect": 10,
+        "fieldsTotal": 10,
+        "fields": [
+          {
+            "key": "supplierName",
+            "expected": "Mehta Leather Works LLP",
+            "got": "MEHTA LEATHER WORKS LLP",
+            "correct": true,
+            "evidence": "MEHTA LEATHER WORKS LLP",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "invoiceNumber",
+            "expected": "MLW/2627/0318",
+            "got": "MLW/2627/0318",
+            "correct": true,
+            "evidence": "MLW/2627/0318",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "invoiceDate",
+            "expected": "2026-10-12",
+            "got": "2026-10-12",
+            "correct": true,
+            "evidence": "12 Oct 2026",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "dueDate",
+            "expected": "2026-10-22",
+            "got": "2026-10-22",
+            "correct": true,
+            "evidence": "22 Oct 2026",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "totalAmount",
+            "expected": 500000,
+            "got": 500000,
+            "correct": true,
+            "evidence": "5,00,000.00",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "quantity",
+            "expected": 400,
+            "got": 400,
+            "correct": true,
+            "evidence": "400",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "unitPrice",
+            "expected": 1250,
+            "got": 1250,
+            "correct": true,
+            "evidence": "1,250.00",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "earlyPaymentDiscountPercent",
+            "expected": 2.5,
+            "got": 2.5,
+            "correct": true,
+            "evidence": "2.5%",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "earlyPaymentDiscountDays",
+            "expected": 5,
+            "got": 5,
+            "correct": true,
+            "evidence": "5 days",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "lateFeePercentPerMonth",
+            "expected": 2,
+            "got": 2,
+            "correct": true,
+            "evidence": "2%",
+            "evidenceExact": true,
+            "confidence": "high"
+          }
+        ],
+        "discount": {
+          "present": true,
+          "outcome": "caught"
+        },
+        "lateFee": {
+          "present": true,
+          "outcome": "caught"
+        },
+        "evidenceAllExact": true,
+        "evidenceChecked": 10,
+        "evidenceBad": [],
+        "confidence": {
+          "high": 10,
+          "medium": 0,
+          "low": 0
+        },
+        "wrongButHigh": 0
+      }
+    },
+    {
+      "name": "invoice-latefee",
+      "file": "public/samples/invoice-latefee.pdf",
+      "layout": "Orange header band, bordered grid, TWO line items in a table with a printed 'Total quantity 500 pairs'. A late fee (1.5% per month) and nothing else: no discount anywhere.",
+      "ok": true,
+      "modelUsed": "gemini-3.5-flash-lite",
+      "ms": 2365,
+      "score": {
+        "fieldsCorrect": 10,
+        "fieldsTotal": 10,
+        "fields": [
+          {
+            "key": "supplierName",
+            "expected": "Bharat Sole & Sports Pvt Ltd",
+            "got": "BHARAT SOLE & SPORTS PVT LTD",
+            "correct": true,
+            "evidence": "BHARAT SOLE & SPORTS PVT LTD",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "invoiceNumber",
+            "expected": "BSS-2026-0907",
+            "got": "BSS-2026-0907",
+            "correct": true,
+            "evidence": "BSS-2026-0907",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "invoiceDate",
+            "expected": "2026-10-12",
+            "got": "2026-10-12",
+            "correct": true,
+            "evidence": "12 Oct 2026",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "dueDate",
+            "expected": null,
+            "got": null,
+            "correct": true,
+            "evidence": null,
+            "evidenceExact": null,
+            "confidence": "low"
+          },
+          {
+            "key": "totalAmount",
+            "expected": 400000,
+            "got": 400000,
+            "correct": true,
+            "evidence": "4,00,000.00",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "quantity",
+            "expected": 500,
+            "got": 500,
+            "correct": true,
+            "evidence": "500 pairs",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "unitPrice",
+            "expected": null,
+            "got": null,
+            "correct": true,
+            "evidence": null,
+            "evidenceExact": null,
+            "confidence": "low"
+          },
+          {
+            "key": "earlyPaymentDiscountPercent",
+            "expected": null,
+            "got": null,
+            "correct": true,
+            "evidence": null,
+            "evidenceExact": null,
+            "confidence": "low"
+          },
+          {
+            "key": "earlyPaymentDiscountDays",
+            "expected": null,
+            "got": null,
+            "correct": true,
+            "evidence": null,
+            "evidenceExact": null,
+            "confidence": "low"
+          },
+          {
+            "key": "lateFeePercentPerMonth",
+            "expected": 1.5,
+            "got": 1.5,
+            "correct": true,
+            "evidence": "1.5% per month",
+            "evidenceExact": true,
+            "confidence": "high"
+          }
+        ],
+        "discount": {
+          "present": false,
+          "outcome": "correctly_none"
+        },
+        "lateFee": {
+          "present": true,
+          "outcome": "caught"
+        },
+        "evidenceAllExact": true,
+        "evidenceChecked": 6,
+        "evidenceBad": [],
+        "confidence": {
+          "high": 6,
+          "medium": 0,
+          "low": 4
+        },
+        "wrongButHigh": 0
+      }
+    },
+    {
+      "name": "invoice-hindi-mixed",
+      "file": "public/samples/invoice-hindi-mixed.png",
+      "layout": "Handwritten-looking notes on ruled notebook paper, slightly crooked. Every label is Hindi and English ('बिल नं. / Bill No'); Hindi and English both appear in values. Dates are DD-MM-YYYY. The discount appears once in Hindi and once in English.",
+      "ok": true,
+      "modelUsed": "gemini-3.5-flash-lite",
+      "ms": 2926,
+      "score": {
+        "fieldsCorrect": 10,
+        "fieldsTotal": 10,
+        "fields": [
+          {
+            "key": "supplierName",
+            "expected": "Shri Laxmi Footwear",
+            "got": "Shri Laxmi Footwear",
+            "correct": true,
+            "evidence": "Shri Laxmi Footwear",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "invoiceNumber",
+            "expected": "SLF-318",
+            "got": "SLF-318",
+            "correct": true,
+            "evidence": "SLF-318",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "invoiceDate",
+            "expected": "2026-10-12",
+            "got": "2026-10-12",
+            "correct": true,
+            "evidence": "12-10-2026",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "dueDate",
+            "expected": "2026-10-24",
+            "got": "2026-10-24",
+            "correct": true,
+            "evidence": "24-10-2026",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "totalAmount",
+            "expected": 490000,
+            "got": 490000,
+            "correct": true,
+            "evidence": "4,90,000",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "quantity",
+            "expected": 350,
+            "got": 350,
+            "correct": true,
+            "evidence": "350",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "unitPrice",
+            "expected": 1400,
+            "got": 1400,
+            "correct": true,
+            "evidence": "1,400",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "earlyPaymentDiscountPercent",
+            "expected": 3,
+            "got": 3,
+            "correct": true,
+            "evidence": "3%",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "earlyPaymentDiscountDays",
+            "expected": 7,
+            "got": 7,
+            "correct": true,
+            "evidence": "7",
+            "evidenceExact": true,
+            "confidence": "high"
+          },
+          {
+            "key": "lateFeePercentPerMonth",
+            "expected": 2,
+            "got": 2,
+            "correct": true,
+            "evidence": "2%",
+            "evidenceExact": true,
+            "confidence": "high"
+          }
+        ],
+        "discount": {
+          "present": true,
+          "outcome": "caught"
+        },
+        "lateFee": {
+          "present": true,
+          "outcome": "caught"
+        },
+        "evidenceAllExact": true,
+        "evidenceChecked": 10,
+        "evidenceBad": [],
+        "confidence": {
+          "high": 10,
+          "medium": 0,
+          "low": 0
+        },
+        "wrongButHigh": 0
+      }
+    }
+  ],
+  "date": "2026-10-12"
+}

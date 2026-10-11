@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "try:extract": "tsx --env-file=.env.local scripts/try-extract.ts",
-    "smoke:ai": "tsx --env-file=.env.local scripts/smoke-ai.ts"
+    "smoke:ai": "tsx --env-file=.env.local scripts/smoke-ai.ts",
+    "eval:extract": "tsx --env-file=.env.local scripts/eval-extract.ts"
   },
   "dependencies": {
     "next": "16.4.0",

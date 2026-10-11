@@ -146,21 +146,22 @@ Variables (all in `.env.local`, which is git-ignored; never commit a key):
 | `AI_MOCK` | `true` makes every AI feature return a built-in answer after a short pause, with **no API call and no key needed**. Mock answers go through the same grounding check and show a "Mock AI" badge. Use it for development and demos without a quota. **It must never be on in production.** |
 
 ```bash
-npm test                     # 653 tests across 26 files; AI is always mocked, no network
+npm test                     # 697 tests across 27 files; AI is always mocked, no network
 npm run build                # production build
 npm run smoke:ai             # LIVE: calls the real model once per feature. Run sparingly (free-tier quota).
 npm run smoke:ai -- 2 explain-hi   # cap the calls, and run just one step
 npm run try:extract          # LIVE: read a sample invoice with the real AI
+npm run eval:extract -- --model gemini-3.5-flash-lite   # LIVE: 5 calls; scores a model on the 5 test invoices and writes docs/EVAL.md
 ```
 
-Sample invoices (synthetic) are in `public/samples/`. If the AI is unavailable the invoice screen offers a labelled **pre-read sample** or **manual entry**, so the demo never dead-ends.
+Five sample invoices (all synthetic, with different layouts, languages and fine print) are in `public/samples/`; their ground truth is in `eval/`. If the AI is unavailable the invoice screen offers a labelled **pre-read sample** or **manual entry**, so the demo never dead-ends.
 
 ## Documents
 
 - [`docs/SPEC.md`](docs/SPEC.md): the locked product spec.
 - [`docs/ASSUMPTIONS.md`](docs/ASSUMPTIONS.md): every number and rule the prototype assumes (100+ rows), updated whenever one changes.
 - [`docs/BUILD_LOG.md`](docs/BUILD_LOG.md): what the AI did, what went wrong, and what I decided, day by day.
-- `docs/EVAL.md`: evaluation write-up *(to be added)*.
+- [`docs/EVAL.md`](docs/EVAL.md): how well each model reads invoices: five synthetic test invoices with hand-written ground truth, scored field by field, with a comparison table.
 - [`CLAUDE.md`](CLAUDE.md): the project rules Claude Code worked under.
 
 ## Limitations and roadmap

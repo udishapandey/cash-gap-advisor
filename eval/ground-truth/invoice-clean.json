@@ -1,0 +1,18 @@
+{
+  "file": "public/samples/invoice-clean.pdf",
+  "printedText": "eval/printed-text/invoice-clean.txt",
+  "layout": "Clean PDF: the baseline. Dates, totals and the discount/late-fee line are all printed plainly (the discount and late fee sit in a small footer line).",
+  "notes": "Everything is printed, so every field has a value.",
+  "fields": {
+    "supplierName": "Shree Ganesh Footwear Pvt Ltd",
+    "invoiceNumber": "SGF/26-27/0142",
+    "invoiceDate": "2026-10-11",
+    "dueDate": "2026-10-21",
+    "totalAmount": 500000,
+    "quantity": 500,
+    "unitPrice": 1000,
+    "earlyPaymentDiscountPercent": 2,
+    "earlyPaymentDiscountDays": 7,
+    "lateFeePercentPerMonth": 1.5
+  }
+}

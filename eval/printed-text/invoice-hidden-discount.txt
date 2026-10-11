@@ -1,0 +1,42 @@
+SYNTHETIC SAMPLE  |  NOT A REAL INVOICE  |  Created for the Cash Gap Advisor prototype
+MEHTA LEATHER WORKS LLP
+Manufacturers of men's and women's footwear
+44, Tannery Road, Jajmau, Kanpur, Uttar Pradesh 208010  |  GSTIN: 00AAAAA0000A0Z0 (fictional)
+TAX INVOICE
+Billed to
+Rahul's shoe brand
+Shop 7, Begum Bazaar
+Hyderabad, Telangana 500012
+Invoice No.
+MLW/2627/0318
+Invoice Date
+12 Oct 2026
+Due Date
+22 Oct 2026
+Buyer's PO
+RSB-PO-5521
+S.No
+Description of goods
+HSN
+Qty
+Rate
+Amount
+1
+Men's casual shoes, style MC-204
+6403
+400 pairs
+1,250.00
+5,00,000.00
+Grand Total
+₹ 5,00,000.00
+(Rupees Five Lakh only. Prices include GST.)
+Payment terms
+Payment is due by the date shown above. Interest @ 2% per month on overdue amounts.
+Bank details
+Bank: Synthetic Bank Ltd   A/c name: Mehta Leather Works LLP   A/c no: 0000 0000 0000   IFSC: SYNT0000000
+Authorised signatory (synthetic)
+Terms & conditions
+1. Goods once sold will not be taken back or exchanged.  2. Subject to Kanpur jurisdiction only.
+3. A cash discount of 2.5% on the invoice value is allowed if payment is received within 5 days of the invoice date.
+4. Our responsibility ceases when the goods leave our premises.  5. E. & O.E.
+Synthetic document generated for a prototype. Names, addresses and bank details are fictional.

@@ -1,0 +1,18 @@
+{
+  "file": "public/samples/invoice-latefee.pdf",
+  "printedText": "eval/printed-text/invoice-latefee.txt",
+  "layout": "Orange header band, bordered grid, TWO line items in a table with a printed 'Total quantity 500 pairs'. A late fee (1.5% per month) and nothing else: no discount anywhere.",
+  "notes": "Three fields are deliberately null. dueDate: only 'Due within 15 days of invoice date' is printed, and the product rule is never to work a date out from terms. unitPrice: the two items have different prices (900 and 650), so there is no single unit price. Both discount fields: there is no discount. A model that fills any of these in is wrong.",
+  "fields": {
+    "supplierName": "Bharat Sole & Sports Pvt Ltd",
+    "invoiceNumber": "BSS-2026-0907",
+    "invoiceDate": "2026-10-12",
+    "dueDate": null,
+    "totalAmount": 400000,
+    "quantity": 500,
+    "unitPrice": null,
+    "earlyPaymentDiscountPercent": null,
+    "earlyPaymentDiscountDays": null,
+    "lateFeePercentPerMonth": 1.5
+  }
+}

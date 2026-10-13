@@ -19,6 +19,7 @@ import {
   tenureDays,
 } from "@/lib/journey";
 import type { ShellContext } from "./JourneyShell";
+import { pickPlan } from "@/lib/plan-choice";
 import JourneyShell from "./JourneyShell";
 import KeyFactStatementPanel from "./KeyFactStatement";
 import { Alert, BTN, Badge, Card, KeyValues, Metric, PageHeader, Panel, SectionLabel, SourceRow, Tile } from "./ui";
@@ -28,7 +29,7 @@ export default function ApproveScreen() {
 }
 
 function ApproveBody({ state, result, update }: ShellContext) {
-  const view = state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull;
+  const view = pickPlan(state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull, state.planChoice);
   const plan = view.recommended.plan;
   const sections = splitPlan(view, result.stock.fullUnits);
   const blockers = approvalBlockers(view);

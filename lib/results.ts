@@ -6,17 +6,18 @@ import type { EngineResult } from "./engine";
 import { computeOutcome, midSeasonCheck, SIMULATED_OUTCOMES, type MidSeason, type MidSeasonChange, type OutcomeId, type OutcomeResult } from "./engine/outcome";
 import { formatINR, inrShort } from "./format";
 import type { JourneyState } from "./journey";
+import { pickPlan, type PlanChoice } from "./plan-choice";
 
 /** The outcome of the approved plan under one simulated result. Null until a plan is chosen. */
 export function outcomeForState(
   result: EngineResult,
-  state: Pick<JourneyState, "chosenView" | "salesDropPercent" | "cashElsewhere">,
+  state: Pick<JourneyState, "chosenView" | "salesDropPercent" | "cashElsewhere"> & { planChoice?: PlanChoice },
   id: OutcomeId,
   merchant: Merchant = simulatedMerchant,
 ): OutcomeResult | null {
   if (state.chosenView === null) return null;
   return computeOutcome({
-    approved: state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull,
+    approved: pickPlan(state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull, state.planChoice),
     fullOrder: result.views.keepFull,
     stock: result.stock,
     merchant,
@@ -29,12 +30,12 @@ export function outcomeForState(
 /** The mid-season check for the approved plan: day 15, sales 15% below the forecast. Null until a plan is chosen. */
 export function midSeasonForState(
   result: EngineResult,
-  state: Pick<JourneyState, "chosenView" | "salesDropPercent" | "cashElsewhere">,
+  state: Pick<JourneyState, "chosenView" | "salesDropPercent" | "cashElsewhere"> & { planChoice?: PlanChoice },
   merchant: Merchant = simulatedMerchant,
 ): MidSeason | null {
   if (state.chosenView === null) return null;
   return midSeasonCheck({
-    approved: state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull,
+    approved: pickPlan(state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull, state.planChoice),
     fullOrder: result.views.keepFull,
     stock: result.stock,
     merchant,

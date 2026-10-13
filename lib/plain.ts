@@ -17,6 +17,7 @@ import {
   inrShort,
 } from "./format";
 import { earlyPayDay } from "./journey";
+import { canChooseDueDate, pickPlan, type PlanChoice } from "./plan-choice";
 import { SAVING_BASIS, outcomeForState } from "./results";
 
 export { SAVING_BASIS };
@@ -80,14 +81,15 @@ export function forecastSaving(
     salesDropPercent: number;
     cashElsewhere: number;
     chosenView?: unknown;
+    planChoice?: PlanChoice;
   },
 ): number {
   // Pick the fields by name: a whole journey state also carries its own `chosenView` (null until chosen), which must not win.
-  const { salesDropPercent, cashElsewhere } = state;
+  const { salesDropPercent, cashElsewhere, planChoice } = state;
   return (
     outcomeForState(
       result,
-      { chosenView: viewId, salesDropPercent, cashElsewhere },
+      { chosenView: viewId, salesDropPercent, cashElsewhere, planChoice },
       "as_forecast",
     )?.cost.moneySaved ?? 0
   );
@@ -552,4 +554,44 @@ export function dayByDay(
     });
   }
   return { rows, total: formatINR(view.recommended.plan.totalCost) };
+}
+
+// ---------- The plan choice ----------
+
+export interface PlanCard {
+  choice: PlanChoice;
+  recommended: boolean;
+  /** "Pay on 21 Oct" */
+  title: string;
+  discount: string;
+  borrowing: string;
+  cost: string;
+  net: string;
+}
+
+export const CHOICE_LINE = "You decide. You can also change any number above and the plan updates.";
+export const SINGLE_CHOICE_LINE = "You can change any number above and the plan updates.";
+
+/**
+ * The plans the founder can pick between: the recommended one and, when the recommendation pays early, paying on the due
+ * date. One card when there is no real alternative. Every figure is the engine's own for that plan.
+ */
+export function planChoiceCards(result: EngineResult, state: { salesDropPercent: number; cashElsewhere: number }): PlanCard[] {
+  const choices: PlanChoice[] = canChooseDueDate(result.recommended) ? ["recommended", "due_date"] : ["recommended"];
+  return choices.map((choice) => {
+    const view = pickPlan(result.recommended, choice);
+    const plan = view.recommended.plan;
+    const early = view.recommended.timing === "pay_early_for_discount";
+    const days = daysOut(view);
+    const saving = forecastSaving(result, result.recommendedView, { ...state, planChoice: choice });
+    return {
+      choice,
+      recommended: choice === "recommended",
+      title: `Pay on ${dayLabel(view.invoice, plan.payDay)}`,
+      discount: early ? `${formatINR(view.discount.discountAmount)} off` : "No discount",
+      borrowing: plan.borrowed > 0 ? `${inrShort(plan.borrowed)} for ${days ?? "a few"} days` : "No borrowing",
+      cost: formatINR(plan.totalCost),
+      net: formatINR(Math.max(0, saving)),
+    };
+  });
 }

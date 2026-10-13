@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { formatINR, formatLakh, inrShort } from "@/lib/format";
 import { dayLabel, forecastSaving } from "@/lib/plain";
 import { forecastReview, outcomeForState } from "@/lib/results";
+import { pickPlan } from "@/lib/plan-choice";
 import JourneyShell, { type ShellContext } from "./JourneyShell";
 import { BTN, Badge, KeyValues, Metric, PageHeader, Panel, SectionLabel } from "./ui";
 
@@ -17,7 +18,7 @@ function ResultsBody({ state, result, reset }: ShellContext) {
   const o = useMemo(() => outcomeForState(result, state, "as_forecast"), [result, state]);
   if (!o || state.chosenView === null) return null;
 
-  const chosen = state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull;
+  const chosen = pickPlan(state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull, state.planChoice);
   const plan = chosen.recommended.plan;
   const early = chosen.recommended.timing === "pay_early_for_discount";
   const saving = forecastSaving(result, state.chosenView, state);

@@ -2,6 +2,7 @@
 // Everything here is plain TypeScript with no React, so it can be tested directly.
 // Money is only ever worked out by the engine and these functions, never by an AI.
 
+import type { PlanChoice } from "./plan-choice";
 import { z } from "zod";
 import type { Invoice } from "./data/invoice";
 import type { ViewId, ViewResult } from "./engine";
@@ -42,6 +43,8 @@ export interface JourneyState {
   overdraftRatePct: number;
   /** The plan the founder chose. Null until they choose: nothing is pre-selected. */
   chosenView: ViewId | null;
+  /** Which plan the founder picked on the Plan screen: the recommended one, or paying on the due date. */
+  planChoice: PlanChoice;
   approved: boolean;
   paid: boolean;
   /** The language of the AI explanation and call script. */
@@ -55,6 +58,7 @@ export const DEFAULT_JOURNEY: JourneyState = {
   cashElsewhere: 0,
   overdraftRatePct: CONFIG.overdraftRatePct,
   chosenView: null,
+  planChoice: "recommended",
   approved: false,
   paid: false,
   language: "en",
@@ -85,6 +89,7 @@ const journeySchema = z.object({
   cashElsewhere: z.number().min(0).catch(DEFAULT_JOURNEY.cashElsewhere),
   overdraftRatePct: z.number().min(0).max(100).catch(DEFAULT_JOURNEY.overdraftRatePct),
   chosenView: z.enum(["keep_full", "right_sized"]).nullable().catch(null),
+  planChoice: z.enum(["recommended", "due_date"]).catch("recommended"),
   approved: z.boolean().catch(false),
   paid: z.boolean().catch(false),
   language: z.enum(["en", "hi"]).catch("en"),

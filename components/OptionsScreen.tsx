@@ -9,7 +9,8 @@ import { SALES_DROPS, type JourneyState } from "@/lib/journey";
 import type { Language } from "@/lib/language";
 import { midSeasonForState, slowSalesView } from "@/lib/results";
 import { dayLabel } from "@/lib/plain";
-import { UNCOVERED_TITLE, buildHeroPlan, compareRows, dayByDay, forecastSaving, type HeroPlan } from "@/lib/plain";
+import { CHOICE_LINE, SINGLE_CHOICE_LINE, UNCOVERED_TITLE, buildHeroPlan, compareRows, dayByDay, forecastSaving, planChoiceCards, type HeroPlan, type PlanCard } from "@/lib/plain";
+import { pickResult, type PlanChoice } from "@/lib/plan-choice";
 import type { AppliedWhatIf } from "@/lib/whatif";
 import AiExplanation from "./AiExplanation";
 import CallScriptPanel from "./CallScriptPanel";
@@ -112,8 +113,15 @@ function HeroCard({
   uncovered,
   onApprove,
   onWhy,
+  cards,
+  choice,
+  onChoice,
 }: {
   hero: HeroPlan;
+  /** The plans to pick between, with the one picked. */
+  cards: PlanCard[];
+  choice: PlanChoice;
+  onChoice: (c: PlanChoice) => void;
   /** Rupees the plan still leaves uncovered. Zero in the normal case. */
   uncovered: number;
   onApprove: () => void;
@@ -124,9 +132,11 @@ function HeroCard({
       <button type="button" onClick={onApprove} disabled={disabled} className={BTN.primary}>
         Review &amp; approve
       </button>
-      <button type="button" onClick={onWhy} className={BTN.link}>
-        Why this plan?
-      </button>
+      {choice === "recommended" && (
+        <button type="button" onClick={onWhy} className={BTN.link}>
+          Why this plan?
+        </button>
+      )}
     </div>
   );
 
@@ -155,7 +165,7 @@ function HeroCard({
     <Panel aria-label="Recommended plan">
       <div className="flex flex-wrap items-start justify-between gap-6 p-6">
         <div>
-          <Badge tone="information">Recommended plan</Badge>
+          <Badge tone="information">{choice === "recommended" ? "Recommended plan" : "Your choice"}</Badge>
           <h2 className="mt-3 font-heading text-2xl font-semibold">{hero.title}</h2>
           {hero.subtitle && <p className="mt-1 text-sm text-subtle">{hero.subtitle}</p>}
           {hero.reason && <p className="mt-1 text-sm text-muted">{hero.reason}</p>}
@@ -224,6 +234,52 @@ function HeroCard({
           </table>
         </div>
         {hero.backup && <p className={`mt-3 text-xs ${hero.backup.warn ? "text-red-700" : "text-muted"}`}>{hero.backup.text}</p>}
+      </div>
+      <div className="border-t border-line px-6 py-4">
+        <div role="radiogroup" aria-label="Choose a plan" className={`grid gap-3 ${cards.length > 1 ? "md:grid-cols-2" : ""}`}>
+          {cards.map((c) => {
+            const selected = c.choice === choice;
+            return (
+              <label
+                key={c.choice}
+                className={`rounded-lg border p-4 ${cards.length > 1 ? "cursor-pointer" : ""} ${selected ? "border-brand bg-brand-faded" : "border-line bg-card hover:bg-background"}`}
+              >
+                <input
+                  type="radio"
+                  name="plan-choice"
+                  value={c.choice}
+                  checked={selected}
+                  disabled={cards.length === 1}
+                  onChange={() => onChoice(c.choice)}
+                  className="sr-only"
+                />
+                <span className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{c.title}</span>
+                  {c.recommended && <Badge tone="positive">Recommended</Badge>}
+                </span>
+                <dl className="mt-3 space-y-1 text-sm">
+                  {(
+                    [
+                      ["Discount", c.discount],
+                      ["Borrowing", c.borrowing],
+                      ["Cost", c.cost],
+                    ] as const
+                  ).map(([k, v]) => (
+                    <div key={k} className="flex justify-between gap-3">
+                      <dt className="text-muted">{k}</dt>
+                      <dd className="tabular-nums">{v}</dd>
+                    </div>
+                  ))}
+                  <div className="flex justify-between gap-3 border-t border-line pt-1 font-semibold">
+                    <dt>Net benefit</dt>
+                    <dd className="tabular-nums">{c.net}</dd>
+                  </div>
+                </dl>
+              </label>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-xs text-muted">{cards.length > 1 ? CHOICE_LINE : SINGLE_CHOICE_LINE}</p>
       </div>
       {actions(uncovered > 0)}
     </Panel>
@@ -374,6 +430,7 @@ function PlanBody({
     cashElsewhere?: number;
     overdraftRatePct?: number;
     chosenView?: ViewId | null;
+    planChoice?: PlanChoice;
     language?: Language;
   }) => void;
   extensionDays: number;
@@ -391,9 +448,15 @@ function PlanBody({
   // The plan the numbers favour. Nothing is chosen until the founder approves it.
   const recId = result.recommendedView;
   const recView = recId === "right_sized" ? rightSized : keepFull;
-  const hero = buildHeroPlan(result, recId, forecastSaving(result, recId, state));
-  // The slow-sales check: the same plan re-run on sales 15% lower, shown before anything is approved.
-  const slow = midSeasonForState(result, { ...state, chosenView: recId });
+  // The two plans on offer, and the one picked. The recommended plan is selected to begin with; nothing is chosen until
+  // the founder presses "Review & approve", and nothing is approved until they approve.
+  const cards = useMemo(() => planChoiceCards(result, state), [result, state]);
+  const [picked, setPicked] = useState<PlanChoice>(state.planChoice);
+  const choice: PlanChoice = cards.some((c) => c.choice === picked) ? picked : "recommended";
+  const shown = useMemo(() => pickResult(result, choice), [result, choice]);
+  const hero = buildHeroPlan(shown, recId, forecastSaving(result, recId, { ...state, planChoice: choice }));
+  // The slow-sales check: the plan on offer re-run on sales 15% lower, shown before anything is approved.
+  const slow = midSeasonForState(result, { ...state, chosenView: recId, planChoice: choice });
 
   // The call script is about the plan the founder chose, or the one the numbers favour if they haven't chosen yet.
   const scriptViewId: ViewId = state.chosenView ?? recId;
@@ -419,20 +482,23 @@ function PlanBody({
       <HeroCard
         hero={hero}
         uncovered={recView.recommended.plan.uncovered}
+        cards={cards}
+        choice={choice}
+        onChoice={setPicked}
         onApprove={() => {
-          update({ chosenView: recId });
+          update({ chosenView: recId, planChoice: choice });
           router.push("/approve");
         }}
         onWhy={openWhy}
       />
 
-      {hero.covered && slow && recView.recommended.timing === "pay_early_for_discount" && (
+      {hero.covered && slow && shown.recommended.recommended.timing === "pay_early_for_discount" && (
         <Disclosure title={slowSalesView(slow, (day) => dayLabel(recView.invoice, day)).statusLine}>
           <SlowSales view={slowSalesView(slow, (day) => dayLabel(recView.invoice, day))} />
         </Disclosure>
       )}
 
-      {whyOpen && (
+      {whyOpen && choice === "recommended" && (
         <Disclosure id="why" title="Why this plan" open onOpenChange={setWhyOpen}>
           <AiExplanation result={result} state={state} language={state.language} onLanguage={setLanguage} typedToken={typedToken} />
         </Disclosure>
@@ -444,7 +510,7 @@ function PlanBody({
             {hero.closingLine && <li>{hero.closingLine}</li>}
             <li>{hero.footer}</li>
           </ul>
-          <DayTable result={result} viewId={recId} />
+          <DayTable result={shown} viewId={recId} />
         </Disclosure>
       )}
 

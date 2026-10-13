@@ -95,7 +95,18 @@ describe("the copy, as written", () => {
     expect(f).toContain('showExtraction(emptyExtraction(), "manual")');
   });
   it("The slow-sales line is hidden when the plan already pays on the due date", () => {
-    expect(read("components/OptionsScreen.tsx")).toContain('recView.recommended.timing === "pay_early_for_discount"');
+    expect(read("components/OptionsScreen.tsx")).toContain('shown.recommended.recommended.timing === "pay_early_for_discount"');
+  });
+  it("Plan: two selectable cards above Review & approve, recommended pre-selected, and the picked plan goes to Approve", () => {
+    const o = read("components/OptionsScreen.tsx");
+    expect(o).toContain('role="radiogroup" aria-label="Choose a plan"');
+    expect(o).toContain("planChoiceCards(result, state)");
+    expect(o).toContain('useState<PlanChoice>(state.planChoice)'); // starts as "recommended"
+    expect(o).toContain("update({ chosenView: recId, planChoice: choice })");
+    expect(o.indexOf('aria-label="Choose a plan"')).toBeLessThan(o.indexOf("{actions(uncovered > 0)}"));
+    expect(read("lib/plain.ts")).toContain("You decide. You can also change any number above and the plan updates.");
+    expect(read("components/ApproveScreen.tsx")).toContain("pickPlan(");
+    expect(read("components/ResultsScreen.tsx")).toContain("pickPlan(");
   });
   it("Confirm bill shows a green check for a second, then opens Cash gap by itself, which says it is checking once", () => {
     const f = read("components/InvoiceFlow.tsx");
@@ -118,7 +129,7 @@ describe("the copy, as written", () => {
   });
   it("Plan shows the explanation only when asked, and has no extra links", () => {
     const o = read("components/OptionsScreen.tsx");
-    expect(o).toContain("{whyOpen && (");
+    expect(o).toContain('{whyOpen && choice === "recommended" && (');
     expect(o).not.toContain("Back to cash gap");
   });
   it("Plan hides 'Ask for more days' and the call script when the due date needs no borrowing", () => {

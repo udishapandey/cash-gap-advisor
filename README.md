@@ -187,6 +187,7 @@ Five sample invoices (all synthetic, with different layouts, languages and fine 
 - [`docs/SPEC.md`](docs/SPEC.md): the locked product spec.
 - [`docs/ASSUMPTIONS.md`](docs/ASSUMPTIONS.md): every number and rule the prototype assumes (100+ rows), updated whenever one changes.
 - [`docs/BUILD_LOG.md`](docs/BUILD_LOG.md): what the AI did, what went wrong, and what I decided, day by day.
+- AI build log: [`docs/AI_BUILD_LOG.md`](docs/AI_BUILD_LOG.md)
 - [`docs/EVAL.md`](docs/EVAL.md): how well each model reads invoices: five synthetic test invoices with hand-written ground truth, scored field by field, with a comparison table.
 - [`CLAUDE.md`](CLAUDE.md): the project rules Claude Code worked under.
 

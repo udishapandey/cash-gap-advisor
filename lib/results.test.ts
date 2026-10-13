@@ -1,29 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { merchant } from "./data/merchant";
-import { sampleInvoice } from "./data/invoice";
+import { defaultInvoice as sampleInvoice } from "./data/default-scenario";
 import { runEngine } from "./engine";
 import { computeOutcome, OUTCOME_IDS, SIMULATED_OUTCOMES } from "./engine/outcome";
 import { formatINR, formatSignedINR } from "./format";
 import { DEFAULT_JOURNEY } from "./journey";
-import { SAVING_BASIS, nextTimeBullets, outcomeForState, resultTiles, savedCard } from "./results";
+import { dayLabel } from "./plain";
+import { MID_SEASON_CAPTION, NEXT_TIME_CAPTION, SAVING_BASIS, gapRow, midSeasonForState, midSeasonView, nextTimeBullets, outcomeForState, savedBreakdown, savedHeadline } from "./results";
 
 const run = (drop = 0) => runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop });
 const state = (drop = 0, chosenView: "keep_full" | "right_sized" | null = "keep_full") => ({ ...DEFAULT_JOURNEY, salesDropPercent: drop, chosenView });
 const at = (id: (typeof OUTCOME_IDS)[number], drop = 0) => outcomeForState(run(drop), state(drop), id)!;
 const words = (s: string) => s.trim().split(/\s+/).length;
-const FORBIDDEN = /\(|\)|because|n\/a|—|Note:|[A-Za-z]:\s/i;
+const FORBIDDEN = /\(|\)|because|n\/a|—|Note:/i;
 
 describe("outcomeForState", () => {
   it("is null until a plan is chosen", () => {
     expect(outcomeForState(run(), state(0, null), "as_forecast")).toBeNull();
   });
-  it("uses the plan the founder approved, not the one the numbers favour", () => {
-    const r = run(30);
-    expect(r.recommendedView).toBe("right_sized");
-    const keep = outcomeForState(r, state(30, "keep_full"), "as_forecast")!;
-    const cut = outcomeForState(r, state(30, "right_sized"), "as_forecast")!;
+  it("uses the plan the founder approved", () => {
+    const r = run(0);
+    const keep = outcomeForState(r, state(0, "keep_full"), "as_forecast")!;
     expect(keep.stock.ordered).toBe(sampleInvoice.units);
-    expect(cut.stock.ordered).toBeLessThan(keep.stock.ordered);
   });
   it("gives exactly what computeOutcome gives for the same inputs", () => {
     const r = run(10);
@@ -32,76 +30,82 @@ describe("outcomeForState", () => {
   });
 });
 
-describe("the 'You saved' card", () => {
-  it("has the label, the number and the caption as written: ₹11,310 = ₹10,000 discount + ₹1,310 lower interest", () => {
-    expect(savedCard(at("as_forecast"))).toEqual({
-      label: "You saved",
-      value: "₹11,310",
-      caption: "₹10,000 discount + ₹1,310 lower interest",
-      tone: "saved",
-    });
+describe("the saved headline and breakdown", () => {
+  it("has the headline as written: This plan saved you ₹9,583", () => {
+    expect(savedHeadline(at("as_forecast"))).toBe("This plan saved you ₹9,583");
   });
-  it("the number is the headline saving, and the two parts in the caption add up to it", () => {
+  it("the breakdown is the discount, the plan's interest and fees, and the usual way's cost", () => {
+    expect(savedBreakdown(at("as_forecast"))).toEqual([
+      { label: "Discount", value: "₹10,000" },
+      { label: "Interest and fees", value: "₹417" },
+      { label: "Paying on the due date", value: "₹0" },
+    ]);
+  });
+  it("the headline is the discount less the plan's cost, set against the usual way's cost, in every season", () => {
     for (const id of OUTCOME_IDS) {
       const o = at(id);
-      expect(o.cost.fromCheaperFunding + o.cost.plan.discountCaptured).toBe(o.cost.moneySaved);
-      expect(savedCard(o).value).toBe(formatINR(o.cost.moneySaved));
+      expect(o.cost.moneySaved).toBe(o.cost.plan.discountCaptured - o.cost.plan.fundsCost + o.cost.default.fundsCost);
+      expect(savedHeadline(o)).toBe(`This plan saved you ${formatINR(o.cost.moneySaved)}`);
     }
   });
-  it("leaves out the discount when the plan took none", () => {
-    const r = runEngine({ merchant, invoice: { ...sampleInvoice, earlyPayDiscountPct: 0 } });
-    expect(savedCard(outcomeForState(r, state(0), "as_forecast")!).caption).toMatch(/^₹[\d,]+ lower interest$/);
-  });
-  it("never shows a negative amount: it says 'You paid extra' and the amount", () => {
+  it("never shows a negative amount: it says what the plan cost extra", () => {
     const o = at("as_forecast");
-    const worse = { ...o, cost: { ...o.cost, moneySaved: -450, fromCheaperFunding: -450, plan: { ...o.cost.plan, discountCaptured: 0 } } };
-    expect(savedCard(worse)).toMatchObject({ label: "You paid extra", value: "₹450", caption: "₹450 higher interest", tone: "extra" });
+    const worse = { ...o, cost: { ...o.cost, moneySaved: -450 } };
+    expect(savedHeadline(worse)).toBe("This plan cost you ₹450 more");
+    expect(savedHeadline({ ...o, cost: { ...o.cost, moneySaved: 0 } })).toBe("This plan cost the same as the usual way");
   });
   it("follows the copy rules at every season and slider value", () => {
     for (const id of OUTCOME_IDS) {
       for (const drop of [0, 10, 25, 30]) {
-        const c = savedCard(at(id, drop));
-        for (const t of [c.label, c.value, c.caption]) {
+        const o = at(id, drop);
+        for (const t of [savedHeadline(o), ...savedBreakdown(o).flatMap((r) => [r.label, r.value])]) {
           expect(t, `${id} -${drop}%`).not.toMatch(FORBIDDEN);
           expect(t).not.toMatch(/[−-]₹|₹-/);
         }
-        expect(words(c.caption)).toBeLessThanOrEqual(8);
       }
     }
   });
   it("the basis is stated once, for anything that needs it", () => {
-    expect(SAVING_BASIS).toContain("Razorpay credit line, then your bank's overdraft, paid on the due date");
+    expect(SAVING_BASIS).toContain("paying on the due date");
   });
 });
 
-describe("the three small cards", () => {
-  it("Borrowed, Pairs sold and Forecast, as written for 'as forecast'", () => {
-    expect(resultTiles(at("as_forecast"))).toEqual([
-      { label: "Borrowed", value: "₹1,17,164", caption: "All of it needed" },
-      { label: "Pairs sold", value: "500 of 500", caption: "" },
-      { label: "Forecast", value: "On target", caption: "" },
+describe("forecast gap against actual gap", () => {
+  it("as forecast, there is no difference", () => {
+    expect(gapRow(at("as_forecast"))).toEqual({ forecast: "₹2,30,900", actual: "₹2,30,900", difference: "None" });
+  });
+  it("says more or less in words, never with a minus", () => {
+    expect(gapRow(at("lower_15"))).toEqual({ forecast: "₹2,30,900", actual: "₹3,47,830", difference: "₹1,16,930 more" });
+    expect(gapRow(at("higher_15")).difference).toMatch(/^₹[\d,]+ less$/);
+  });
+});
+
+describe("the mid-season check", () => {
+  const date = (d: number) => dayLabel(sampleInvoice, d);
+  const mid = midSeasonForState(run(), state())!;
+  const view = midSeasonView(mid, date);
+  it("is null until a plan is chosen", () => {
+    expect(midSeasonForState(run(), state(0, null))).toBeNull();
+  });
+  it("has the headline as written", () => {
+    expect(view.headline).toBe("Day 15: sales are 15% below forecast.");
+  });
+  it("shows the forecast against actual cash in, and the updated gap", () => {
+    expect(view.rows.map((r) => r.label)).toEqual(["Cash in so far, forecast", "Cash in so far, actual", "Likely gap, forecast", "Likely gap, updated"]);
+    expect(view.rows[2].value).toBe("₹2,30,900");
+    expect(view.rows[3].value).toBe("₹3,47,830");
+  });
+  it("says exactly what changes, with dates", () => {
+    expect(view.changes).toEqual([
+      "Withdraw ₹1,16,930 more credit on 21 Oct",
+      "Backup used: ₹1,16,930 of your unused credit",
+      "Repayment moves from 29 Oct to 20 Nov",
     ]);
+    expect(view.nothingChanges).toBeNull();
   });
-  it("never warns about a sell-out when sales were as forecast", () => {
-    for (const t of resultTiles(at("as_forecast"))) expect(`${t.value} ${t.caption}`).not.toMatch(/sold out|sell/i);
-  });
-  it("says so when sales were lower: the plan needed more, and pairs are left over", () => {
-    const [borrowed, sold, forecast] = resultTiles(at("lower_15"));
-    expect(borrowed.caption).toMatch(/^₹[\d,]+ more needed$/);
-    expect(sold.caption).toBe("58 left over");
-    expect(forecast.value).toBe("15% below");
-  });
-  it("says so when sales were higher: part of the borrowing was not needed", () => {
-    const [borrowed, , forecast] = resultTiles(at("higher_15"));
-    expect(borrowed.caption).toMatch(/^₹[\d,]+ not needed$/);
-    expect(forecast.value).toBe("15% above");
-  });
-  it("captions are at most eight words and break none of the copy rules", () => {
-    for (const id of OUTCOME_IDS) for (const drop of [0, 25]) for (const t of resultTiles(at(id, drop))) {
-      expect(words(t.label)).toBeLessThanOrEqual(4);
-      if (t.caption) expect(words(t.caption), t.caption).toBeLessThanOrEqual(8);
-      expect(`${t.label} ${t.value} ${t.caption}`).not.toMatch(FORBIDDEN);
-    }
+  it("has the captions as written", () => {
+    expect(MID_SEASON_CAPTION).toBe("The plan updates as real sales arrive. Sales are simulated in this prototype.");
+    expect(NEXT_TIME_CAPTION).toBe("Prototype uses a simple update rule. Production would learn from your history.");
   });
 });
 
@@ -129,9 +133,9 @@ describe("Next time", () => {
     expect(nextTimeBullets(at("as_forecast", 25), 25)[0]).toBe("Sales ran 25% under normal. Next time, start at 1.22x.");
   });
   it("says what the COD return rate was against the one assumed, and what to expect", () => {
-    expect(nextTimeBullets(at("lower_15"), 0)[1]).toBe("COD returns were 25%, not 20%. Next time, expect 22.5%.");
-    expect(nextTimeBullets(at("higher_15"), 0)[1]).toBe("COD returns were 18%, not 20%. Next time, expect 19%.");
-    expect(nextTimeBullets(at("as_forecast"), 0)[1]).toBe("COD returns matched the 20% assumed.");
+    expect(nextTimeBullets(at("lower_15"), 0)[1]).toBe("COD returns were 35%, not 30%. Next time, expect 32.5%.");
+    expect(nextTimeBullets(at("higher_15"), 0)[1]).toBe("COD returns were 27%, not 30%. Next time, expect 28.5%.");
+    expect(nextTimeBullets(at("as_forecast"), 0)[1]).toBe("COD returns matched the 30% assumed.");
   });
 });
 

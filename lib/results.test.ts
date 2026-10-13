@@ -87,6 +87,11 @@ describe("the mid-season check", () => {
   it("is null until a plan is chosen", () => {
     expect(midSeasonForState(run(), state(0, null))).toBeNull();
   });
+  it("has the title, the reassurance line and the cash-in note as written", () => {
+    expect(view.title).toBe("If sales had been slow: the day-5 check");
+    expect(view.intro).toBe("Nothing is paid until 21 Oct, so the advisor re-checks on day 5 and can switch you to paying on 10 Nov.");
+    expect(view.cashInNote).toBe("Cash in is less affected than sales because some money was already on its way.");
+  });
   it("has the headline as written, on day 5 before the payment", () => {
     expect(view.headline).toBe("Day 5: sales 15% below forecast");
     expect(date(5)).toBe("16 Oct");

@@ -402,6 +402,8 @@ export interface GapView {
   summary: { label: string; value: string; caption?: string }[];
   /** "for 8 days" or "on 10 Nov": what goes under the shortfall figure. */
   duration: string | null;
+  /** "Includes ₹50,000 safety buffer". */
+  bufferLine: string;
   /** "How we estimated this": each estimate with where its data comes from. All simulated. */
   estimates: { label: string; value: string; source: SourceLabel }[];
 }
@@ -421,6 +423,7 @@ export function gapView(result: EngineResult): GapView {
           ? `Cash shortfall: ${inrShort(gap.gapExpected)} for ${daysOut(view) ?? "a few"} days`
           : `Cash shortfall: ${inrShort(gap.gapExpected)} on ${dayLabel(view.invoice, view.invoice.dueInDays)}`,
     hero: inrShort(gap.gapExpected),
+    bufferLine: `Includes ${formatINR(view.recommended.plan.buffer)} safety buffer`,
     duration: gap.gapExpected <= 0 ? null : early ? `for ${daysOut(view) ?? "a few"} days` : `on ${dayLabel(view.invoice, view.invoice.dueInDays)}`,
     caption:
       gap.gapMax === 0

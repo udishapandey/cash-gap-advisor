@@ -123,6 +123,9 @@ export function midSeasonView(m: MidSeason, date: (day: number) => string) {
   const earlyDate = date(m.early.payDay);
   const dueDate = date(m.due.payDay);
   return {
+    title: "If sales had been slow: the day-5 check",
+    intro: `Nothing is paid until ${earlyDate}, so the advisor re-checks on day ${m.day} and can switch you to paying on ${dueDate}.`,
+    cashInNote: "Cash in is less affected than sales because some money was already on its way.",
     headline:
       miss === 0
         ? `Day ${m.day}: sales on forecast`

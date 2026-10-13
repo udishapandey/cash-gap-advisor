@@ -47,7 +47,6 @@ function ApproveBody({ state, result, update }: ShellContext) {
   const allowed = canApprove({ view, sections, consent });
   const early = view.recommended.timing === "pay_early_for_discount";
   const payDay = early ? earlyPayDay(view.invoice) : view.invoice.dueInDays;
-  const payWhen = `on ${date(payDay)}`;
   const savingNow = forecastSaving(result, state.chosenView ?? "keep_full", state);
 
   // Both buttons are simulations: a short pause, then the next stage.
@@ -196,7 +195,7 @@ function ApproveBody({ state, result, update }: ShellContext) {
       <Card aria-label="Pay supplier">
         <SectionLabel>Pay supplier</SectionLabel>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-          <Metric label={supplier} value={formatINR(pay)} caption={`Due ${payWhen.replace("on ", "")}`} />
+          <Metric label={supplier} value={formatINR(pay)} caption={early ? `Pay by ${date(payDay)} for the discount · bill due ${date(view.invoice.dueInDays)}` : `Due ${date(payDay)}`} />
           <button type="button" onClick={payNow} disabled={!approved || busy !== null} className={BTN.primary}>
             {busy === "pay" ? "Paying…" : "Pay supplier"}
           </button>

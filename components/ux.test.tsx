@@ -84,15 +84,22 @@ describe("the copy, as written", () => {
     expect(o).toContain("recView.gap.gapExpected > 0 && (");
     expect(o.indexOf("recView.gap.gapExpected > 0")).toBeLessThan(o.indexOf("<AskCard"));
   });
+  it("Approve: the Key Fact Statement and an unticked consent come before the approval", () => {
+    const a = read("components/ApproveScreen.tsx");
+    expect(a).toContain("useState(false)");
+    expect(a.indexOf("Key Fact Statement")).toBeLessThan(a.indexOf("onClick={approve}"));
+    expect(a.indexOf('type="checkbox"')).toBeLessThan(a.indexOf("onClick={approve}"));
+    expect(a).toContain("Pay by ${date(payDay)} for the discount · bill due ${date(view.invoice.dueInDays)}");
+  });
   it("Approve", () => {
     has("components/ApproveScreen.tsx", "Plan summary", "Amount financed", "Financing cost", "Repaid by", "Net benefit", "Funding", "Financing approval", "Key Fact Statement", "View full statement", "Approve financing", "Pay supplier", "Supplier paid", "Simulated. No real money moved.", "See results");
     has("lib/plain.ts", "Razorpay credit needs lender approval and a final Key Fact Statement. Values are illustrative.");
     expect(read("components/ApproveScreen.tsx")).not.toContain("Start another invoice");
   });
   it("Results", () => {
-    has("components/ResultsScreen.tsx", "Supplier paid", "Discount captured", "Financing cost", "Repayment", "Mid-season check", "Approve updated plan", "As forecast", "15% lower", "15% higher", "Forecast gap", "Actual gap", "Difference", "Next time", "Details", "Done");
+    has("components/ResultsScreen.tsx", "Supplier paid", "Discount captured", "Financing cost", "Repayment", "Updated plan", "As forecast", "15% lower", "15% higher", "Forecast gap", "Actual gap", "Difference", "Next time", "Details", "Done");
     has("lib/results.ts", "Saved", "Day ${m.day}: sales", "Nothing changes.");
-    expect(read("components/ResultsScreen.tsx")).not.toMatch(/sold out/i);
+    expect(read("components/ResultsScreen.tsx")).not.toMatch(/sold out|Approve updated plan/i);
   });
 });
 

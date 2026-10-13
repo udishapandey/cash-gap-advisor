@@ -56,6 +56,9 @@ describe("the default scenario is the pre-read sample bill", () => {
     expect(v.summary.map((c) => c.value)).toEqual(["₹12.09L", "₹13.90L", "21 Oct"]);
     expect(v.summary[2].caption).toBe("Bill due 10 Nov");
   });
+  it("says the shortfall includes the safety buffer", () => {
+    expect(gapView(runDefault()).bufferLine).toBe("Includes ₹50,000 safety buffer");
+  });
   it("labels the forecast with its confidence, and every estimate with a data source", () => {
     const v = gapView(runDefault());
     expect(v.forecastLabel).toBe("Forecast");

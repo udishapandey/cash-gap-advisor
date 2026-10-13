@@ -32,7 +32,6 @@ export default function ResultsScreen() {
 function ResultsBody({ state, result, update, reset }: ShellContext) {
   const router = useRouter();
   const [outcomeId, setOutcomeId] = useState<OutcomeId>("as_forecast");
-  const [replanApproved, setReplanApproved] = useState(false);
   const o = useMemo(() => outcomeForState(result, state, outcomeId), [result, state, outcomeId]);
   const mid = useMemo(() => midSeasonForState(result, state), [result, state]);
   if (!o || !mid || state.chosenView === null) return null;
@@ -98,8 +97,9 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
       </Panel>
 
       <Card aria-label="Mid-season check">
-        <SectionLabel>Mid-season check</SectionLabel>
-        <p className="mt-1 font-heading text-xl font-semibold">{view.headline}</p>
+        <SectionLabel>{view.title}</SectionLabel>
+        <p className="mt-1 text-sm text-muted">{view.intro}</p>
+        <p className="mt-3 font-heading text-xl font-semibold">{view.headline}</p>
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
           {view.rows.map((r) => (
             <div key={r.label}>
@@ -108,6 +108,7 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
             </div>
           ))}
         </dl>
+        <p className="mt-2 text-xs text-muted">{view.cashInNote}</p>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[22rem] text-sm">
             <thead>
@@ -140,17 +141,6 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
                 <li key={c}>{c}</li>
               ))}
             </ul>
-            {replanApproved ? (
-              <p className="mt-4 text-sm font-medium text-green-700">Updated plan approved. Simulated, no real money moved.</p>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setReplanApproved(true)}
-                className={`mt-4 ${BTN.primary}`}
-              >
-                Approve updated plan
-              </button>
-            )}
           </>
         )}
         <p className="mt-3 text-xs text-muted">{MID_SEASON_CAPTION}</p>

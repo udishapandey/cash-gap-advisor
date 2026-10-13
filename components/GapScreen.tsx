@@ -80,6 +80,7 @@ export default function GapScreen() {
 
             <Panel aria-label={view.headline}>
               <div className="flex flex-wrap items-start justify-between gap-6 p-6">
+                <div>
                 <Metric
                   size="lg"
                   tone={gap.gapExpected > 0 ? "short" : "plain"}
@@ -87,6 +88,8 @@ export default function GapScreen() {
                   value={view.hero}
                   caption={view.duration ?? undefined}
                 />
+                <p className="mt-1 text-xs text-muted">{view.bufferLine}</p>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="neutral">Forecast</Badge>
                   <Badge tone={view.lowConfidence ? "notice" : "neutral"}>{view.confidence}</Badge>

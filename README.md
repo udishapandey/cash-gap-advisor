@@ -144,7 +144,7 @@ Paying ₹4,90,000 on 21 Oct instead of ₹5,00,000 on 10 Nov leaves the founder
 
 ## Try it
 
-Open the live demo and, on the Bill screen, pick a sample bill. Each is named by its merchant and the scenario it shows, and loads its saved reading at once. You can also download the PDF and upload it.
+Open the [live demo](https://cash-gap-advisor-qus7-git-main-razorpay-isb.vercel.app/) and, on the Bill screen, pick a sample bill. Each is named by its merchant and the scenario it shows, and loads its saved reading at once. You can also download the PDF and upload it.
 
 - **Shree Ganesh Footwear · Borrow to pay early** ([PDF](public/samples/invoice-clean.pdf)): ₹5,00,000, 2% off within 10 days, due in 30. Paying early uses cash, an overdraft and Razorpay credit.
 - **Kaveri Soles & Uppers · Pay early from cash** ([PDF](public/samples/sample-invoice-2-kaveri-soles.pdf)): ₹2,70,000, 1.5% off within 15 days, net 45. Paying early needs no borrowing, so the plan uses cash only.

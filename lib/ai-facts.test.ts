@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { merchant } from "./data/merchant";
-import { sampleInvoice } from "./data/invoice";
+import { defaultInvoice as sampleInvoice } from "./data/default-scenario";
 import { cleanText, explainPromptFacts, planFacts, recommendedFacts, resultsFacts, scriptFacts, type ExplainFacts } from "./ai-facts";
 import { computeOutcome, OUTCOME_IDS, SIMULATED_OUTCOMES } from "./engine/outcome";
 import { runEngine } from "./engine";
@@ -33,11 +33,11 @@ describe("the facts the AI is given about a plan", () => {
     expect(f.stock.forecastPairsToSell).toBe(Math.floor(r.stock.demandByScenario.expected));
   });
 
-  it("carry the rates, including the early-settlement 'looks cheap' figure", () => {
-    expect(f.ratesPercent.earlySettlementFeePercent).toBe(0.3);
-    expect(f.ratesPercent.earlySettlementAnnualisedPercent).toBe(54.75);
+  it("carry the rates, including the flat instant-settlement fee with GST and no yearly figure for it", () => {
+    expect(f.ratesPercent.instantSettlementFeePercent).toBe(0.354);
     expect(f.ratesPercent.creditLineAnnualPercent).toBe(18);
-    expect(f.ratesPercent.overdraftAnnualPercent).toBe(14);
+    expect(f.ratesPercent.overdraftAnnualPercent).toBe(11);
+    expect(Object.keys(f.ratesPercent)).not.toContain("earlySettlementAnnualisedPercent");
   });
 
   it("follow the bank rate the founder typed", () => {
@@ -104,12 +104,12 @@ describe("the facts the AI is given about a plan", () => {
   it("show a plan that pays early, and one that doesn't", () => {
     const early = planFacts(run(0)).keepFull;
     expect(early.paysEarlyForDiscount).toBe(true);
-    expect(early.payByDay).toBe(7);
+    expect(early.payByDay).toBe(10);
     expect(early.earlyPaymentDiscountPercent).toBe(2);
     expect(early.earlyPaymentDiscountRupees).toBe(10_000);
     const due = planFacts(runEngine({ merchant, invoice: { ...sampleInvoice, earlyPayDiscountPct: 0.01 } })).keepFull;
     expect(due.paysEarlyForDiscount).toBe(false);
-    expect(due.payByDay).toBe(10);
+    expect(due.payByDay).toBe(30);
     expect(due.earlyPaymentDiscountRupees).toBe(0);
   });
 
@@ -130,7 +130,7 @@ describe("the facts for the supplier call script", () => {
     expect(f.payOnTimeRupees).toBe(500_000 - plan.gap);
     expect(f.payOnTimeRupees + f.payLaterRupees).toBe(500_000);
     expect(f.extraDaysRequested).toBe(15);
-    expect(f.dueInDays).toBe(10);
+    expect(f.dueInDays).toBe(30);
     expect(f.earlyPaymentDiscountPercent).toBe(2);
     expect(f.lateFeeMonthlyPercent).toBe(1.5);
     expect(f.borrowingRemovedIfAgreedRupees).toBe(56_634);
@@ -177,36 +177,32 @@ describe("the facts for the supplier call script", () => {
 export type _Unused = ExplainFacts;
 
 describe("the explanation facts come from the RECOMMENDED plan only", () => {
-  // At -25% the recommendation is to order fewer pairs than the invoice says.
+  // Ordering fewer pairs is not part of paying the supplier, so the recommendation is always the whole order.
   const result = runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: 25 });
   const facts = planFacts(result);
   const rec = recommendedFacts(facts);
 
-  it("recommends a smaller order in this case, so the test below is meaningful", () => {
-    expect(facts.recommendedPlan).toBe("right_sized");
-    expect(rec.plan.pairs).toBeLessThan(facts.pairsOrdered);
-    expect(rec.plan).toBe(facts.rightSized);
+  it("always recommends the full order", () => {
+    expect(facts.recommendedPlan).toBe("keep_full");
+    expect(rec.plan).toBe(facts.keepFull);
+    expect(rec.plan.pairs).toBe(facts.pairsOrdered);
   });
 
-  it("when the recommended order is smaller than the invoice, every unsold figure refers to the recommended quantity", () => {
-    const { expected, low } = { expected: Math.floor(result.stock.demandByScenario.expected), low: Math.floor(result.stock.demandByScenario.low) };
+  it("every unsold figure refers to the recommended quantity", () => {
+    const expected = Math.floor(result.stock.demandByScenario.expected);
+    const low = Math.floor(result.stock.demandByScenario.low);
     const n = rec.plan.pairs;
     expect(rec.plan.unsoldPairsAtExpectedSales).toBe(Math.max(0, n - expected));
     expect(rec.plan.unsoldPairsAtLowSales).toBe(Math.max(0, n - low));
     expect(rec.plan.unsoldAtLowSalesPercent).toBeCloseTo((rec.plan.unsoldPairsAtLowSales / n) * 100, 1);
-    expect(rec.plan.unsoldAtExpectedSalesPercent).toBeCloseTo((rec.plan.unsoldPairsAtExpectedSales / n) * 100, 1);
-    // Not the old, wrong figures, which were measured against the full 500: 500 - 390 = 110 unsold.
-    expect(rec.plan.unsoldPairsAtExpectedSales).not.toBe(facts.pairsOrdered - n);
-    expect(rec.plan.unsoldPairsAtLowSales).toBeLessThan(facts.pairsOrdered - Math.floor(result.stock.demandByScenario.low));
   });
 
   it("contains no number that belongs only to the other plan", () => {
     const shown = JSON.stringify(rec);
     expect(shown).not.toContain("keepFull");
     expect(shown).not.toContain("rightSized");
-    const other = facts.keepFull;
+    const other = facts.rightSized;
     const mine = collectFactNumbers(rec).rupees;
-    // The other plan's loan and cost are not available to be quoted.
     for (const n of [other.loanRupees, other.fundingCostRupees]) if (n !== rec.plan.loanRupees && n !== rec.plan.fundingCostRupees) expect(mine).not.toContain(n);
   });
 
@@ -235,8 +231,8 @@ describe("the facts behind the results summary", () => {
     expect(f.moneySavedRupees).toBe(Math.abs(o.cost.moneySaved));
     expect(f.moneyDirection).toBe("saved");
     expect(f).toMatchObject({ salesDirection: "below", salesVsForecastPercent: 15, pairsOrdered: o.stock.ordered, pairsSold: o.stock.sold, pairsLeftOver: o.stock.leftOver });
-    expect(f.drawnFromStandbyRupees).toBe(o.borrowing.drawnFromStandby);
-    expect(f.beyondStandbyRupees).toBe(o.borrowing.beyondStandby);
+    expect(f.drawnFromStandbyRupees).toBe(o.borrowing.extraCredit);
+    expect(f.beyondStandbyRupees).toBe(o.borrowing.beyondBackup);
     expect(f.nextUpliftTimes).toBe(o.learned.uplift.after);
   });
 

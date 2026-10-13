@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { merchant } from "./data/merchant";
-import { formatINR } from "./format";
 import { defaultInvoice as sampleInvoice } from "./data/default-scenario";
 import { runEngine, type EngineInput } from "./engine";
 import {

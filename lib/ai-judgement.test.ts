@@ -90,7 +90,7 @@ describe("explainPlan: three labelled parts", () => {
   const v = facts[facts.recommendedPlan === "right_sized" ? "rightSized" : "keepFull"];
   const goodParts = {
     doThis: `Order ${v.pairs} of ${facts.pairsOrdered} pairs now and cover the cash gap with ${inr(v.steps[0].amountRupees)} from ${v.steps[0].source}.`,
-    whyCheapest: `Funding costs ${inr(v.fundingCostRupees)} in all, since early settlement is only ${facts.ratesPercent.earlySettlementFeePercent}% (about ${Math.round(facts.ratesPercent.earlySettlementAnnualisedPercent)}% a year).`,
+    whyCheapest: `Funding costs ${inr(v.fundingCostRupees)} in all, with your overdraft at only ${facts.ratesPercent.overdraftAnnualPercent}% a year and both loans repaid as sales money arrives.`,
     watchOut: `At expected sales all ${v.pairs} pairs should sell; at lower sales about ${v.unsoldPairsAtLowSales} pairs (${v.unsoldAtLowSalesPercent}%) could be left over.`,
   };
   const reply = (parts: Record<string, unknown> = goodParts) => geminiReply(JSON.stringify(parts));

@@ -62,7 +62,7 @@ describe("extractInvoice with Gemini (default)", () => {
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.data.totalAmount).toEqual({ value: 500000, evidence: "5,00,000.00", confidence: "high" });
-      expect(r.data.dueDate.value).toBe("2026-10-21");
+      expect(r.data.dueDate.value).toBe("2026-11-10");
       expect(r.model).toBe("gemini-3.5-flash-lite"); // Flash-Lite is the default
       expect(r.attempts).toBe(1);
     }

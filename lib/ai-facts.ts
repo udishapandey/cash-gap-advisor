@@ -4,10 +4,8 @@
 // the grounding check uses that to know which numbers a ₹ amount or a % may match.
 
 import type { Invoice } from "./data/invoice";
-import { merchant } from "./data/merchant";
 import type { EngineResult, ViewResult } from "./engine";
 import type { OutcomeResult } from "./engine/outcome";
-import { CONFIG } from "./engine/config";
 import type { OptionId, Plan } from "./engine/options";
 import { expectedLostMargin } from "./engine/stock";
 import { formatINR, formatPct } from "./format";

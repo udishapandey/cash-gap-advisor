@@ -118,14 +118,14 @@ It was tested the hard way. The first live explanation passed every automated ch
 
 | | Real | Simulated (labelled in the UI) |
 |---|---|---|
-| Invoice reading from a PDF / photo | ✅ | |
+| Invoice reading from a PDF / photo (the three sample bills also load a saved reading, used if the AI is busy) | ✅ | |
 | Cost calculator, gap range, plan sizing, what-if slider | ✅ (on simulated inputs) | |
-| Explanation, call script, typed what-if | ✅ | |
+| Explanation, call script, typed what-if (the demo plan's explanation is saved text, checked against the plan) | ✅ | |
 | Merchant's sales history, bank balance, COD cash and returns | | ✅ |
 | Credit-line and overdraft limits, loan approval, the Key Fact Statement lender | | ✅ |
 | Touch ID tap and the supplier payout | | ✅ |
-| Post-season results (three made-up seasons) | | ✅ |
-| Razorpay test-mode API call | not built | |
+| Results after payment: repayment dates and the forecast check (the "actual" gap is a simulated outcome) | | ✅ |
+| Razorpay APIs (payouts, credit line) | — | Simulated by design: this is a concept prototype not connected to any Razorpay account. In production it would use RazorpayX Payouts and Razorpay Capital's credit line. |
 
 ## The key finding
 

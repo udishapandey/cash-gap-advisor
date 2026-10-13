@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { merchant } from "./data/merchant";
 import { formatINR } from "./format";
-import { sampleInvoice } from "./data/invoice";
+import { defaultInvoice as sampleInvoice } from "./data/default-scenario";
 import { runEngine, type EngineInput } from "./engine";
 import {
   DEFAULT_JOURNEY,
@@ -11,15 +11,10 @@ import {
   buildKfs,
   canApprove,
   consentText,
-  daysOut,
   earlyPayDay,
-  earlySettlementWhy,
-  overdraftFirstNote,
   SOURCE_TAGS,
-  earlySettlementInsight,
   needsCreditConsent,
   parseJourney,
-  quoteOption,
   rangeBarLayout,
   splitPlan,
   stepAccess,
@@ -39,7 +34,7 @@ describe("journey state", () => {
   it("starts with nothing chosen, approved or paid", () => {
     expect(DEFAULT_JOURNEY).toMatchObject({ invoice: null, chosenView: null, approved: false, paid: false });
     expect(DEFAULT_JOURNEY.salesDropPercent).toBe(0);
-    expect(DEFAULT_JOURNEY.overdraftRatePct).toBe(14);
+    expect(DEFAULT_JOURNEY.overdraftRatePct).toBe(11);
   });
 
   it("restores saved state", () => {
@@ -147,76 +142,30 @@ describe("which steps can be opened", () => {
   });
 });
 
-describe("option cards", () => {
-  const options = run().views.keepFull.options;
-  const get = (id: string) => options.find((o) => o.id === id)!;
-
-  it("quotes the cost of covering the gap with that option alone, up to its cap", () => {
-    const early = get("early_settlement");
-    const q = quoteOption(early, 227_621);
-    expect(q.available).toBe(true);
-    expect(q.cap).toBe(early.maxAmount);
-    expect(q.covers).toBe(Math.min(227_621, early.maxAmount));
-    expect(q.cost).toBe(Math.round(q.covers * 0.003));
-  });
-
-  it("covers only the gap when the cap is bigger than the gap", () => {
-    const credit = get("credit_line");
-    const q = quoteOption(credit, 100_000);
-    expect(q.covers).toBe(100_000);
-    expect(q.cost).toBe(1_479); // 100,000 at 18% a year for 30 days
-  });
-
-  it("is unavailable when the cap is zero", () => {
-    const q = quoteOption({ ...get("early_settlement"), maxAmount: 0 }, 50_000);
-    expect(q).toMatchObject({ available: false, covers: 0, cost: 0 });
-  });
-
-  it("shows the 'looks cheap' insight: 0.30% is about 55% a year", () => {
-    expect(earlySettlementInsight(get("early_settlement"))).toBe("0.30% ≈ 55% a year here");
-    expect(earlySettlementInsight({ ...get("early_settlement"), annualisedPct: null })).toBeNull();
-  });
-});
-
 describe("a plan split into non-credit actions and credit", () => {
-  it("puts early settlement and paying early in non-credit, and loans in credit", () => {
+  it("puts your own cash and paying early in non-credit, and the loans in credit", () => {
     const r = run();
     const sections = splitPlan(r.views.keepFull, r.stock.fullUnits);
     expect(r.views.keepFull.recommended.timing).toBe("pay_early_for_discount");
-    expect(sections.nonCredit.map((a) => a.id)).toEqual(["pay_early", "early_settlement"]);
-    expect(sections.nonCredit[0].text).toContain("by day 7");
+    expect(sections.nonCredit.map((a) => a.id)).toEqual(["pay_early", "own_cash"]);
+    expect(sections.nonCredit[0].text).toContain("by day 10");
     expect(sections.nonCredit[0].amount).toBe(10_000);
-    // Early settlement and the ₹1L overdraft are used up first; a small partner credit line covers the rest.
-    expect(sections.overdraft).toMatchObject({ amount: 100_000 });
-    expect(sections.creditLine).toMatchObject({ amount: 17_164, cost: 279 });
+    expect(sections.nonCredit[1].text).toContain("₹2,59,100");
+    expect(sections.overdraft).toMatchObject({ amount: 100_000, cost: 208, closedDay: 18 });
+    expect(sections.creditLine).toMatchObject({ amount: 130_900, cost: 209, closedDay: 15 });
   });
 
-  it("describes a right-sized order as an action, with the cash saved", () => {
-    const r = run({ salesDropPercent: 30 });
-    const sections = splitPlan(r.views.rightSized, r.stock.fullUnits);
-    const order = sections.nonCredit.find((a) => a.id === "right_size_order")!;
-    expect(order.text).toBe("Order 364 of 500 pairs now (73%)");
-    expect(order.amount).toBe(136_000);
-  });
-
-  it("has no order action when the full order is kept", () => {
+  it("has no order action: ordering fewer pairs is not part of paying the supplier", () => {
     const r = run({ salesDropPercent: 30 });
     expect(splitPlan(r.views.keepFull, r.stock.fullUnits).nonCredit.some((a) => a.id === "right_size_order")).toBe(false);
   });
 
   it("separates the partner credit line from the founder's own overdraft", () => {
-    const r = run({ exclude: ["early_settlement"], salesDropPercent: 30 });
+    const r = run();
     const sections = splitPlan(r.views.keepFull, r.stock.fullUnits);
     expect(sections.overdraft?.optionId).toBe("bank_overdraft");
     expect(sections.creditLine?.optionId).toBe("credit_line");
     expect(sections.nonCredit.every((a) => a.id !== "credit_line" && a.id !== "bank_overdraft")).toBe(true);
-  });
-
-  it("describes a deferred delivery in pairs", () => {
-    const r = run({ exclude: ["early_settlement", "credit_line", "bank_overdraft"], salesDropPercent: 0 });
-    const sections = splitPlan(r.views.rightSized, r.stock.fullUnits);
-    const split = sections.nonCredit.find((a) => a.id === "split_order");
-    expect(split?.text).toMatch(/^Have \d+ pairs delivered later$/);
   });
 });
 
@@ -225,42 +174,32 @@ describe("paying the supplier", () => {
     const view = run().views.keepFull;
     expect(view.recommended.timing).toBe("pay_early_for_discount");
     expect(supplierPayment(view)).toBe(490_000);
-    expect(tenureDays(view)).toBe(33); // 30 days plus the 3 days early
-    expect(earlyPayDay(view.invoice)).toBe(7);
+    expect(earlyPayDay(view.invoice)).toBe(10);
   });
 
   it("is the full amount on the due date", () => {
     const view = runEngine({ merchant, invoice: dueDateInvoice }).views.keepFull;
     expect(view.recommended.timing).toBe("on_due_date");
     expect(supplierPayment(view)).toBe(500_000);
-    expect(tenureDays(view)).toBe(30);
   });
 
-  it("follows the right-sized order", () => {
-    const view = run({ salesDropPercent: 30 }).views.rightSized;
-    expect(supplierPayment(view)).toBeLessThan(364_000 + 1);
-    expect(supplierPayment(view)).toBeGreaterThan(300_000);
+  it("the credit line is out for the days it was really owed, not a fixed term", () => {
+    expect(tenureDays(run().views.keepFull)).toBe(5);
   });
 });
 
 describe("Key Fact Statement (simulated)", () => {
-  const forced = () => {
-    // Force a plan that uses the partner credit line, so the engine and the statement can be compared.
-    const r = run({ exclude: ["early_settlement", "bank_overdraft"] });
-    const view = r.views.keepFull;
-    const step = view.recommended.plan.steps.find((s) => s.optionId === "credit_line")!;
-    return { view, step };
-  };
-
   it("shows interest that exactly matches the engine's cost for the same loan", () => {
-    const { view, step } = forced();
-    const kfs = buildKfs(step.amount, tenureDays(view));
+    const view = run().views.keepFull;
+    const step = view.recommended.plan.steps.find((s) => s.optionId === "credit_line")!;
+    const kfs = buildKfs(step.amount, tenureDays(view), step.cost);
     expect(kfs.totalInterest).toBe(step.cost);
     expect(kfs.loanAmount).toBe(step.amount);
+    expect(kfs.tenureDays).toBe(5);
   });
 
   it("has every field the founder must see before borrowing", () => {
-    const kfs = buildKfs(100_000, 30);
+    const kfs = buildKfs(100_000, 30, 1_479);
     expect(kfs.lender).toBe("Partner NBFC (simulated)");
     expect(kfs.loanAmount).toBe(100_000);
     expect(kfs.annualRatePct).toBe(18);
@@ -279,22 +218,19 @@ describe("Key Fact Statement (simulated)", () => {
   });
 
   it("the repayment adds up: principal + interest + fees", () => {
-    const kfs = buildKfs(250_000, 33);
+    const kfs = buildKfs(250_000, 33, 4_000);
     expect(kfs.totalRepayable).toBe(kfs.loanAmount + kfs.totalInterest + kfs.fees);
     expect(kfs.schedule[0].total).toBe(kfs.totalRepayable);
   });
 
-  it("charges more interest for a longer tenure", () => {
-    expect(buildKfs(100_000, 33).totalInterest).toBeGreaterThan(buildKfs(100_000, 30).totalInterest);
-  });
-
-  it("writes consent text with the amount, rate, repayment and days", () => {
-    const text = consentText(buildKfs(100_000, 30));
+  it("writes consent text with the amount, rate, repayment and days, and says there is no pre-closure charge", () => {
+    const text = consentText(buildKfs(100_000, 30, 1_479));
     expect(text).toContain("₹1,00,000");
     expect(text).toContain("18%");
     expect(text).toContain("₹1,01,479");
     expect(text).toContain("30 days");
     expect(text).toContain("Partner NBFC (simulated)");
+    expect(text).toContain("no pre-closure charge");
   });
 });
 
@@ -319,27 +255,20 @@ describe("approval rules", () => {
     expect(approvalBlockers(view)).toEqual([]);
   });
 
-  it("needs consent only when the partner credit line is used", () => {
-    const r = run({ exclude: ["early_settlement", "bank_overdraft"] });
-    expect(r.views.keepFull.recommended.plan.fullyCovered).toBe(true);
-    const withCredit = splitPlan(r.views.keepFull, r.stock.fullUnits);
-    expect(needsCreditConsent(withCredit)).toBe(true);
-    expect(canApprove({ view: r.views.keepFull, sections: withCredit, consent: false })).toBe(false);
-    expect(canApprove({ view: r.views.keepFull, sections: withCredit, consent: true })).toBe(true);
-
-    // Early settlement and your own overdraft only: no partner credit, so nothing to consent to.
-    const base = run({ exclude: ["credit_line"], cashElsewhere: 20_000 });
-    const noCredit = splitPlan(base.views.keepFull, base.stock.fullUnits);
-    expect(noCredit.creditLine).toBeNull();
-    expect(needsCreditConsent(noCredit)).toBe(false);
-    expect(canApprove({ view: base.views.keepFull, sections: noCredit, consent: false })).toBe(true);
+  it("needs consent when the partner credit line is used, and the approval waits for it", () => {
+    const r = run();
+    const sections = splitPlan(r.views.keepFull, r.stock.fullUnits);
+    expect(needsCreditConsent(sections)).toBe(true);
+    expect(canApprove({ view: r.views.keepFull, sections, consent: false })).toBe(false);
+    expect(canApprove({ view: r.views.keepFull, sections, consent: true })).toBe(true);
   });
 
-  it("the founder's own overdraft never needs the partner's consent", () => {
-    const r = run({ exclude: ["early_settlement", "credit_line"] });
+  it("needs no consent when nothing is borrowed from the partner", () => {
+    const r = run({ cashElsewhere: 400_000 });
     const sections = splitPlan(r.views.keepFull, r.stock.fullUnits);
-    expect(sections.overdraft).not.toBeNull();
+    expect(sections.creditLine).toBeNull();
     expect(needsCreditConsent(sections)).toBe(false);
+    expect(canApprove({ view: r.views.keepFull, sections, consent: false })).toBe(true);
   });
 });
 
@@ -363,124 +292,18 @@ describe("range bar layout", () => {
   });
 });
 
-describe("funding cards: yearly rate AND rupee cost, and why early settlement is still cheapest", () => {
-  const run = (drop = 0, extra: Partial<EngineInput> = {}) => runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop, ...extra });
-  const optionsOf = (view: ReturnType<typeof run>["recommended"]) => (view.recommended.timing === "pay_early_for_discount" ? view.earlyOptions : view.options);
-
-  it("on every step of every plan, yearly rate x days out / 365 equals the rupee cost shown", () => {
-    for (const drop of [0, 10, 20, 25, 30]) {
-      const result = run(drop);
-      for (const view of [result.views.keepFull, result.views.rightSized]) {
-        const options = optionsOf(view);
-        const loanDays = tenureDays(view);
-        for (const step of view.recommended.plan.steps) {
-          const option = options.find((o) => o.id === step.optionId)!;
-          const days = daysOut(option, merchant.settlementDays, loanDays);
-          if (option.annualisedPct === null || days === null) continue; // the split order is priced as lost margin
-          const expected = step.amount * (option.annualisedPct / 100) * (days / 365);
-          expect(Math.abs(step.cost - expected), `${option.id} at -${drop}%`).toBeLessThanOrEqual(1);
-        }
-      }
-    }
-  });
-
-  it("explains in numbers: a high yearly rate, 2 days, against a 30-day loan that costs more", () => {
-    const view = run(0).views.keepFull;
-    const step = view.recommended.plan.steps.find((s) => s.optionId === "early_settlement")!;
-    const text = earlySettlementWhy({ options: optionsOf(view), amount: step.amount, settlementDays: merchant.settlementDays, loanDays: tenureDays(view) })!;
-    const loan = optionsOf(view).filter((o) => o.isBorrowing).reduce((a, b) => (b.costRate < a.costRate ? b : a));
-    expect(text).toContain("High yearly rate (55% a year)");
-    expect(text).toContain(`only needed for ${merchant.settlementDays} days`);
-    expect(text).toContain(`A loan would run ${tenureDays(view)} days`);
-    expect(text).toContain(`cost ${formatINR(Math.round(step.amount * loan.costRate))}`);
-    expect(text).toContain(`against ${formatINR(step.cost)} here`);
-    expect(Math.round(step.amount * loan.costRate)).toBeGreaterThan(step.cost);
-  });
-
-  it("is said only when early settlement really is cheaper in rupees than the cheapest loan", () => {
-    const cheapBank = run(0, { overdraftRatePct: 3 }).views.keepFull; // 3% x 30 days = 0.25%, under the 0.30% fee
-    expect(earlySettlementWhy({ options: cheapBank.options, amount: 100_000, settlementDays: 2, loanDays: 30 })).toBeNull();
-    expect(earlySettlementWhy({ options: cheapBank.options.filter((o) => !o.isBorrowing), amount: 100_000, settlementDays: 2, loanDays: 30 })).toBeNull();
-    expect(earlySettlementWhy({ options: run(0).views.keepFull.options, amount: 0, settlementDays: 2, loanDays: 30 })).toBeNull();
-  });
-
-  it("uses the longer loan period when the plan pays early for the discount", () => {
-    const view = run(0).views.keepFull;
-    expect(view.recommended.timing).toBe("pay_early_for_discount");
-    expect(tenureDays(view)).toBe(30 + (sampleInvoice.dueInDays - earlyPayDay(sampleInvoice)));
-    const step = view.recommended.plan.steps.find((s) => s.optionId === "early_settlement")!;
-    expect(earlySettlementWhy({ options: view.earlyOptions, amount: step.amount, settlementDays: 2, loanDays: tenureDays(view) })).toContain("A loan would run 33 days");
-  });
-
-  it("days out: early settlement a few days, loans their period, split order none", () => {
-    const options = run(0).views.rightSized.options;
-    expect(daysOut(options.find((o) => o.id === "early_settlement")!, 2, 30)).toBe(2);
-    expect(daysOut(options.find((o) => o.id === "credit_line")!, 2, 30)).toBe(30);
-    expect(daysOut(options.find((o) => o.id === "split_order")!, 2, 30)).toBeNull();
-  });
-});
-
-describe("who provides each source, and why the founder's own overdraft goes first", () => {
-  const run = (drop = 0, extra: Partial<EngineInput> = {}) => runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop, ...extra });
-  const planOf = (view: ReturnType<typeof run>["views"]["keepFull"]) => ({
-    options: view.recommended.timing === "pay_early_for_discount" ? view.earlyOptions : view.options,
-    steps: view.recommended.plan.steps,
-    loanDays: tenureDays(view),
-  });
-
-  it("tags the bank overdraft as the founder's own bank, not Razorpay, and the credit line as Razorpay's", () => {
+describe("who provides each source", () => {
+  it("tags your own cash and the bank overdraft as not Razorpay, and the credit line as Razorpay's", () => {
+    expect(SOURCE_TAGS.own_cash.razorpay).toBe(false);
     expect(SOURCE_TAGS.bank_overdraft).toEqual({ label: "Your own bank, not Razorpay", razorpay: false });
     expect(SOURCE_TAGS.credit_line.razorpay).toBe(true);
     expect(SOURCE_TAGS.credit_line.label).toContain("simulated");
     expect(SOURCE_TAGS.early_settlement.razorpay).toBe(true);
     expect(SOURCE_TAGS.split_order.razorpay).toBe(false);
-    for (const id of Object.keys(SOURCE_TAGS)) expect(SOURCE_TAGS[id as keyof typeof SOURCE_TAGS].label.length).toBeGreaterThan(5);
   });
 
-  it("in the demo, the overdraft (₹1,00,000 at 14%) is used before the credit line because it costs less for the days needed", () => {
-    const view = run(0).views.keepFull;
-    const steps = view.recommended.plan.steps;
-    const iOd = steps.findIndex((s) => s.optionId === "bank_overdraft");
-    const iCredit = steps.findIndex((s) => s.optionId === "credit_line");
-    expect(iOd).toBeGreaterThanOrEqual(0);
-    expect(iCredit).toBeGreaterThan(iOd); // the overdraft comes first in the plan
-    expect(steps[iOd].amount).toBe(merchant.overdraftLimit);
-    expect(steps[iOd].amount).toBe(100_000);
-    const note = overdraftFirstNote(planOf(view))!;
-    expect(note).toContain("Your bank's overdraft (₹1,00,000 at 14% a year)");
-    expect(note).toContain("the Razorpay credit line (18%)");
-    expect(note).toContain("costs less for the 33 days needed");
-    // The two costs it quotes are real: the overdraft's own step cost, and the credit line's rate on the same amount.
-    expect(note).toContain(formatINR(steps[iOd].cost));
-    const credit = view.earlyOptions.find((o) => o.id === "credit_line")!;
-    expect(note).toContain(formatINR(Math.round(100_000 * credit.costRate)));
-    expect(steps[iOd].cost).toBeLessThan(Math.round(100_000 * credit.costRate));
-  });
-
-  it("holds for every plan and slider value that uses both: the overdraft is never the dearer one used first", () => {
-    for (const drop of [0, 10, 20, 25, 30]) {
-      const r = run(drop);
-      for (const view of [r.views.keepFull, r.views.rightSized]) {
-        const p = planOf(view);
-        const od = p.options.find((o) => o.id === "bank_overdraft")!;
-        const credit = p.options.find((o) => o.id === "credit_line")!;
-        const iOd = p.steps.findIndex((s) => s.optionId === "bank_overdraft");
-        const iCredit = p.steps.findIndex((s) => s.optionId === "credit_line");
-        if (iOd >= 0 && iCredit >= 0) {
-          expect(od.costRate < credit.costRate ? iOd < iCredit : iCredit < iOd, `${view.id} -${drop}%`).toBe(true);
-          expect(overdraftFirstNote(p) !== null, `${view.id} -${drop}%`).toBe(od.costRate < credit.costRate);
-        }
-      }
-    }
-  });
-
-  it("says nothing when the plan doesn't use both, or when the overdraft is not the cheaper", () => {
-    const rich = run(0, { cashElsewhere: 5_000_000 }).views.keepFull;
-    expect(overdraftFirstNote(planOf(rich))).toBeNull();
-    const dear = run(0, { overdraftRatePct: 30 }).views.keepFull; // a 30% overdraft costs more than the 18% credit line
-    expect(overdraftFirstNote(planOf(dear))).toBeNull();
-    const iOd = dear.recommended.plan.steps.findIndex((s) => s.optionId === "bank_overdraft");
-    const iCredit = dear.recommended.plan.steps.findIndex((s) => s.optionId === "credit_line");
-    if (iOd >= 0 && iCredit >= 0) expect(iCredit).toBeLessThan(iOd); // then the credit line really does come first
+  it("in the demo, the cheaper overdraft is used before the credit line", () => {
+    const steps = run().views.keepFull.recommended.plan.steps.map((s) => s.optionId);
+    expect(steps.indexOf("bank_overdraft")).toBeLessThan(steps.indexOf("credit_line"));
   });
 });

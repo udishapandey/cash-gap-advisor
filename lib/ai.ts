@@ -32,6 +32,7 @@ type Provider = "gemini" | "claude";
 // Defaults can be overridden with GEMINI_MODEL / CLAUDE_MODEL in .env.local.
 const GEMINI_FLASH = "gemini-3.8-flash";
 const GEMINI_FLASH_LITE = "gemini-3.5-flash-lite";
+const GEMINI_FLASH_LITE_31 = "gemini-3.1-flash-lite";
 // Flash-Lite is the default: it is fast and has its own free quota, and the founder checks every field anyway.
 const DEFAULT_GEMINI_MODEL = GEMINI_FLASH_LITE;
 const DEFAULT_CLAUDE_MODEL = "claude-haiku-5-5";
@@ -177,6 +178,10 @@ const INVOICE_USER_PROMPT = "Extract the invoice fields from the attached file."
 const INVOICE_DEADLINE_MS = 30_000;
 const FIRST_ATTEMPT_MS = 15_000; // each model gets at most 15s, so both attempts fit in the 30s deadline
 const MIN_RETRY_MS = 5_000;
+// An overloaded model usually answers 503 within seconds, and demand comes in spikes, so a read keeps trying across the
+// models (and the first one again) until the deadline. At most this many tries, with a short pause between them.
+const MAX_ATTEMPTS = 5;
+const RETRY_PAUSE_MS = process.env.VITEST ? 0 : 800;
 
 
 const FIELD_TYPES: Record<FieldKey, "string" | "number" | "integer"> = {
@@ -485,18 +490,24 @@ async function runAttempts(
   const log: AttemptLog[] = [];
   let last: Extract<Attempt, { ok: false }> | undefined;
 
-  for (let i = 0; i < models.length; i++) {
+  // One model (fallback off, or Claude) is one try: there is nothing to spread the load across.
+  const maxAttempts = models.length > 1 ? MAX_ATTEMPTS : 1;
+  for (let i = 0; i < maxAttempts; i++) {
+    // Every model once; then, for overload and timeouts only (never for a rate limit), round again.
+    if (i >= models.length && last?.status === 429) break;
+    const model = models[i % models.length];
     const remaining = budget.deadlineMs - (Date.now() - started);
     if (i > 0 && remaining < MIN_RETRY_MS) break;
     const timeoutMs = Math.min(budget.firstAttemptMs, remaining);
 
     const t0 = Date.now();
-    const result = await attempt(models[i], timeoutMs);
-    if (result.ok) return { ok: true, raw: result.raw, model: models[i], attempts: i + 1 };
+    const result = await attempt(model, timeoutMs);
+    if (result.ok) return { ok: true, raw: result.raw, model, attempts: i + 1 };
 
-    log.push({ model: models[i], elapsedMs: Date.now() - t0, status: result.status, providerStatus: result.providerStatus });
+    log.push({ model, elapsedMs: Date.now() - t0, status: result.status, providerStatus: result.providerStatus });
     last = result;
     if (!result.retryable) break;
+    if (RETRY_PAUSE_MS > 0) await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
   }
 
   const failure = last!.failure;
@@ -519,7 +530,10 @@ function geminiModels(): string[] {
   // The fallback is "the other model": a model can't back itself up.
   const otherModel = /flash-lite/.test(primary) ? GEMINI_FLASH : GEMINI_FLASH_LITE;
   const fallback = process.env.GEMINI_FALLBACK_MODEL || otherModel;
-  return fallback === "off" || fallback === primary ? [primary] : [primary, fallback];
+  if (fallback === "off" || fallback === primary) return [primary];
+  // A third model from the same family spreads the load: when two are busy, a third often is not.
+  const third = GEMINI_FLASH_LITE_31;
+  return [primary, fallback, ...(third !== primary && third !== fallback ? [third] : [])];
 }
 
 async function geminiExtractInvoice(file: InvoiceFile): Promise<RawResult> {

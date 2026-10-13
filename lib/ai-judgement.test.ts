@@ -336,19 +336,20 @@ describe("explainPlan: three labelled parts", () => {
     it("does not cache a failure or a rejected answer, so asking again tries again", async () => {
       const fetchMock = mockFetchSequence(
         () => geminiError(429, "RESOURCE_EXHAUSTED"), // 1st question, 1st model...
-        () => geminiError(429, "RESOURCE_EXHAUSTED"), // ...and the fallback model: it fails
+        () => geminiError(429, "RESOURCE_EXHAUSTED"), // ...the fallback model...
+        () => geminiError(429, "RESOURCE_EXHAUSTED"), // ...and the third model: all fail
         () => bad("doThis", "₹5,55,555."), //             2nd question: an invented number
         () => reply(), //                                 3rd question: finally good
       );
       expect((await explainPlan(result, "en")).reason).toBe("ai_error");
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect((await explainPlan(result, "en")).reason).toBe("ungrounded");
       expect(fetchMock).toHaveBeenCalledTimes(3);
-      expect((await explainPlan(result, "en")).status).toBe("verified");
+      expect((await explainPlan(result, "en")).reason).toBe("ungrounded");
       expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect((await explainPlan(result, "en")).status).toBe("verified");
+      expect(fetchMock).toHaveBeenCalledTimes(5);
       // Only the good answer was remembered.
       expect((await explainPlan(result, "en")).cached).toBe(true);
-      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(fetchMock).toHaveBeenCalledTimes(5);
     });
     it("is not shared between providers", async () => {
       const fetchMock = mockFetch(() => reply());

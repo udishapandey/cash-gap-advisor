@@ -216,15 +216,18 @@ describe("when the main model fails: one retry on the other model", () => {
     expect(modelOf(sent(fetchMock).url)).toBe("gemini-3.5-flash-lite");
   });
 
-  it("retries once only: never a third try, and the failure lists both attempts", async () => {
+  it("keeps trying while the models are overloaded: three models, then round again, five tries at most", async () => {
     const fetchMock = mockFetch(() => geminiError(503, "UNAVAILABLE", "The model is overloaded."));
     const r = await extractInvoice(pdf);
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(r).toMatchObject({ ok: false, kind: "provider_error" });
     if (!r.ok) {
       expect(r.message).toContain("503");
       expect(r.detail?.attempts.map((a) => [a.model, a.status, a.providerStatus])).toEqual([
+        ["gemini-3.5-flash-lite", 503, "UNAVAILABLE"],
+        ["gemini-3.8-flash", 503, "UNAVAILABLE"],
+        ["gemini-3.1-flash-lite", 503, "UNAVAILABLE"],
         ["gemini-3.5-flash-lite", 503, "UNAVAILABLE"],
         ["gemini-3.8-flash", 503, "UNAVAILABLE"],
       ]);
@@ -244,7 +247,7 @@ describe("when the main model fails: one retry on the other model", () => {
     const down = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     vi.stubGlobal("fetch", down);
     const r2 = await extractInvoice(pdf);
-    expect(down).toHaveBeenCalledTimes(2);
+    expect(down).toHaveBeenCalledTimes(5);
     expect(r2).toMatchObject({ ok: false, kind: "provider_error" });
     if (!r2.ok) expect(r2.message).toContain("Couldn't reach");
   });
@@ -305,18 +308,18 @@ describe("rate limits are retried on the other model; bad requests are not", () 
     if (r.ok) expect(r.model).toBe("gemini-3.8-flash");
   });
 
-  it("a 429 on both models is two requests, then a clear usage-limit message with the wait time", async () => {
+  it("a 429 on every model is one request each (three), then a clear usage-limit message with the wait time", async () => {
     const fetchMock = mockFetch(() =>
       geminiError(429, "RESOURCE_EXHAUSTED", "Quota exceeded. SECRET-BODY", { "Retry-After": "17" }),
     );
     const r = await extractInvoice(pdf);
-    expect(fetchMock).toHaveBeenCalledTimes(2); // never a third
+    expect(fetchMock).toHaveBeenCalledTimes(3); // each model once, never a second round for a rate limit
     expect(r).toMatchObject({ ok: false, kind: "rate_limit", retryAfterSeconds: 17 });
     if (!r.ok) {
       expect(r.message).toBe("Usage limit reached. Try again in a minute.");
       expect(r.message).not.toContain("SECRET-BODY"); // the provider's text is logged, never shown to the founder
       expect(r.detail).toMatchObject({ status: 429, providerStatus: "RESOURCE_EXHAUSTED" });
-      expect(r.detail?.attempts).toHaveLength(2);
+      expect(r.detail?.attempts).toHaveLength(3);
     }
   });
 

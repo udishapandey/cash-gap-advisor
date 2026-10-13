@@ -57,6 +57,5 @@ Copy: headings 3 to 8 words, one supporting line, buttons 1 to 4 words, labels a
 `GEMINI_MODEL` (default `gemini-3.5-flash-lite`), `GEMINI_FALLBACK_MODEL` (default: the other Gemini model, so
 `gemini-3.8-flash` when the main one is Flash-Lite; `off` to disable), `CLAUDE_MODEL`.
 
-Invoice reading waits at most 45 seconds with at most one retry on the fallback model (on 429, 5xx, timeout, network
-error or empty answer). `AI_MOCK=true` returns the pre-read sample after 1.5 seconds with no API call: use it for
+Invoice reading waits at most 30 seconds in total, 15 seconds per try. It rotates across up to three Gemini models (the main one, the fallback, then `gemini-3.1-flash-lite`) and goes round again after a 503 or a timeout, five tries at most; a 429 tries each model once. Fallback `off` means one try. `AI_MOCK=true` returns the pre-read sample after 1.5 seconds with no API call: use it for
 development. It must never be on in production.

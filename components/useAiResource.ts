@@ -10,7 +10,8 @@ export type AiResource<T> =
   | { status: "ready"; value: T; fromCache: boolean }
   | { status: "failed"; message: string };
 
-const CLIENT_TIMEOUT_MS = 30_000;
+// A little longer than the server's 10 seconds for these short answers, then the page shows its own template.
+const CLIENT_TIMEOUT_MS = 15_000;
 
 /**
  * Fetch an AI answer for `request` from one of our own routes. It waits a moment before asking (so dragging a slider

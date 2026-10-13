@@ -202,7 +202,7 @@ function ApproveBody({ state, result, update }: ShellContext) {
 
       <Card aria-label="Pay supplier">
         <SectionLabel>Pay supplier</SectionLabel>
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+        <div className="mt-3 flex flex-col items-start gap-4">
           <Metric label={supplier} value={formatINR(pay)} caption={early ? `Pay by ${date(payDay)} for the discount · bill due ${date(view.invoice.dueInDays)}` : `Due ${date(payDay)}`} />
           <button type="button" onClick={payNow} disabled={!approved || busy !== null} className={BTN.primary}>
             {busy === "pay" ? "Paying…" : "Pay supplier"}

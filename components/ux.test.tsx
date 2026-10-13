@@ -139,7 +139,7 @@ describe("the copy, as written", () => {
     expect(read("components/ApproveScreen.tsx")).not.toContain("Start another invoice");
   });
   it("Results", () => {
-    has("components/ResultsScreen.tsx", "Payment complete", "Supplier paid", "Expected net benefit", "Early-payment discount", "Estimated financing cost", "What happens next", "How did the forecast perform?", "Actual (simulated)", "On forecast", "Done");
+    has("components/ResultsScreen.tsx", "Payment complete", "Supplier paid", "Expected net benefit", "Early-payment discount", "Estimated financing cost", "What happens next", "How did the forecast perform?", "Actual (simulated)", "Forecast range", "Done");
     has("lib/results.ts", "Saved", "Day ${m.day}: sales", "Nothing changes.");
     expect(read("components/ResultsScreen.tsx")).not.toMatch(/sold out|Approve updated plan|15% lower|15% higher|Mid-season|simple update rule|1\.4x/i);
   });

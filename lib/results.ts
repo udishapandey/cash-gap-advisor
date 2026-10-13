@@ -162,3 +162,37 @@ export function slowSalesView(m: MidSeason, date: (day: number) => string) {
     risk: m.stillWorthIt ? null : "Slower sales would leave you without enough credit if sales fell further.",
   };
 }
+
+/**
+ * "How did the forecast perform?" in words a founder can read: what we expected you to need, what you needed, where that
+ * sits in the forecast range, and what it meant for borrowing. Every figure is the outcome's own.
+ */
+export function forecastReview(o: OutcomeResult, range: { low: number; high: number }) {
+  const d = o.gap.difference;
+  const sales = Math.round(Math.abs(o.sales.vsForecastPercent));
+  const max = Math.max(range.high, o.gap.forecast, o.gap.actual, 1) * 1.05;
+  const at = (n: number) => Math.min(100, Math.max(0, (n / max) * 100));
+  return {
+    headline: `We expected you to need ${inrShort(o.gap.forecast)}. You needed ${inrShort(o.gap.actual)}.`,
+    verdict: d === 0 ? "On forecast" : d > 0 ? `${inrShort(d)} more than expected` : `${inrShort(-d)} less than expected`,
+    verdictTone: d > 0 ? ("notice" as const) : ("positive" as const),
+    bar: {
+      rangeText: `${inrShort(range.low)} to ${inrShort(range.high)}`,
+      forecastValue: inrShort(o.gap.forecast),
+      actualValue: inrShort(o.gap.actual),
+      lowPct: at(range.low),
+      highPct: at(range.high),
+      forecastPct: at(o.gap.forecast),
+      actualPct: at(o.gap.actual),
+    },
+    lines: [
+      sales === 0
+        ? "Sales matched the forecast."
+        : `Sales were ${sales}% ${o.sales.vsForecastPercent < 0 ? "below" : "above"} the forecast.`,
+      o.borrowing.extraCredit > 0
+        ? `${inrShort(o.borrowing.extraCredit)} more credit was needed. It came from your backup limit.`
+        : "Your loans stayed within the plan.",
+      ...(o.borrowing.beyondBackup > 0 ? [`${inrShort(o.borrowing.beyondBackup)} was more than your backup limit could cover.`] : []),
+    ],
+  };
+}

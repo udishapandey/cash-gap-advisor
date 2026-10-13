@@ -85,6 +85,20 @@ describe("cleaning the AI's text", () => {
 });
 
 // ---------------------------------------------------------------------------
+describe("a busy AI does not keep a short answer waiting", () => {
+  it("explanation, script and summary give up after two tries and show their template", async () => {
+    const fetchMock = mockFetch(() => geminiError(503, "UNAVAILABLE"));
+    const o = await explainPlan(run(), "en");
+    expect(o).toMatchObject({ status: "unavailable", reason: "ai_error" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    fetchMock.mockClear();
+    const c = await callScript(sampleInvoice, run().views.keepFull.duePlan, "en", { extensionDays: 15, borrowingRemovedRupees: 0 });
+    expect(c.status).toBe("unavailable");
+    expect(c.text.length).toBeGreaterThan(40);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("the saved demo explanation", () => {
   it("makes no AI call for the demo plan, in English or Hindi, and says it is saved", async () => {
     const fetchMock = mockFetch(() => geminiReply("{}"));
@@ -336,20 +350,19 @@ describe("explainPlan: three labelled parts", () => {
     it("does not cache a failure or a rejected answer, so asking again tries again", async () => {
       const fetchMock = mockFetchSequence(
         () => geminiError(429, "RESOURCE_EXHAUSTED"), // 1st question, 1st model...
-        () => geminiError(429, "RESOURCE_EXHAUSTED"), // ...the fallback model...
-        () => geminiError(429, "RESOURCE_EXHAUSTED"), // ...and the third model: all fail
+        () => geminiError(429, "RESOURCE_EXHAUSTED"), // ...and the fallback model: short answers get two tries only
         () => bad("doThis", "₹5,55,555."), //             2nd question: an invented number
         () => reply(), //                                 3rd question: finally good
       );
       expect((await explainPlan(result, "en")).reason).toBe("ai_error");
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
       expect((await explainPlan(result, "en")).reason).toBe("ungrounded");
-      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
       expect((await explainPlan(result, "en")).status).toBe("verified");
-      expect(fetchMock).toHaveBeenCalledTimes(5);
+      expect(fetchMock).toHaveBeenCalledTimes(4);
       // Only the good answer was remembered.
       expect((await explainPlan(result, "en")).cached).toBe(true);
-      expect(fetchMock).toHaveBeenCalledTimes(5);
+      expect(fetchMock).toHaveBeenCalledTimes(4);
     });
     it("is not shared between providers", async () => {
       const fetchMock = mockFetch(() => reply());

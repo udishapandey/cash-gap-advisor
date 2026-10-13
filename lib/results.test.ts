@@ -6,7 +6,7 @@ import { computeOutcome, OUTCOME_IDS, SIMULATED_OUTCOMES } from "./engine/outcom
 import { formatINR, formatSignedINR } from "./format";
 import { DEFAULT_JOURNEY } from "./journey";
 import { dayLabel } from "./plain";
-import { slowSalesView, MID_SEASON_CAPTION, SAVING_BASIS, gapRow, midSeasonForState, midSeasonView, nextTimeBullets, outcomeForState, savedBreakdown, savedHeadline } from "./results";
+import { forecastReview, slowSalesView, MID_SEASON_CAPTION, SAVING_BASIS, gapRow, midSeasonForState, midSeasonView, nextTimeBullets, outcomeForState, savedBreakdown, savedHeadline } from "./results";
 
 const run = (drop = 0) => runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop });
 const state = (drop = 0, chosenView: "keep_full" | "right_sized" | null = "keep_full") => ({ ...DEFAULT_JOURNEY, salesDropPercent: drop, chosenView });
@@ -174,5 +174,30 @@ describe("the slow-sales status line when the plan stays safe", () => {
   it("reads as a tick, from the engine's own verdict", () => {
     const m = midSeasonForState(run(), state())!;
     expect(slowSalesView({ ...m, stillWorthIt: true }, (d) => dayLabel(sampleInvoice, d)).statusLine).toBe("✓ Still safe if sales are 15% lower");
+  });
+});
+
+describe("how did the forecast perform", () => {
+  const range = { low: 96_500, high: 365_300 };
+  it("says what we expected, what you needed, and that it was on forecast", () => {
+    const r = forecastReview(at("as_forecast"), range);
+    expect(r.headline).toBe("We expected you to need ₹2.31L. You needed ₹2.31L.");
+    expect(r.verdict).toBe("On forecast");
+    expect(r.bar).toMatchObject({ rangeText: "₹96,500 to ₹3.65L", forecastValue: "₹2.31L", actualValue: "₹2.31L" });
+    expect(r.lines).toEqual(["Sales matched the forecast.", "Your loans stayed within the plan."]);
+  });
+  it("puts the forecast and the actual inside the range bar, in order", () => {
+    const { bar } = forecastReview(at("as_forecast"), range);
+    expect(bar.lowPct).toBeLessThan(bar.forecastPct);
+    expect(bar.forecastPct).toBeLessThan(bar.highPct);
+    expect(bar.actualPct).toBeCloseTo(bar.forecastPct, 6);
+  });
+  it("says more or less than expected, and where the extra credit came from", () => {
+    const lower = forecastReview(at("lower_15"), range);
+    expect(lower.verdict).toBe("₹1.17L more than expected");
+    expect(lower.verdictTone).toBe("notice");
+    expect(lower.lines).toContain("Sales were 15% below the forecast.");
+    expect(lower.lines).toContain("₹1.17L more credit was needed. It came from your backup limit.");
+    expect(forecastReview(at("higher_15"), range).verdict).toMatch(/^₹1\.08L less than expected$/);
   });
 });

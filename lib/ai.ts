@@ -484,14 +484,14 @@ type RawResult = { ok: true; raw: unknown; model: string; attempts: number } | E
 async function runAttempts(
   models: string[],
   attempt: (model: string, timeoutMs: number) => Promise<Attempt>,
-  budget: { deadlineMs: number; firstAttemptMs: number } = { deadlineMs: INVOICE_DEADLINE_MS, firstAttemptMs: FIRST_ATTEMPT_MS },
+  budget: { deadlineMs: number; firstAttemptMs: number; maxAttempts?: number } = { deadlineMs: INVOICE_DEADLINE_MS, firstAttemptMs: FIRST_ATTEMPT_MS },
 ): Promise<RawResult> {
   const started = Date.now();
   const log: AttemptLog[] = [];
   let last: Extract<Attempt, { ok: false }> | undefined;
 
   // One model (fallback off, or Claude) is one try: there is nothing to spread the load across.
-  const maxAttempts = models.length > 1 ? MAX_ATTEMPTS : 1;
+  const maxAttempts = models.length > 1 ? (budget.maxAttempts ?? MAX_ATTEMPTS) : 1;
   for (let i = 0; i < maxAttempts; i++) {
     // Every model once; then, for overload and timeouts only (never for a rate limit), round again.
     if (i >= models.length && last?.status === 429) break;
@@ -633,7 +633,8 @@ export function describeFailure(failure: ExtractInvoiceFailure): string {
 export type { Language } from "./language";
 
 /** Shorter than invoice reading: these are short answers and the founder is waiting. */
-const TEXT_BUDGET = { deadlineMs: 25_000, firstAttemptMs: 15_000 };
+// Each of them has a plain template, so a busy AI should cost the founder seconds, not half a minute: two tries, 10s in all.
+const TEXT_BUDGET = { deadlineMs: 10_000, firstAttemptMs: 6_000, maxAttempts: 2 };
 const MOCK_AI_DELAY_MS = 800;
 const MAX_TEXT_CHARS = 1_400;
 

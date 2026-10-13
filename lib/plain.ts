@@ -139,6 +139,10 @@ export interface HeroPlan {
   viewId: ViewId;
   /** "Pay by 21 Oct and get ₹10,000 off" */
   title: string;
+  /** "Pay ₹4.90L by 21 Oct to get the ₹10,000 discount." Null when the plan pays on the due date. */
+  subtitle: string | null;
+  /** The supplier discount the plan takes, in rupees. Zero when it pays on the due date. */
+  discount: number;
   /** "₹9,583 better off than paying on the due date" */
   caption: string;
   /** False when the limits cannot cover the bill: the screen then shows the options below instead of a cost table. */
@@ -205,8 +209,12 @@ export function buildHeroPlan(
   return {
     viewId,
     title: early
-      ? `Pay by ${dayLabel(view.invoice, plan.payDay)}, save ${formatINR(view.discount.discountAmount)}`
+      ? `Pay early and keep ${formatINR(Math.max(0, saving))}`
       : `Pay on ${dayLabel(view.invoice, plan.payDay)}`,
+    subtitle: early
+      ? `Pay ${formatLakh(plan.payAmount)} by ${dayLabel(view.invoice, plan.payDay)} to get the ${formatINR(view.discount.discountAmount)} discount.`
+      : null,
+    discount: early ? view.discount.discountAmount : 0,
     covered: plan.fullyCovered,
     reason: payEarlyReason(view),
     uncoveredOptions: UNCOVERED_OPTIONS.map((o) => o.replace("{due}", dayLabel(view.invoice, view.invoice.dueInDays))),

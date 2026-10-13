@@ -229,7 +229,9 @@ describe("the recommended plan card", () => {
   const hero = buildHeroPlan(r, r.recommendedView, forecastSaving(r, r.recommendedView, state()));
 
   it("has the title and caption as written, bound to the engine", () => {
-    expect(hero.title).toBe("Pay by 21 Oct, save ₹10,000");
+    expect(hero.title).toBe("Pay early and keep ₹9,583");
+    expect(hero.subtitle).toBe("Pay ₹4.90L by 21 Oct to get the ₹10,000 discount.");
+    expect(hero.discount).toBe(10_000);
     expect(hero.caption).toBe("Net benefit ₹9,583");
     expect(hero.saving).toBe(9_583);
   });

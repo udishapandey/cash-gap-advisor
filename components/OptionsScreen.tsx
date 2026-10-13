@@ -7,6 +7,8 @@ import { CONFIG } from "@/lib/engine/config";
 import { formatINR, inrShort } from "@/lib/format";
 import { SALES_DROPS, type JourneyState } from "@/lib/journey";
 import type { Language } from "@/lib/language";
+import { midSeasonForState, midSeasonView } from "@/lib/results";
+import { dayLabel } from "@/lib/plain";
 import { UNCOVERED_TITLE, buildHeroPlan, compareRows, dayByDay, forecastSaving, type HeroPlan } from "@/lib/plain";
 import type { AppliedWhatIf } from "@/lib/whatif";
 import AiExplanation from "./AiExplanation";
@@ -15,7 +17,7 @@ import Disclosure from "./Disclosure";
 import JourneyShell from "./JourneyShell";
 import Tabs from "./Tabs";
 import WhatIfAsk from "./WhatIfAsk";
-import { Alert, BTN, Badge, Card, Metric, PageHeader, Panel } from "./ui";
+import { Alert, BTN, Badge, Card, PageHeader, Panel } from "./ui";
 
 const dropLabel = (d: number) => (d === 0 ? "no change" : `−${d}%`);
 
@@ -155,13 +157,10 @@ function HeroCard({
         <div>
           <Badge tone="information">Recommended plan</Badge>
           <h2 className="mt-3 font-heading text-2xl font-semibold">{hero.title}</h2>
+          {hero.subtitle && <p className="mt-1 text-sm text-subtle">{hero.subtitle}</p>}
           {hero.reason && <p className="mt-1 text-sm text-muted">{hero.reason}</p>}
+          {hero.saving <= 0 && <p className="mt-1 text-sm text-muted">{hero.caption}</p>}
         </div>
-        {hero.saving > 0 ? (
-          <Metric size="lg" tone="saved" label="Net benefit" value={formatINR(hero.saving)} />
-        ) : (
-          <p className="text-sm text-muted">{hero.caption}</p>
-        )}
       </div>
 
       <div className="border-t border-line px-6 py-4">
@@ -199,12 +198,28 @@ function HeroCard({
                   <td className="py-2.5 text-right tabular-nums">{formatINR(x.cost)}</td>
                 </tr>
               ))}
-              <tr className="font-semibold">
+              {hero.discount > 0 && (
+                <tr>
+                  <td className="py-2.5">Supplier discount</td>
+                  <td />
+                  <td />
+                  <td className="py-2.5 text-right tabular-nums">+{formatINR(hero.discount)}</td>
+                </tr>
+              )}
+              <tr>
                 <td className="py-2.5">Financing cost</td>
                 <td />
                 <td />
-                <td className="py-2.5 text-right tabular-nums">{formatINR(hero.totalCost)}</td>
+                <td className="py-2.5 text-right tabular-nums">−{formatINR(hero.totalCost)}</td>
               </tr>
+              {hero.saving > 0 && (
+                <tr className="font-semibold text-green-700">
+                  <td className="py-2.5">Net benefit</td>
+                  <td />
+                  <td />
+                  <td className="py-2.5 text-right tabular-nums">{formatINR(hero.saving)}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -241,6 +256,40 @@ function AskCard({
       </div>
       {showScript && script(true)}
     </Card>
+  );
+}
+
+// ---------- If sales are slow ----------
+
+function SlowSales({ view }: { view: ReturnType<typeof midSeasonView> }) {
+  return (
+    <div className="space-y-3 text-sm">
+      <p className="text-muted">{view.intro}</p>
+      <p className="font-heading text-lg font-semibold">{view.headline}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[22rem]">
+          <thead>
+            <tr className="border-b border-line text-xs text-muted">
+              <th className="py-2 text-left font-medium">Updated plan</th>
+              <th className="px-3 py-2 text-right font-medium">Cost</th>
+              <th className="py-2 text-right font-medium">Saving</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {view.plans.map((p) => (
+              <tr key={p.label}>
+                <td className="py-2">{p.label}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{p.cost}</td>
+                <td className="py-2 text-right tabular-nums">{p.saving}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="font-semibold">{view.verdict}</p>
+      {view.verdictWhy && <p className="text-muted">{view.verdictWhy}</p>}
+      <p className="text-xs text-muted">{view.cashInNote}</p>
+    </div>
   );
 }
 
@@ -364,6 +413,8 @@ function PlanBody({
   const recId = result.recommendedView;
   const recView = recId === "right_sized" ? rightSized : keepFull;
   const hero = buildHeroPlan(result, recId, forecastSaving(result, recId, state));
+  // The slow-sales check: the same plan re-run on sales 15% lower, shown before anything is approved.
+  const slow = midSeasonForState(result, { ...state, chosenView: recId });
 
   // The call script is about the plan the founder chose, or the one the numbers favour if they haven't chosen yet.
   const scriptViewId: ViewId = state.chosenView ?? recId;
@@ -399,6 +450,12 @@ function PlanBody({
       {whyOpen && (
         <Disclosure id="why" title="Why this plan" open onOpenChange={setWhyOpen}>
           <AiExplanation result={result} state={state} language={state.language} onLanguage={setLanguage} typedToken={typedToken} />
+        </Disclosure>
+      )}
+
+      {hero.covered && slow && (
+        <Disclosure title="If sales are slow">
+          <SlowSales view={midSeasonView(slow, (day) => dayLabel(recView.invoice, day))} />
         </Disclosure>
       )}
 

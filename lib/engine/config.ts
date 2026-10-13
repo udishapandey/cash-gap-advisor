@@ -11,13 +11,23 @@ export const CONFIG = {
   // The sales baseline is the average of the most recent N days of orders.
   baselineDays: 30,
 
-  // Early settlement (getting your own prepaid sales money before the normal T+N date).
+  // Instant settlement (getting your own prepaid sales money before the normal T+N date).
+  // A flat fee on the amount settled, plus GST on the fee, charged once per settlement, not per day.
+  // Capped at the sales earned but not yet settled, and at an illustrative daily limit.
   earlySettlementFeePct: 0.3,
+  earlySettlementGstPct: 18,
+  earlySettlementDailyLimit: 200_000, // ₹, illustrative
 
-  // Borrowing. Annual rates, simple interest.
-  creditLineRatePct: 18,
-  overdraftRatePct: 14,
-  borrowDays: 30, // how long borrowed money is assumed to stay out
+  // Borrowing. Annual rates, interest charged per day on the amount used, repayable any time with no pre-closure charge.
+  creditLineRatePct: 18, // illustrative; Razorpay quotes 18 to 32% APR, from 1.5% a month
+  overdraftRatePct: 11, // illustrative; a typical secured MSME overdraft
+
+  // Safety: keep at least this much in the account on every day (illustrative).
+  safetyBufferRupees: 50_000,
+
+  // Repayment is simulated day by day. Money still owed when the bill window ends keeps being repaid from the forecast,
+  // for at most this many more days.
+  repaymentHorizonDays: 90,
 
   // Split order: part of the order is delivered (and paid for) later.
   maxSplitShareOfInvoice: 0.3,
@@ -29,7 +39,7 @@ export const CONFIG = {
     lastDiwaliUnitsSold: 520, // SIMULATED: pairs of this festive range sold last Diwali
   },
 
-  // Recommend right-sizing the order when expected unsold stock is more than this share of the order.
+  // The share of the order that would stay unsold above which ordering fewer pairs is worth a look (shown only as a row in the options table).
   rightSizeUnsoldThreshold: 0.1,
 
   // Supplier extension: how many extra days we ask for. Shown as an "ask first" step, never in the plan.

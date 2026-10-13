@@ -3,7 +3,7 @@
 import type { Merchant } from "./data/merchant";
 import { merchant as simulatedMerchant } from "./data/merchant";
 import type { EngineResult } from "./engine";
-import { computeOutcome, SIMULATED_OUTCOMES, type OutcomeId, type OutcomeResult } from "./engine/outcome";
+import { computeOutcome, midSeasonCheck, SIMULATED_OUTCOMES, type MidSeason, type MidSeasonChange, type OutcomeId, type OutcomeResult } from "./engine/outcome";
 import { formatINR } from "./format";
 import type { JourneyState } from "./journey";
 
@@ -26,40 +26,52 @@ export function outcomeForState(
   });
 }
 
-/** What the headline saving is measured against. The same basis is used on every screen that shows a saving. */
-export const SAVING_BASIS = "Compared with the usual way: Razorpay credit line, then your bank's overdraft, paid on the due date.";
-
-/** The "You saved" card: label, number and a short caption. A cost is never shown as a negative number. */
-export function savedCard(o: OutcomeResult): { label: string; value: string; caption: string; tone: "saved" | "extra" | "even" } {
-  const total = o.cost.moneySaved;
-  const c = o.cost.fromCheaperFunding;
-  const parts: string[] = [];
-  if (o.cost.plan.discountCaptured > 0) parts.push(`${formatINR(o.cost.plan.discountCaptured)} discount`);
-  parts.push(c >= 0 ? `${formatINR(c)} lower interest` : `${formatINR(-c)} higher interest`);
-  const caption = parts.join(" + ");
-  if (total > 0) return { label: "You saved", value: formatINR(total), caption, tone: "saved" };
-  if (total === 0) return { label: "You saved", value: formatINR(0), caption, tone: "even" };
-  return { label: "You paid extra", value: formatINR(-total), caption, tone: "extra" };
+/** The mid-season check for the approved plan: day 15, sales 15% below the forecast. Null until a plan is chosen. */
+export function midSeasonForState(
+  result: EngineResult,
+  state: Pick<JourneyState, "chosenView" | "salesDropPercent" | "cashElsewhere">,
+  merchant: Merchant = simulatedMerchant,
+): MidSeason | null {
+  if (state.chosenView === null) return null;
+  return midSeasonCheck({
+    approved: state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull,
+    fullOrder: result.views.keepFull,
+    stock: result.stock,
+    merchant,
+    salesDropPercent: state.salesDropPercent,
+    cashElsewhere: state.cashElsewhere,
+    actual: SIMULATED_OUTCOMES.lower_15,
+  });
 }
 
-/** The three small cards: Borrowed, Pairs sold, Forecast. */
-export function resultTiles(o: OutcomeResult): { label: string; value: string; caption: string }[] {
-  const b = o.borrowing;
-  const p = o.sales.vsForecastPercent;
-  const miss = Math.round(Math.abs(p));
+/** What the headline saving is measured against. The same basis is used on every screen that shows a saving. */
+export const SAVING_BASIS = "Compared with paying on the due date, with no discount and any shortfall on the credit line.";
+
+/** The headline: what the plan saved against the usual way. A cost is never shown as a negative number. */
+export function savedHeadline(o: OutcomeResult): string {
+  const total = o.cost.moneySaved;
+  if (total > 0) return `This plan saved you ${formatINR(total)}`;
+  if (total === 0) return "This plan cost the same as the usual way";
+  return `This plan cost you ${formatINR(-total)} more`;
+}
+
+/** The three figures behind the headline: the discount, the plan's interest and fees, and the usual way's. */
+export function savedBreakdown(o: OutcomeResult): { label: string; value: string }[] {
   return [
-    {
-      label: "Borrowed",
-      value: formatINR(b.borrowed),
-      caption: b.underFunded > 0 ? `${formatINR(b.underFunded)} more needed` : b.unnecessary > 0 ? `${formatINR(b.unnecessary)} not needed` : "All of it needed",
-    },
-    { label: "Pairs sold", value: `${o.stock.sold} of ${o.stock.ordered}`, caption: o.stock.leftOver > 0 ? `${o.stock.leftOver} left over` : "" },
-    {
-      label: "Forecast",
-      value: miss === 0 ? "On target" : `${miss}% ${p < 0 ? "below" : "above"}`,
-      caption: o.sales.insideRange ? "" : "Outside the range",
-    },
+    { label: "Discount", value: formatINR(o.cost.plan.discountCaptured) },
+    { label: "Interest and fees", value: formatINR(o.cost.plan.fundsCost) },
+    { label: "Paying on the due date", value: formatINR(o.cost.default.fundsCost) },
   ];
+}
+
+/** The small table: the cash to find, forecast against actual. The difference is in words, never a minus sign. */
+export function gapRow(o: OutcomeResult): { forecast: string; actual: string; difference: string } {
+  const d = o.gap.difference;
+  return {
+    forecast: formatINR(o.gap.forecast),
+    actual: formatINR(o.gap.actual),
+    difference: d === 0 ? "None" : d > 0 ? `${formatINR(d)} more` : `${formatINR(-d)} less`,
+  };
 }
 
 /** The two "Next time" bullets, each at most ten words. */
@@ -76,4 +88,46 @@ export function nextTimeBullets(o: OutcomeResult, salesDropPercent: number): str
       ? `COD returns matched the ${cod.assumedPercent}% assumed.`
       : `COD returns were ${cod.observedPercent}%, not ${cod.assumedPercent}%. Next time, expect ${cod.updatedPercent}%.`;
   return [sales, returns];
+}
+
+// ---------- the mid-season check ----------
+
+export const NEXT_TIME_CAPTION = "Prototype uses a simple update rule. Production would learn from your history.";
+export const MID_SEASON_CAPTION = "The plan updates as real sales arrive. Sales are simulated in this prototype.";
+
+/** Each change the re-plan makes, in a short line. `date` turns a day count into a date. */
+export function changeLine(c: MidSeasonChange, date: (day: number) => string): string {
+  switch (c.kind) {
+    case "withdraw_credit":
+      return `Withdraw ${formatINR(c.amount ?? 0)} more credit${c.day !== undefined ? ` on ${date(c.day)}` : ""}`;
+    case "draw_overdraft":
+      return `Draw ${formatINR(c.amount ?? 0)} more overdraft`;
+    case "backup_used":
+      return `Backup used: ${formatINR(c.amount ?? 0)} of your unused credit`;
+    case "repay_later":
+      return `Repayment moves from ${date(c.from ?? 0)} to ${date(c.to ?? 0)}`;
+    case "repay_earlier":
+      return `Repayment moves from ${date(c.from ?? 0)} to ${date(c.to ?? 0)}`;
+    case "uncovered":
+      return `${formatINR(c.amount ?? 0)} is still not covered`;
+  }
+}
+
+/** The mid-season check as the screen shows it. */
+export function midSeasonView(m: MidSeason, date: (day: number) => string) {
+  const miss = Math.round(Math.abs(m.vsForecastPercent));
+  return {
+    headline:
+      miss === 0
+        ? `Day ${m.day}: sales are on forecast.`
+        : `Day ${m.day}: sales are ${miss}% ${m.vsForecastPercent < 0 ? "below" : "above"} forecast.`,
+    rows: [
+      { label: "Cash in so far, forecast", value: formatINR(m.cashInForecast) },
+      { label: "Cash in so far, actual", value: formatINR(m.cashInActual) },
+      { label: "Likely gap, forecast", value: formatINR(m.forecastGap) },
+      { label: "Likely gap, updated", value: formatINR(m.updatedGap) },
+    ],
+    changes: m.changes.map((c) => changeLine(c, date)),
+    nothingChanges: m.nothingChanges ? "Nothing changes." : null,
+  };
 }

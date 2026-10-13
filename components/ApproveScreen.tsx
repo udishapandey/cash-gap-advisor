@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { EngineResult } from "@/lib/engine";
-import { formatINR, formatPct } from "@/lib/format";
-import { backupLine } from "@/lib/plain";
+import { formatCompactINR, formatINR } from "@/lib/format";
+import { backupLine, CREDIT_NEEDS_APPROVAL, dayLabel, tidyName } from "@/lib/plain";
 import {
   approvalBlockers,
   approvalStage,
@@ -13,7 +13,6 @@ import {
   consentText,
   earlyPayDay,
   needsCreditConsent,
-  overdraftFirstNote,
   SOURCE_TAGS,
   SIMULATED_ACCOUNT,
   splitPlan,
@@ -31,19 +30,16 @@ export default function ApproveScreen() {
 
 function ApproveBody({ state, result, update }: ShellContext) {
   const view = state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull;
-  const planName = state.chosenView === "right_sized" ? "Order fewer pairs" : "Keep full order";
   const plan = view.recommended.plan;
   const sections = splitPlan(view, result.stock.fullUnits);
   const blockers = approvalBlockers(view);
   const stage = approvalStage(state);
   const pay = supplierPayment(view);
   const backup = backupLine(view);
-  const kfs = sections.creditLine ? buildKfs(sections.creditLine.amount, tenureDays(view)) : null;
-  const overdraftNote = overdraftFirstNote({
-    options: view.recommended.timing === "pay_early_for_discount" ? view.earlyOptions : view.options,
-    steps: plan.steps,
-    loanDays: tenureDays(view),
-  });
+  const kfs = sections.creditLine ? buildKfs(sections.creditLine.amount, tenureDays(view), sections.creditLine.cost) : null;
+  const date = (day: number) => dayLabel(view.invoice, day);
+  const repays = (closed: number | null) => (closed === null ? "repay when cash allows" : `repay ${date(closed)}`);
+  const supplier = tidyName(view.invoice.supplier);
 
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState<null | "touch" | "pay">(null);
@@ -52,7 +48,8 @@ function ApproveBody({ state, result, update }: ShellContext) {
 
   const allowed = canApprove({ view, sections, consent });
   const early = view.recommended.timing === "pay_early_for_discount";
-  const payWhen = early ? `by day ${earlyPayDay(view.invoice)}` : `on the due date (day ${view.invoice.dueInDays})`;
+  const payDay = early ? earlyPayDay(view.invoice) : view.invoice.dueInDays;
+  const payWhen = `on ${date(payDay)}`;
 
   // Both buttons are simulations: a short pause, then the next stage.
   function approve() {
@@ -75,7 +72,7 @@ function ApproveBody({ state, result, update }: ShellContext) {
   if (stage === "pay") {
     return (
       <>
-        <h1 className="font-heading text-2xl font-semibold">Approve plan</h1>
+        <h1 className="font-heading text-2xl font-semibold">You&apos;re about to pay {supplier}</h1>
         <Card className="border-green-300">
           <SectionTitle aside={<SimulatedTag />}>Approved ✓</SectionTitle>
           <p className="mt-1 text-sm text-muted">Approved with Touch ID (simulated: no fingerprint was read).</p>
@@ -122,82 +119,55 @@ function ApproveBody({ state, result, update }: ShellContext) {
 
   return (
     <>
-      <h1 className="font-heading text-2xl font-semibold">Approve plan</h1>
+      <h1 className="font-heading text-2xl font-semibold">You&apos;re about to pay {supplier}</h1>
 
-      <Card>
-        <SectionTitle aside={<SimulatedTag />}>Review and approve</SectionTitle>
-        <p className="mt-1 text-sm text-muted">
-          You chose <strong>{planName}</strong>. Nothing happens until you approve at the bottom.
+      <Card aria-label="Payment">
+        <p className="font-heading text-4xl font-semibold tabular-nums">
+          {formatCompactINR(pay)} <span className="text-2xl text-muted">on {date(payDay)}</span>
         </p>
-        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
-          <div>
-            <dt className="text-xs text-muted">Pay the supplier</dt>
-            <dd className="text-lg font-semibold tabular-nums">{formatINR(pay)}</dd>
-            <dd className="text-xs text-muted">{payWhen}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted">Order</dt>
-            <dd className="text-lg font-semibold tabular-nums">{view.units} pairs</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted">Loan total</dt>
-            <dd className="text-lg font-semibold tabular-nums">{formatINR(view.loan)}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted">Total interest and fees</dt>
-            <dd className="text-lg font-semibold tabular-nums">{formatINR(plan.totalCost)}</dd>
-          </div>
-        </dl>
+        <p className="mt-1 text-sm text-muted">{formatINR(pay)} in full{early ? `, ${formatINR(view.discount.discountAmount)} off` : ""}.</p>
         {backup && <p className={`mt-3 text-sm ${backup.warn ? "text-red-700" : "text-muted"}`}>{backup.text}</p>}
         <Link href="/options" className="mt-3 inline-block text-sm text-brand hover:underline">
           ← Change plan
         </Link>
       </Card>
 
-      <Card className="border-l-4 border-l-brand">
-        <SectionTitle>Actions that are not credit</SectionTitle>
-        <p className="mt-1 text-sm text-muted">These are not loans. No borrowing is involved.</p>
+      <Card aria-label="Your money">
+        <SectionTitle>Your money</SectionTitle>
         {sections.nonCredit.length === 0 ? (
-          <p className="mt-3 text-sm">None. Besides paying the supplier, nothing else is needed.</p>
+          <p className="mt-3 text-sm text-muted">None needed.</p>
         ) : (
           <ul className="mt-3 divide-y divide-line text-sm">
-            {sections.nonCredit.map((a) => (
-              <li key={a.id} className="py-2">
-                <p className="font-medium">{a.text}</p>
-                {a.detail && <p className="text-xs text-muted">{a.detail}</p>}
-              </li>
-            ))}
+            {sections.nonCredit
+              .filter((a) => a.id !== "pay_early")
+              .map((a) => (
+                <li key={a.id} className="py-2">
+                  <p className="font-medium">{a.text}</p>
+                  {a.detail && <p className="text-xs text-muted">{a.detail}</p>}
+                </li>
+              ))}
           </ul>
         )}
       </Card>
 
-      <Card className="border-l-4 border-l-amber-500" aria-label="Credit">
-        <SectionTitle aside={<span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">Credit: needs your consent</span>}>
-          Credit
+      <Card className="border-l-4 border-l-amber-500" aria-label="Borrowed">
+        <SectionTitle aside={<span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">Needs your consent</span>}>
+          Borrowed
         </SectionTitle>
-        <p className="mt-1 text-sm text-muted">
-          Borrowed money must be repaid with interest. It is kept apart from the actions above on purpose.
-        </p>
 
         {!sections.creditLine && !sections.overdraft && (
-          <p className="mt-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
-            No credit is needed for this plan.
-          </p>
+          <p className="mt-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">Nothing borrowed in this plan.</p>
         )}
 
         {sections.overdraft && (
           <div className="mt-4 rounded-lg border border-line p-4">
             <h3 className="text-sm font-semibold">
-              Your bank&apos;s overdraft: {formatINR(sections.overdraft.amount)}{" "}
-              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-800">
-                {SOURCE_TAGS.bank_overdraft.label}
-              </span>
+              Bank overdraft {formatINR(sections.overdraft.amount)}{" "}
+              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-800">{SOURCE_TAGS.bank_overdraft.label}</span>
             </h3>
             <p className="mt-1 text-sm">
-              At {formatPct(state.overdraftRatePct)} a year the cost is about {formatINR(sections.overdraft.cost)}.
-              You draw this yourself at your own bank. It is not part of this approval, and we never draw it for you.
+              Interest {formatINR(sections.overdraft.cost)}, {repays(sections.overdraft.closedDay)}. You draw it at your own bank. We never draw it for you.
             </p>
-            {overdraftNote && <p className="mt-2 text-xs text-green-900">{overdraftNote}</p>}
           </div>
         )}
 
@@ -205,15 +175,11 @@ function ApproveBody({ state, result, update }: ShellContext) {
           <div className="mt-4 space-y-4">
             <div>
               <h3 className="text-sm font-semibold">
-                Razorpay credit line, from {kfs.lender}{" "}
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
-                  {SOURCE_TAGS.credit_line.label}
-                </span>
+                Razorpay credit {formatINR(kfs.loanAmount)}{" "}
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">{SOURCE_TAGS.credit_line.label}</span>
               </h3>
               <p className="mt-1 text-sm">
-                Borrow <strong>{formatINR(kfs.loanAmount)}</strong> at {kfs.annualRatePct}% a year for {kfs.tenureDays}{" "}
-                days. Total interest {formatINR(kfs.totalInterest)}. You repay{" "}
-                <strong>{formatINR(kfs.totalRepayable)}</strong>.
+                Interest {formatINR(kfs.totalInterest)}, {repays(sections.creditLine.closedDay)}. No charge for repaying early.
               </p>
             </div>
             <KeyFactStatementPanel kfs={kfs} />
@@ -228,10 +194,15 @@ function ApproveBody({ state, result, update }: ShellContext) {
             </label>
           </div>
         )}
+
+        <p className="mt-4 border-t border-line pt-3 text-sm font-semibold">
+          Total interest and fees <span className="tabular-nums">{formatINR(plan.totalCost)}</span>
+        </p>
+        {sections.creditLine && <p className="mt-2 text-xs text-muted">{CREDIT_NEEDS_APPROVAL}</p>}
       </Card>
 
       <Card>
-        <SectionTitle aside={<SimulatedTag />}>Approve</SectionTitle>
+        <SectionTitle aside={<SimulatedTag />}>Approve with Touch ID</SectionTitle>
         {blockers.map((b) => (
           <p key={b} role="alert" className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
             {b}
@@ -246,7 +217,7 @@ function ApproveBody({ state, result, update }: ShellContext) {
           disabled={!allowed || busy !== null}
           className="mt-4 rounded-md bg-brand px-6 py-3 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {busy === "touch" ? "Verifying… (simulated)" : "Approve with Touch ID"}
+          {busy === "touch" ? "Verifying… (simulated)" : "Approve plan"}
         </button>
         <p className="mt-2 text-xs text-muted">
           Simulated: no real fingerprint is read and no real credit is drawn. Nothing is approved automatically.
@@ -266,7 +237,7 @@ function Success({
   result: EngineResult;
 }) {
   const sections = splitPlan(view, result.stock.fullUnits);
-  const kfs = sections.creditLine ? buildKfs(sections.creditLine.amount, tenureDays(view)) : null;
+  const kfs = sections.creditLine ? buildKfs(sections.creditLine.amount, tenureDays(view), sections.creditLine.cost) : null;
   const plan = view.recommended.plan;
   return (
     <Card className="text-center">

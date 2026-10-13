@@ -1,205 +1,210 @@
-// True cost of each way to cover a cash gap, and the cheapest plan. Plain TypeScript, no AI.
-// Options are ranked by actual ₹ paid per ₹1 raised, never by a fixed order.
+// The ways to find the money, and the plan built from them. Plain TypeScript, no AI. All amounts in ₹.
 //
-// Only CONFIRMED sources are in here: early settlement, credit line, bank overdraft, and
-// ordering fewer pairs. Asking the supplier for more time is never counted as certain, so it
-// is not an option here. See `askFirst` in index.ts.
+// The plan itself comes from the day-by-day planner in plan.ts. This file turns its result into the shapes the screens use:
+// the plan's steps (your own cash, then the loans, then instant settlement only if it was genuinely used) and the table of
+// every option. Asking the supplier for more time is never counted as certain, so it is not here: see `askFirst` in index.ts.
 
 import { CONFIG } from "./config";
-import { amountDueOn, type ScenarioResult } from "./gap";
+import { amountDueOn } from "./gap";
+import { bestPlan, type PlanSim, type SourceId, type Terms } from "./plan";
 import { expectedLostMargin, type StockOutRisk } from "./stock";
-import { formatINR } from "../format";
-import type { Merchant } from "../data/merchant";
+import type { CashSeries } from "./gap";
 import type { Invoice } from "../data/invoice";
 
-export type OptionId = "early_settlement" | "credit_line" | "bank_overdraft" | "split_order";
+export type OptionId = "own_cash" | "bank_overdraft" | "credit_line" | "early_settlement" | "split_order";
 
 export interface FundingOption {
   id: OptionId;
   name: string;
-  /** The most this source can give us. */
+  /** The most this source can give. */
   maxAmount: number;
-  /** ₹ actually paid per ₹1 raised, over the time the money is used. The ranking key. */
-  costRate: number;
-  /** Cost expressed as % per year, for comparison with loans. null if it doesn't make sense. */
+  /** Yearly rate for the two loans. Null for the rest: instant settlement is a flat fee, not a yearly rate. */
   annualisedPct: number | null;
   isBorrowing: boolean;
   /** Only for the split order: how the stock-out risk was priced. */
   stockOut?: StockOutRisk;
   note: string;
+  /** What it does if it is the only source used (with the founder's own cash first). Null for the split order. */
+  solo: { covers: number; cost: number; feasible: boolean; days: number } | null;
 }
 
 export interface PlanStep {
   optionId: OptionId;
   name: string;
+  /** The most outstanding (the cash used, for your own cash). */
   amount: number;
+  /** Interest paid, or the fee for instant settlement. Zero for your own cash. */
   cost: number;
   isBorrowing: boolean;
   note: string;
+  /** Days something was outstanding. Null for your own cash. */
+  days: number | null;
+  /** The day it was repaid. Null if it was never drawn, or is still owed. */
+  closedDay: number | null;
 }
 
 export interface Plan {
+  payDay: number;
+  payAmount: number;
+  /** The most the account would fall below the safety buffer with nothing borrowed: the cash to find. */
   gap: number;
   steps: PlanStep[];
-  /** Covered by confirmed sources. Never includes a supplier extension. */
+  /** The part of the gap that sources could cover. */
   covered: number;
   uncovered: number;
   fullyCovered: boolean;
+  /** Interest and fees over the life of the plan. */
   totalCost: number;
-  /** Credit line + overdraft. */
+  /** The most owed on the overdraft and credit line together. */
   borrowed: number;
+  /** The founder's own cash used, above the safety buffer. */
+  ownCash: number;
+  buffer: number;
+  /** The day all loans were back to zero. Null if nothing was borrowed. */
+  closedDay: number | null;
+  /** The day-by-day run for the expected sales, and for the low sales (same sources in the same order). */
+  sim: PlanSim;
+  simLow: PlanSim;
 }
 
 export interface DiscountAnalysis {
   discountAmount: number; // ₹ saved by paying within the discount window
   daysEarly: number;
-  /** Extra funding cost of paying early (bigger gap earlier) compared with paying on the due date. */
+  /** Extra interest and fees of paying early (a bigger gap sooner) compared with paying on the due date. Can be negative. */
   extraFundingCost: number;
   netSaving: number;
-  /** False if even every confirmed source together can't cover the earlier, bigger gap. */
+  /** True if paying early is feasible and the slow-sales case is still covered. */
   affordable: boolean;
   worthIt: boolean;
 }
 
-export interface FundingInput {
-  merchant: Merchant;
-  /** The invoice being paid (already resized if the order was right-sized). */
-  invoice: Invoice;
-  /** The scenario whose "earned but not yet settled" cash, on the day the shortfall peaks, caps early settlement. */
-  scenario: ScenarioResult;
-  /** Pairs forecast to sell this season in the plan scenario. Prices the split order's stock-out risk. */
-  demandUnits: number;
-  overdraftRatePct?: number;
-  /** Days borrowed money stays out. Defaults to CONFIG.borrowDays. */
-  borrowDays?: number;
-}
-
 const round = (n: number) => Math.round(n);
 
-/** Fee for getting money `daysAdvanced` earlier, expressed per year. 0.30% for 2 days = 54.75%. */
-export function annualisedPct(feePct: number, daysAdvanced: number): number {
-  return (feePct * CONFIG.daysPerYear) / daysAdvanced;
-}
-
-/** Interest on ₹1 borrowed at `ratePct` per year for `days` days (simple interest). */
-export function interestRate(ratePct: number, days: number): number {
-  return (ratePct / 100) * (days / CONFIG.daysPerYear);
-}
+export const OPTION_NAMES: Record<OptionId, string> = {
+  own_cash: "Your cash",
+  bank_overdraft: "Bank overdraft",
+  credit_line: "Credit line",
+  early_settlement: "Instant settlement",
+  split_order: "Split the order",
+};
 
 /** The late fee if the due date is missed by `daysLate`. Shown as a cost of missing it, never as a plan. */
 export function lateFeeIfMissed(invoice: Invoice, daysLate: number): number {
-  return round(
-    ((invoice.amount * invoice.lateFeePctPerMonth) / 100) * (daysLate / CONFIG.daysPerMonth),
-  );
+  return round(((invoice.amount * invoice.lateFeePctPerMonth) / 100) * (daysLate / CONFIG.daysPerMonth));
 }
 
-export function buildFundingOptions(input: FundingInput): FundingOption[] {
-  const { merchant, invoice, scenario } = input;
-  const overdraftRatePct = input.overdraftRatePct ?? CONFIG.overdraftRatePct;
-  const borrowDays = input.borrowDays ?? CONFIG.borrowDays;
+const STEP_ORDER: OptionId[] = ["own_cash", "bank_overdraft", "credit_line", "early_settlement"];
 
-  // Early settlement can only help on the day the shortfall peaks, so its cap is the prepaid sales earned by
-  // that day that would settle after it.
-  const earlySettlementCap = round(scenario.peak.earnedNotSettled);
-
-  // Split order: defer some pairs to a later delivery. The cost is the margin on the
-  // deferred pairs that would have sold.
-  const splitUnits = round(invoice.units * CONFIG.maxSplitShareOfInvoice);
-  const splitAmount = splitUnits * invoice.unitPrice;
-  const risk = expectedLostMargin({
-    orderUnits: invoice.units,
-    unitsNotOrdered: splitUnits,
-    demandUnits: input.demandUnits,
-  });
-
-  const options: FundingOption[] = [
-    {
-      id: "early_settlement",
-      name: "Early settlement",
-      maxAmount: earlySettlementCap,
-      costRate: CONFIG.earlySettlementFeePct / 100,
-      annualisedPct: annualisedPct(CONFIG.earlySettlementFeePct, merchant.settlementDays),
-      isBorrowing: false,
-      note: `Your own prepaid sales money, ${merchant.settlementDays} days early. Not a loan. Capped at sales already earned (${formatINR(earlySettlementCap)}).`,
-    },
-    {
-      id: "credit_line",
-      name: "Credit line",
-      maxAmount: merchant.creditLineLimit,
-      costRate: interestRate(CONFIG.creditLineRatePct, borrowDays),
-      annualisedPct: CONFIG.creditLineRatePct,
-      isBorrowing: true,
-      note: `${CONFIG.creditLineRatePct}% a year, assumed out for ${borrowDays} days. Simulated pre-approved limit.`,
-    },
-    {
-      id: "bank_overdraft",
-      name: "Your bank overdraft",
-      maxAmount: merchant.overdraftLimit,
-      costRate: interestRate(overdraftRatePct, borrowDays),
-      annualisedPct: overdraftRatePct,
-      isBorrowing: true,
-      note: `${overdraftRatePct}% a year (editable), assumed out for ${borrowDays} days.`,
-    },
-    {
-      id: "split_order",
-      name: "Split the order",
-      maxAmount: splitAmount,
-      costRate: splitAmount > 0 ? risk.expectedLostMargin / splitAmount : 0,
-      annualisedPct: null,
-      isBorrowing: false,
-      stockOut: risk,
-      note: `Delivers ${splitUnits} pairs later. No interest, but the forecast says ${Math.round(risk.probabilitySell * 100)}% of those pairs would sell, so the expected lost margin is ${formatINR(risk.expectedLostMargin)} (pairs × chance they sell × ${formatINR(risk.marginPerUnit)} margin).`,
-    },
-  ];
-
-  return options.sort(
-    (a, b) => a.costRate - b.costRate || Number(a.isBorrowing) - Number(b.isBorrowing),
-  );
-}
-
-/** Use the cheapest confirmed sources first, by actual cost, until the gap is covered. */
-export function buildPlan(gap: number, options: FundingOption[], exclude: OptionId[] = []): Plan {
-  const ranked = options
-    .filter((o) => !exclude.includes(o.id))
-    .sort((a, b) => a.costRate - b.costRate || Number(a.isBorrowing) - Number(b.isBorrowing));
-
-  let remaining = gap;
+/** The plan as the screens show it: your own cash first, then each source that was really used. */
+export function planFromSim(sim: PlanSim, simLow: PlanSim, gap: number): Plan {
   const steps: PlanStep[] = [];
-  for (const option of ranked) {
-    if (remaining <= 0) break;
-    const amount = Math.min(remaining, option.maxAmount);
-    if (amount <= 0) continue;
-    steps.push({
-      optionId: option.id,
-      name: option.name,
-      amount,
-      cost: round(amount * option.costRate),
-      isBorrowing: option.isBorrowing,
-      note: option.note,
-    });
-    remaining -= amount;
+  if (sim.ownCashUsed > 0) {
+    steps.push({ optionId: "own_cash", name: OPTION_NAMES.own_cash, amount: sim.ownCashUsed, cost: 0, isBorrowing: false, note: "Cash already in your account, above the safety buffer.", days: null, closedDay: null });
   }
-
+  for (const id of ["bank_overdraft", "credit_line", "early_settlement"] as SourceId[]) {
+    const s = sim.stats[id];
+    if (s.drawn <= 0) continue;
+    steps.push({
+      optionId: id,
+      name: OPTION_NAMES[id],
+      amount: round(s.peak),
+      cost: round(s.cost),
+      isBorrowing: id !== "early_settlement",
+      note: id === "early_settlement" ? "A flat fee each time, on your own sales money." : "Interest per day on what is used, repaid as cash arrives.",
+      days: s.days,
+      closedDay: s.closedDay,
+    });
+  }
+  steps.sort((a, b) => STEP_ORDER.indexOf(a.optionId) - STEP_ORDER.indexOf(b.optionId));
+  const uncovered = Math.min(gap, sim.uncoveredPeak);
   return {
+    payDay: sim.payDay,
+    payAmount: sim.payAmount,
     gap,
     steps,
-    covered: gap - remaining,
-    uncovered: remaining,
-    fullyCovered: remaining === 0,
-    totalCost: steps.reduce((s, x) => s + x.cost, 0),
-    borrowed: steps.filter((s) => s.isBorrowing).reduce((s, x) => s + x.amount, 0),
+    covered: gap - uncovered,
+    uncovered,
+    fullyCovered: sim.feasible,
+    totalCost: round(sim.totalCost),
+    borrowed: sim.peakBorrowed,
+    ownCash: sim.ownCashUsed,
+    buffer: sim.buffer,
+    closedDay: sim.closedDay,
+    sim,
+    simLow,
   };
 }
 
+export interface OptionsInput {
+  series: CashSeries;
+  terms: Terms;
+  payDay: number;
+  payAmount: number;
+  horizon: number;
+  /** Pairs on the order, the unit price, and the forecast demand: they price the split order. */
+  invoice: Invoice;
+  demandUnits: number;
+}
+
+/** Every way of finding the money, each tried alone (with your own cash first), for the table that compares them. */
+export function buildOptions(input: OptionsInput): FundingOption[] {
+  const { series, terms, payDay, payAmount, horizon, invoice } = input;
+  const solo = (id: SourceId) => {
+    const sim = bestPlan({ series, payDay, payAmount, terms, horizon, allowed: [id] });
+    return { covers: round(sim.stats[id].peak), cost: round(sim.totalCost), feasible: sim.feasible, days: sim.stats[id].days };
+  };
+  const earned = Math.max(0, ...series.earnedNotSettled.slice(0, payDay + 1));
+  const splitUnits = round(invoice.units * CONFIG.maxSplitShareOfInvoice);
+  const splitAmount = splitUnits * invoice.unitPrice;
+  const risk = expectedLostMargin({ orderUnits: invoice.units, unitsNotOrdered: splitUnits, demandUnits: input.demandUnits });
+
+  return [
+    {
+      id: "bank_overdraft",
+      name: OPTION_NAMES.bank_overdraft,
+      maxAmount: terms.overdraft.limit,
+      annualisedPct: terms.overdraft.ratePct,
+      isBorrowing: true,
+      note: `${terms.overdraft.ratePct}% a year, interest per day on what you use, repayable any time.`,
+      solo: solo("bank_overdraft"),
+    },
+    {
+      id: "credit_line",
+      name: OPTION_NAMES.credit_line,
+      maxAmount: terms.creditLine.limit,
+      annualisedPct: terms.creditLine.ratePct,
+      isBorrowing: true,
+      note: `${terms.creditLine.ratePct}% a year, interest per day on what you withdraw, no pre-closure charge.`,
+      solo: solo("credit_line"),
+    },
+    {
+      id: "early_settlement",
+      name: OPTION_NAMES.early_settlement,
+      maxAmount: round(Math.min(earned, terms.instant.limitPerDay)),
+      annualisedPct: null,
+      isBorrowing: false,
+      note: `A flat ${terms.instant.feePct.toFixed(3)}% of the amount, fee and GST, each time. Your own sales money.`,
+      solo: solo("early_settlement"),
+    },
+    {
+      id: "split_order",
+      name: OPTION_NAMES.split_order,
+      maxAmount: splitAmount,
+      annualisedPct: null,
+      isBorrowing: false,
+      stockOut: risk,
+      note: `Delivers ${splitUnits} pairs later. The cost is the expected lost margin on the pairs that would have sold.`,
+      solo: null,
+    },
+  ];
+}
+
 /** Is it worth paying early for the discount, after paying for the extra cash that needs? */
-export function evaluateDiscount(
-  invoice: Invoice,
-  duePlan: Plan,
-  earlyPlan: Plan,
-): DiscountAnalysis {
+export function evaluateDiscount(invoice: Invoice, duePlan: Plan, earlyPlan: Plan): DiscountAnalysis {
   const discountAmount = round(invoice.amount - amountDueOn(invoice, invoice.earlyPayWithinDays));
   const extraFundingCost = earlyPlan.totalCost - duePlan.totalCost;
-  const affordable = earlyPlan.fullyCovered;
+  // Paying early is only sound if the plan is feasible and the slow-sales case is still covered by unused credit.
+  const affordable = earlyPlan.fullyCovered && earlyPlan.simLow.feasible;
   const netSaving = discountAmount - extraFundingCost;
   return {
     discountAmount,

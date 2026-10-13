@@ -5,7 +5,18 @@ import { useMemo, useState } from "react";
 import { OUTCOME_IDS, type OutcomeId, type OutcomeResult } from "@/lib/engine/outcome";
 import { formatINR } from "@/lib/format";
 import type { Language } from "@/lib/language";
-import { nextTimeBullets, outcomeForState, resultTiles, savedCard } from "@/lib/results";
+import { dayLabel } from "@/lib/plain";
+import {
+  gapRow,
+  MID_SEASON_CAPTION,
+  midSeasonForState,
+  midSeasonView,
+  nextTimeBullets,
+  NEXT_TIME_CAPTION,
+  outcomeForState,
+  savedBreakdown,
+  savedHeadline,
+} from "@/lib/results";
 import Disclosure from "./Disclosure";
 import JourneyShell, { type ShellContext } from "./JourneyShell";
 import ResultsSummary from "./ResultsSummary";
@@ -21,38 +32,100 @@ export default function ResultsScreen() {
 function ResultsBody({ state, result, update, reset }: ShellContext) {
   const router = useRouter();
   const [outcomeId, setOutcomeId] = useState<OutcomeId>("as_forecast");
+  const [replanApproved, setReplanApproved] = useState(false);
   const o = useMemo(() => outcomeForState(result, state, outcomeId), [result, state, outcomeId]);
-  if (!o || state.chosenView === null) return null;
+  const mid = useMemo(() => midSeasonForState(result, state), [result, state]);
+  if (!o || !mid || state.chosenView === null) return null;
 
-  const saved = savedCard(o);
   const setLanguage = (language: Language) => update({ language });
+  const view = midSeasonView(mid, (day) => dayLabel(result.recommended.invoice, day));
+  const row = gapRow(o);
+  const saved = o.cost.moneySaved;
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-heading text-2xl font-semibold">After Diwali</h1>
-        <div role="radiogroup" aria-label="Season" className="flex flex-wrap gap-2">
-          {OUTCOME_IDS.map((id) => (
-            <label
-              key={id}
-              className={`cursor-pointer rounded-full border px-3.5 py-1 text-sm ${
-                outcomeId === id ? "border-brand bg-brand-faded font-semibold text-brand-text" : "border-line bg-card hover:bg-background"
-              }`}
-            >
-              <input type="radio" name="outcome" value={id} checked={outcomeId === id} onChange={() => setOutcomeId(id)} className="sr-only" />
-              {SEASON_CHIP[id]}
-            </label>
+      <h1 className="font-heading text-2xl font-semibold">Results</h1>
+
+      <Card aria-label="Mid-season check">
+        <h2 className="text-base font-semibold">Mid-season check</h2>
+        <p className="mt-1 font-heading text-xl font-semibold">{view.headline}</p>
+        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
+          {view.rows.map((r) => (
+            <div key={r.label}>
+              <dt className="text-xs text-muted">{r.label}</dt>
+              <dd className="text-lg font-semibold tabular-nums">{r.value}</dd>
+            </div>
           ))}
-        </div>
-      </div>
+        </dl>
+        {view.nothingChanges ? (
+          <p className="mt-4 text-sm font-medium">{view.nothingChanges}</p>
+        ) : (
+          <>
+            <h3 className="mt-4 text-sm font-semibold">What changes</h3>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
+              {view.changes.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+            {replanApproved ? (
+              <p className="mt-4 text-sm font-medium text-green-700">Updated plan approved. Simulated, no real money moved.</p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setReplanApproved(true)}
+                className="mt-4 rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
+              >
+                Approve updated plan
+              </button>
+            )}
+          </>
+        )}
+        <p className="mt-3 text-xs text-muted">{MID_SEASON_CAPTION}</p>
+      </Card>
 
-      <StatCard big label={saved.label} value={saved.value} caption={saved.caption} tone={saved.tone === "saved" ? "saved" : "plain"} />
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        {resultTiles(o).map((t) => (
-          <StatCard key={t.label} label={t.label} value={t.value} caption={t.caption || undefined} />
+      <div role="radiogroup" aria-label="Season" className="flex flex-wrap gap-2">
+        {OUTCOME_IDS.map((id) => (
+          <label
+            key={id}
+            className={`cursor-pointer rounded-full border px-3.5 py-1 text-sm ${
+              outcomeId === id ? "border-brand bg-brand-faded font-semibold text-brand-text" : "border-line bg-card hover:bg-background"
+            }`}
+          >
+            <input type="radio" name="outcome" value={id} checked={outcomeId === id} onChange={() => setOutcomeId(id)} className="sr-only" />
+            {SEASON_CHIP[id]}
+          </label>
         ))}
       </div>
+
+      <StatCard big label="Result" value={savedHeadline(o)} tone={saved > 0 ? "saved" : "plain"}>
+        <dl className="mt-4 divide-y divide-line text-sm">
+          {savedBreakdown(o).map((r) => (
+            <div key={r.label} className="flex justify-between py-2">
+              <dt className="text-muted">{r.label}</dt>
+              <dd className="font-medium tabular-nums">{r.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </StatCard>
+
+      <Card aria-label="Forecast against actual">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-line text-xs text-muted">
+              <th className="py-2 text-left font-medium">Forecast gap</th>
+              <th className="px-3 py-2 text-right font-medium">Actual gap</th>
+              <th className="py-2 text-right font-medium">Difference</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="py-2 tabular-nums">{row.forecast}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{row.actual}</td>
+              <td className="py-2 text-right tabular-nums">{row.difference}</td>
+            </tr>
+          </tbody>
+        </table>
+      </Card>
 
       <Card aria-label="Next time">
         <h2 className="text-base font-semibold">Next time</h2>
@@ -61,6 +134,7 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
             <li key={line}>{line}</li>
           ))}
         </ul>
+        <p className="mt-3 text-xs text-muted">{NEXT_TIME_CAPTION}</p>
       </Card>
 
       <Disclosure title="Details" lazy>
@@ -82,11 +156,11 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
           type="button"
           onClick={() => {
             reset();
-            router.push("/invoice");
+            router.push("/");
           }}
           className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
         >
-          Plan another bill
+          Done
         </button>
       </div>
     </>
@@ -127,8 +201,8 @@ function Details({ o }: { o: OutcomeResult }) {
         ["Pairs wanted", String(actualPairs)],
         ["Pairs sold", String(o.stock.sold)],
         ["Pairs left", String(o.stock.leftOver)],
-        ["Most short", formatINR(o.borrowing.actualPeakNeed)],
-        ["Borrowed", formatINR(o.borrowing.borrowed)],
+        ["Most owed", formatINR(o.borrowing.actual)],
+        ["Extra credit used", formatINR(o.borrowing.extraCredit)],
       ])}
       <div className="lg:col-span-2">
         <h3 className="text-sm font-semibold">Forecast</h3>

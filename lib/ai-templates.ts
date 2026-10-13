@@ -79,10 +79,9 @@ export function templateExplanationParts(facts: ExplainFacts, language: Language
         ? `Interest and fees come to ${inr(v.fundingCostRupees)} in all, only ${inr(v.extraCostOfPayingEarlyRupees)} more than paying on day ${facts.dueInDays}, and the ${v.earlyPaymentDiscountPercent}% discount saves ${inr(v.earlyPaymentDiscountRupees)}, so you come out ${inr(v.netSavingFromEarlyPaymentRupees)} better off than paying on day ${facts.dueInDays}.`
         : `Interest and fees come to ${inr(v.fundingCostRupees)} in all and the ${v.earlyPaymentDiscountPercent}% discount saves ${inr(v.earlyPaymentDiscountRupees)}, so you come out ${inr(v.netSavingFromEarlyPaymentRupees)} better off than paying on day ${facts.dueInDays}.`;
   } else if (v.peakShortfallRupees > 0) {
-    // Compare what each costs for the days it is really used, never the yearly rates: a 2-day fee looks huge a year.
     whyCheapest = hi
-      ? `कुल ब्याज और फीस ${inr(v.fundingCostRupees)} है, जो आपके विकल्पों में सबसे कम है: अर्ली सेटलमेंट की ज़रूरत सिर्फ़ ${facts.earlySettlementDays} दिन है और उसकी फ़ीस ${r.earlySettlementFeePercent}% है, जबकि कर्ज़ ${facts.loanDays} दिन चलेगा और उस पर लगभग ${r.cheapestLoanCostForItsDaysPercent}% लगेगा।`
-      : `Interest and fees come to ${inr(v.fundingCostRupees)} in all, the lowest of your options: getting your sales money early is needed for only ${facts.earlySettlementDays} days and costs ${r.earlySettlementFeePercent}%, while a loan would run ${facts.loanDays} days and cost about ${r.cheapestLoanCostForItsDaysPercent}%.`;
+      ? `कुल ब्याज और फीस ${inr(v.fundingCostRupees)} है, जो आपके विकल्पों में सबसे कम है: ओवरड्राफ्ट ${r.overdraftAnnualPercent}% सालाना और क्रेडिट लाइन ${r.creditLineAnnualPercent}% सालाना है, और बिक्री का पैसा आते ही दोनों चुका दिए जाते हैं।`
+      : `Interest and fees come to ${inr(v.fundingCostRupees)} in all, the lowest of your options: your overdraft costs ${r.overdraftAnnualPercent}% a year and your credit line ${r.creditLineAnnualPercent}%, both repaid as your sales money arrives.`;
   } else {
     whyCheapest = hi ? "आपको उधार नहीं लेना है, इसलिए फंडिंग का कोई खर्च नहीं है।" : "You do not need to borrow, so there is no funding cost.";
   }

@@ -37,7 +37,7 @@ const TODAY = "2026-10-10";
 const HISTORY_DAYS = 90;
 const BASE_ORDERS_PER_DAY = 50;
 const AVERAGE_ORDER_VALUE = 2000; // ₹ per pair of shoes
-const PREPAID_SHARE = 0.6;
+export const PREPAID_SHARE = 0.55; // COD is about 45% of orders
 
 // Small seeded random generator so the "random" history is identical on every run.
 function mulberry32(seed: number) {
@@ -82,11 +82,11 @@ export const merchant: Merchant = {
   today: TODAY,
   bankBalance: 150_000,
   settlementDays: 2,
-  codPayoutDelayDays: { min: 5, max: 9 },
-  codReturnRate: 0.2,
-  // CALIBRATED, not observed: chosen so the expected gap is ~₹2.3L, matching the spec's demo story.
+  codPayoutDelayDays: { min: 12, max: 13 }, // about 4 days to deliver, then 8 to 9 days for the courier to remit
+  codReturnRate: 0.3, // returns to origin for footwear
+  // CALIBRATED, not observed: chosen so the expected gap on the discount deadline is about ₹2.3L, matching the demo story.
   // Without other outflows this merchant would have a ₹8L surplus and no gap to solve.
-  otherOutflowsPerDay: 105_000,
+  otherOutflowsPerDay: 90_000,
   creditLineLimit: 300_000,
   overdraftLimit: 100_000,
   lastYearFestive: {

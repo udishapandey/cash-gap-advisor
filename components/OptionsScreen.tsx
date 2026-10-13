@@ -69,26 +69,22 @@ function WhatIf({
       {ask}
 
       <div className="mt-5 overflow-x-auto">
-        <table className="w-full min-w-[36rem] text-sm">
+        <table className="w-full min-w-[26rem] text-sm">
           <thead>
             <tr className="border-b border-line text-xs text-muted">
-              <th className="px-3 py-2 text-left font-medium">Sales</th>
+              <th className="py-2 text-left font-medium">Sales</th>
               <th className="px-3 py-2 text-right font-medium">Short</th>
-              <th className="px-3 py-2 text-right font-medium">Borrow full order</th>
-              <th className="px-3 py-2 text-right font-medium">Pairs to order</th>
-              <th className="px-3 py-2 text-right font-medium">Borrow fewer pairs</th>
-              <th className="px-3 py-2 text-left font-medium">Best plan</th>
+              <th className="px-3 py-2 text-right font-medium">Borrowed</th>
+              <th className="py-2 text-right font-medium">Cost</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {rows.map((r) => (
               <tr key={r.salesDropPercent} className={r.salesDropPercent === drop ? "bg-blue-50 font-medium" : ""}>
-                <td className="px-3 py-2">{dropLabel(r.salesDropPercent)}</td>
+                <td className="py-2">{dropLabel(r.salesDropPercent)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatINR(r.keepFull.gapExpected)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatINR(r.keepFull.loan)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{r.rightSized.units}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatINR(r.rightSized.loan)}</td>
-                <td className="px-3 py-2">{r.recommendedView === "right_sized" ? "Fewer pairs" : "Full order"}</td>
+                <td className="py-2 text-right tabular-nums">{formatINR(r.keepFull.planCost)}</td>
               </tr>
             ))}
           </tbody>
@@ -102,6 +98,7 @@ function WhatIf({
 
 /** Colours for the funding bar, in plan order. */
 const BAR_COLOUR: Record<string, string> = {
+  own_cash: "bg-green-600",
   early_settlement: "bg-brand",
   bank_overdraft: "bg-slate-500",
   credit_line: "bg-amber-500",
@@ -123,61 +120,54 @@ function HeroCard({
   return (
     <Card aria-label="Recommended plan" className="p-6">
       <h2 className="font-heading text-xl font-semibold">{hero.title}</h2>
-      <p className={`mt-1 text-sm ${hero.saving > 0 ? "text-green-700" : "text-muted"}`}>{hero.caption}</p>
-      {hero.orderChip && <span className="mt-3 inline-block rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{hero.orderChip}</span>}
+      <p className={`mt-2 font-heading text-2xl font-semibold ${hero.saving > 0 ? "text-green-700" : "text-muted"}`}>{hero.caption}</p>
+      <div
+        role="img"
+        aria-label={hero.rows.map((x) => `${x.label} ${formatINR(x.amount)}`).join(", ")}
+        className="mt-5 flex h-3 w-full overflow-hidden rounded-full bg-slate-200"
+      >
+        {hero.rows.map((x) => (
+          <div key={x.id} className={BAR_COLOUR[x.id]} style={{ width: `${x.share * 100}%` }} />
+        ))}
+      </div>
 
-      {hero.noBorrowing ? (
-        <p className="mt-5 text-sm font-medium">No borrowing needed</p>
-      ) : (
-        <>
-          <div
-            role="img"
-            aria-label={hero.rows.map((x) => `${x.label} ${formatINR(x.amount)}`).join(", ")}
-            className="mt-5 flex h-3 w-full overflow-hidden rounded-full bg-slate-200"
-          >
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[26rem] text-sm">
+          <thead>
+            <tr className="border-b border-line text-xs text-muted">
+              <th className="py-2 text-left font-medium">Source</th>
+              <th className="px-3 py-2 text-right font-medium">Amount</th>
+              <th className="px-3 py-2 text-right font-medium">Days</th>
+              <th className="py-2 text-right font-medium">Cost</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
             {hero.rows.map((x) => (
-              <div key={x.id} className={BAR_COLOUR[x.id]} style={{ width: `${x.share * 100}%` }} />
+              <tr key={x.id}>
+                <td className="py-2">
+                  <span className="flex items-center gap-2">
+                    <span aria-hidden className={`inline-block h-2.5 w-2.5 rounded-full ${BAR_COLOUR[x.id]}`} />
+                    {x.label}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">{formatINR(x.amount)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{x.days ?? "-"}</td>
+                <td className="py-2 text-right tabular-nums">{formatINR(x.cost)}</td>
+              </tr>
             ))}
-          </div>
+            <tr className="font-semibold">
+              <td className="py-2">Total cost</td>
+              <td />
+              <td />
+              <td className="py-2 text-right tabular-nums">{formatINR(hero.totalCost)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[26rem] text-sm">
-              <thead>
-                <tr className="border-b border-line text-xs text-muted">
-                  <th className="py-2 text-left font-medium">Source</th>
-                  <th className="px-3 py-2 text-right font-medium">Amount</th>
-                  <th className="px-3 py-2 text-right font-medium">Days</th>
-                  <th className="py-2 text-right font-medium">Cost</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {hero.rows.map((x) => (
-                  <tr key={x.id}>
-                    <td className="py-2">
-                      <span className="flex items-center gap-2">
-                        <span aria-hidden className={`inline-block h-2.5 w-2.5 rounded-full ${BAR_COLOUR[x.id]}`} />
-                        {x.label}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatINR(x.amount)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{x.days ?? "-"}</td>
-                    <td className="py-2 text-right tabular-nums">{formatINR(x.cost)}</td>
-                  </tr>
-                ))}
-                <tr className="font-semibold">
-                  <td className="py-2">Total cost</td>
-                  <td />
-                  <td />
-                  <td className="py-2 text-right tabular-nums">{formatINR(hero.totalCost)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-
-      {hero.insight && <p className="mt-4 inline-block rounded-full bg-green-50 px-3 py-1.5 text-sm text-green-800">{hero.insight}</p>}
+      {hero.closingLine && <p className="mt-4 text-sm text-muted">{hero.closingLine}</p>}
       {hero.backup && <p className={`mt-3 text-sm ${hero.backup.warn ? "text-red-700" : "text-muted"}`}>{hero.backup.text}</p>}
+      <p className="mt-3 text-xs text-muted">{hero.footer}</p>
       {uncovered > 0 && (
         <p role="alert" className="mt-3 text-sm text-red-700">
           {formatINR(uncovered)} not covered
@@ -191,7 +181,7 @@ function HeroCard({
           disabled={uncovered > 0}
           className="rounded-md bg-brand px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Approve plan
+          Review &amp; approve
         </button>
         <button type="button" onClick={onWhy} className="text-sm font-medium text-brand-text hover:underline">
           Why this plan
@@ -205,41 +195,22 @@ function HeroCard({
 
 function AskCard({
   days,
-  onDays,
   removed,
   script,
 }: {
   days: number;
-  onDays: (d: number) => void;
   removed: number;
   /** The call-script panel, shown once the founder asks for it. */
   script: (open: boolean) => ReactNode;
 }) {
   const [showScript, setShowScript] = useState(false);
-  // A typed question can ask for a number of days that isn't one of the chips. Show it as well.
-  const chips = ([7, 15, 30] as number[]).includes(days) ? [7, 15, 30] : [7, 15, 30, days].sort((a, b) => a - b);
   return (
     <Card aria-label="Ask the supplier for more days">
-      <h2 className="text-base font-semibold">Ask for {days} more days</h2>
-      <p className="mt-1 text-sm text-muted">{removed > 0 ? `Could remove ${formatINR(removed)} of borrowing` : "Would not reduce borrowing"}</p>
-      <div className="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label="Extra days to ask for">
-        {chips.map((d) => (
-          <button
-            key={d}
-            type="button"
-            onClick={() => onDays(d)}
-            aria-pressed={days === d}
-            className={`rounded-full border px-3.5 py-1 text-sm ${
-              days === d ? "border-brand bg-brand-faded font-semibold text-brand-text" : "border-line hover:bg-background"
-            }`}
-          >
-            {d} days
-          </button>
-        ))}
-        <button type="button" onClick={() => setShowScript(true)} className="ml-2 text-sm font-medium text-brand-text hover:underline">
-          Get call script
-        </button>
-      </div>
+      <h2 className="text-base font-semibold">Ask for more days</h2>
+      <p className="mt-1 text-sm text-muted">{removed > 0 ? `${days} days could remove ${formatINR(removed)} of borrowing` : "Would not reduce borrowing"}</p>
+      <button type="button" onClick={() => setShowScript(true)} className="mt-3 text-sm font-medium text-brand-text hover:underline">
+        Get call script
+      </button>
       {showScript && script(true)}
     </Card>
   );
@@ -257,7 +228,6 @@ function OptionsTable({ result, viewId }: { result: EngineResult; viewId: ViewId
             <th className="py-2 text-left font-medium">Option</th>
             <th className="px-3 py-2 text-right font-medium">Covers</th>
             <th className="px-3 py-2 text-right font-medium">Cost</th>
-            <th className="py-2 text-right font-medium">Yearly rate</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
@@ -266,7 +236,6 @@ function OptionsTable({ result, viewId }: { result: EngineResult; viewId: ViewId
               <td className="py-2 font-medium">{r.label}</td>
               <td className="px-3 py-2 text-right tabular-nums">{r.covers}</td>
               <td className="px-3 py-2 text-right tabular-nums">{r.cost}</td>
-              <td className="py-2 text-right tabular-nums">{r.yearly}</td>
             </tr>
           ))}
         </tbody>
@@ -350,7 +319,7 @@ function PlanBody({
 
   return (
     <>
-      <h1 className="font-heading text-2xl font-semibold">Recommended plan</h1>
+      <h1 className="font-heading text-2xl font-semibold">Plan</h1>
 
       <HeroCard
         hero={hero}
@@ -370,7 +339,6 @@ function PlanBody({
 
       <AskCard
         days={extensionDays}
-        onDays={setExtensionDays}
         removed={ask.views[recId === "right_sized" ? "rightSized" : "keepFull"].askFirst.borrowingRemoved}
         script={(open) => (
           <CallScriptPanel
@@ -389,12 +357,21 @@ function PlanBody({
         <Tabs
           label="More about the plan"
           tabs={[
-            { id: "options", label: "All options", content: <OptionsTable result={result} viewId={recId} /> },
+            { id: "options", label: "Compare options", content: <OptionsTable result={result} viewId={recId} /> },
             {
               id: "drop",
-              label: "If sales drop",
+              label: "What if sales change",
               content: (
-                <WhatIf input={input} drop={drop} onChange={(v) => update({ salesDropPercent: v })} ask={<WhatIfAsk onApply={applyTyped} />} />
+                <WhatIf
+                  input={input}
+                  drop={drop}
+                  onChange={(v) => update({ salesDropPercent: v })}
+                  ask={
+                    <Disclosure title="Ask your own question" className="mt-5">
+                      <WhatIfAsk onApply={applyTyped} />
+                    </Disclosure>
+                  }
+                />
               ),
             },
           ]}

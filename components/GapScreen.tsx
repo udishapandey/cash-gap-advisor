@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import type { ScenarioResult } from "@/lib/engine/gap";
+import type { GapResult, ScenarioResult } from "@/lib/engine/gap";
+import { gapView } from "@/lib/plain";
 import { formatINR } from "@/lib/format";
+import Disclosure from "./Disclosure";
 import JourneyShell from "./JourneyShell";
 import NumberField from "./NumberField";
 import RangeBar from "./RangeBar";
@@ -70,50 +72,69 @@ export default function GapScreen() {
   return (
     <JourneyShell step="gap">
       {({ state, result, update }) => {
-        const gap = result.views.keepFull.gap;
-        const { low, expected, high } = gap.scenarios;
-        const cols = [
-          ["Low sales", low],
-          ["Expected", expected],
-          ["High sales", high],
-        ] as const;
+        const view = gapView(result);
+        const gap = result.recommended.focusGap;
         return (
           <>
-            <header>
-              <h1 className="font-heading text-2xl font-semibold">Cash gap</h1>
-              <p className="mt-1 text-sm text-muted">How short you could be before the due date.</p>
-            </header>
+            <h1 className="font-heading text-2xl font-semibold">{view.headline}</h1>
 
-            <StatCard
-              big
-              tone="short"
-              label="Likely short"
-              value={formatINR(gap.gapExpected)}
-              caption={gap.gapMax === 0 ? "Enough cash in every case" : `Could be ${formatINR(gap.gapMin)} to ${formatINR(gap.gapMax)}`}
-            >
+            <StatCard big tone="short" label="Expected gap" value={view.hero} caption={view.caption}>
               {gap.gapMax > 0 && (
                 <div className="mt-5">
                   <RangeBar best={gap.gapMin} expected={gap.gapExpected} worst={gap.gapMax} />
                 </div>
               )}
-              {gap.lowConfidence && (
-                <span className="mt-4 inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">Low confidence</span>
-              )}
+              <p className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">{view.forecastLabel}</span>
+                <span className={`rounded-full px-3 py-1 font-medium ${view.lowConfidence ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
+                  {view.confidence}
+                </span>
+              </p>
             </StatCard>
 
-            <Card>
-              <Tabs
-                label="Cash gap detail"
-                tabs={[
-                  { id: "summary", label: "Summary", content: <Table rows={SUMMARY} cols={cols} /> },
-                  { id: "in", label: "Cash in", content: <Table rows={CASH_IN} cols={cols} /> },
-                  { id: "out", label: "Cash out", content: <Table rows={CASH_OUT} cols={cols} /> },
-                ]}
-              />
-            </Card>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {view.summary.map((c) => (
+                <StatCard key={c.label} label={c.label} value={c.value} caption={c.caption} />
+              ))}
+            </div>
+
+            <Disclosure title="How we estimated this">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[26rem] text-sm">
+                  <thead>
+                    <tr className="border-b border-line text-xs text-muted">
+                      <th className="py-2 text-left font-medium">Estimate</th>
+                      <th className="px-3 py-2 text-left font-medium">Value</th>
+                      <th className="py-2 text-left font-medium">Source</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {view.estimates.map((e) => (
+                      <tr key={e.label}>
+                        <td className="py-2 font-medium">{e.label}</td>
+                        <td className="px-3 py-2 tabular-nums">{e.value}</td>
+                        <td className="py-2">
+                          {e.source} <span className="text-muted">(simulated)</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-5">
+                <Tabs
+                  label="Cash gap detail"
+                  tabs={[
+                    { id: "summary", label: "Summary", content: <Table rows={SUMMARY} cols={cols(gap)} /> },
+                    { id: "in", label: "Cash in", content: <Table rows={CASH_IN} cols={cols(gap)} /> },
+                    { id: "out", label: "Cash out", content: <Table rows={CASH_OUT} cols={cols(gap)} /> },
+                  ]}
+                />
+              </div>
+            </Disclosure>
 
             <Card>
-              <h2 className="text-sm font-semibold">Adjust</h2>
+              <h2 className="text-sm font-semibold">Your inputs</h2>
               <div className="mt-4 grid gap-5 sm:grid-cols-2">
                 <NumberField
                   id="cash-elsewhere"
@@ -136,7 +157,7 @@ export default function GapScreen() {
 
             <div>
               <Link href="/options" className="inline-block rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover">
-                See funding plan
+                See cheapest plan
               </Link>
             </div>
           </>
@@ -145,3 +166,10 @@ export default function GapScreen() {
     </JourneyShell>
   );
 }
+
+const cols = (gap: GapResult) =>
+  [
+    ["Low sales", gap.scenarios.low],
+    ["Expected", gap.scenarios.expected],
+    ["High sales", gap.scenarios.high],
+  ] as const;

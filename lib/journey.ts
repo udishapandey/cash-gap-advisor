@@ -7,7 +7,7 @@ import type { Invoice } from "./data/invoice";
 import type { ViewId, ViewResult } from "./engine";
 import { CONFIG } from "./engine/config";
 import { amountDueOn } from "./engine/gap";
-import { interestRate, type FundingOption, type PlanStep } from "./engine/options";
+import type { FundingOption, PlanStep } from "./engine/options";
 import { formatINR } from "./format";
 import type { Language } from "./language";
 
@@ -137,86 +137,16 @@ export function stepStatus(state: JourneyState, step: StepId, current: StepId | 
   return behind && stepComplete(state, step) ? "done" : "upcoming";
 }
 
-// ---------- Option cards ----------
-
-export interface OptionQuote {
-  available: boolean;
-  cap: number;
-  /** How much of the gap this option alone could cover (up to its cap). */
-  covers: number;
-  /** The true cost in ₹ of covering that amount with this option alone. */
-  cost: number;
-}
-
-/** What one option would cost if it alone covered the gap, up to its cap. Lets cards be compared side by side. */
-export function quoteOption(option: FundingOption, gap: number): OptionQuote {
-  const covers = Math.min(gap, option.maxAmount);
-  return {
-    available: option.maxAmount > 0,
-    cap: option.maxAmount,
-    covers,
-    cost: Math.round(covers * option.costRate),
-  };
-}
-
-/** The "looks cheap" insight for early settlement: a small fee that is a large rate a year. */
-export function earlySettlementInsight(option: FundingOption): string | null {
-  if (option.annualisedPct === null) return null;
-  return `${CONFIG.earlySettlementFeePct.toFixed(2)}% ≈ ${Math.round(option.annualisedPct)}% a year here`;
-}
+// ---------- Who provides each source ----------
 
 /** Who provides each source, so the screen never lets a bank overdraft pass for a Razorpay product. */
 export const SOURCE_TAGS: Record<FundingOption["id"], { label: string; razorpay: boolean }> = {
+  own_cash: { label: "Your own cash", razorpay: false },
   early_settlement: { label: "Your Razorpay sales money", razorpay: true },
   credit_line: { label: "Razorpay partner credit (simulated)", razorpay: true },
   bank_overdraft: { label: "Your own bank, not Razorpay", razorpay: false },
   split_order: { label: "Agreed with your supplier", razorpay: false },
 };
-
-/**
- * When the plan uses the founder's own bank overdraft before the Razorpay credit line, say why, in numbers: it costs
- * less for the days the money is needed. Returns null if the plan doesn't use both, or the overdraft isn't cheaper.
- */
-export function overdraftFirstNote(args: { options: FundingOption[]; steps: PlanStep[]; loanDays: number }): string | null {
-  const { options, steps, loanDays } = args;
-  const od = options.find((o) => o.id === "bank_overdraft");
-  const credit = options.find((o) => o.id === "credit_line");
-  const odStep = steps.find((s) => s.optionId === "bank_overdraft");
-  const creditStep = steps.find((s) => s.optionId === "credit_line");
-  if (!od || !credit || !odStep || !creditStep || od.costRate >= credit.costRate) return null;
-  const sameAmount = odStep.amount;
-  const odCost = Math.round(sameAmount * od.costRate);
-  const creditCost = Math.round(sameAmount * credit.costRate);
-  return `Your bank's overdraft (${formatINR(sameAmount)} at ${od.annualisedPct}% a year) is used before the Razorpay credit line (${credit.annualisedPct}%) because it costs less for the ${loanDays} days needed: ${formatINR(odCost)} against ${formatINR(creditCost)} on the same ${formatINR(sameAmount)}.`;
-}
-
-/** How many days the money from this option is out: early settlement only brings money forward a few days. */
-export function daysOut(option: FundingOption, settlementDays: number, loanDays: number): number | null {
-  if (option.id === "early_settlement") return settlementDays;
-  return option.isBorrowing ? loanDays : null;
-}
-
-/**
- * When early settlement is cheaper in rupees than the cheapest loan, say why, in numbers: its yearly rate looks high,
- * but the money is only needed a couple of days, while a loan would run much longer. Returns null if it is not cheaper.
- * `amount` is how much early settlement would cover; `loanDays` is how long a loan would be out.
- */
-export function earlySettlementWhy(args: {
-  options: FundingOption[];
-  amount: number;
-  settlementDays: number;
-  loanDays: number;
-}): string | null {
-  const { options, amount, settlementDays, loanDays } = args;
-  const early = options.find((o) => o.id === "early_settlement");
-  const loans = options.filter((o) => o.isBorrowing && o.maxAmount > 0);
-  if (!early || early.annualisedPct === null || loans.length === 0 || amount <= 0) return null;
-  const loan = loans.reduce((a, b) => (b.costRate < a.costRate ? b : a));
-  if (early.costRate >= loan.costRate) return null;
-  const earlyCost = Math.round(amount * early.costRate);
-  const loanCost = Math.round(amount * loan.costRate);
-  return `High yearly rate (${Math.round(early.annualisedPct)}% a year), but only needed for ${settlementDays} days. A loan would run ${loanDays} days and cost ${formatINR(loanCost)} to cover the same ${formatINR(amount)}, against ${formatINR(earlyCost)} here.`;
-}
 
 // ---------- Plan sections for the approval screen ----------
 
@@ -265,7 +195,15 @@ export function splitPlan(view: ViewResult, fullUnits: number): PlanSections {
   }
   for (const step of view.recommended.plan.steps) {
     if (step.isBorrowing) continue;
-    if (step.optionId === "split_order") {
+    if (step.optionId === "own_cash") {
+      nonCredit.push({
+        id: step.optionId,
+        text: `Use ${formatINR(step.amount)} of your own cash`,
+        detail: `Your safety buffer of ${formatINR(view.recommended.plan.buffer)} stays in the account.`,
+        amount: step.amount,
+        cost: 0,
+      });
+    } else if (step.optionId === "split_order") {
       const pairs = Math.round(step.amount / invoice.unitPrice);
       nonCredit.push({
         id: step.optionId,
@@ -277,7 +215,7 @@ export function splitPlan(view: ViewResult, fullUnits: number): PlanSections {
     } else {
       nonCredit.push({
         id: step.optionId,
-        text: `Get ${formatINR(step.amount)} of your Razorpay sales money early`,
+        text: `Settle ${formatINR(step.amount)} of your sales early`,
         detail: `Fee ${formatINR(step.cost)}. This is your own money, not a loan.`,
         amount: step.amount,
         cost: step.cost,
@@ -300,11 +238,12 @@ export function supplierPayment(view: ViewResult): number {
   return Math.round(amountDueOn(view.invoice, day));
 }
 
-/** How many days borrowed money stays out under this plan (it is needed sooner if paying early). */
+/**
+ * How many days the credit line is out under this plan. Loans are repaid as soon as cash allows, so this is the days
+ * something was owed in the day-by-day run, not a fixed term.
+ */
 export function tenureDays(view: ViewResult): number {
-  return view.recommended.timing === "pay_early_for_discount"
-    ? CONFIG.borrowDays + (view.invoice.dueInDays - earlyPayDay(view.invoice))
-    : CONFIG.borrowDays;
+  return Math.max(1, view.recommended.plan.sim.stats.credit_line.days);
 }
 
 // ---------- Key Fact Statement (simulated) ----------
@@ -332,9 +271,9 @@ export interface KeyFactStatement {
   coolingOffDays: number;
 }
 
-/** The numbers shown before any credit is drawn. Interest uses the same formula as the engine, so they always agree. */
-export function buildKfs(loanAmount: number, tenure: number): KeyFactStatement {
-  const totalInterest = Math.round(loanAmount * interestRate(CONFIG.creditLineRatePct, tenure));
+/** The numbers shown before any credit is drawn. The interest is the engine's own figure for the credit line, so they always agree. */
+export function buildKfs(loanAmount: number, tenure: number, interest: number): KeyFactStatement {
+  const totalInterest = Math.round(interest);
   const fees = 0; // simulated: no processing fee, so the engine's cost is interest only
   return {
     lender: "Partner NBFC (simulated)",
@@ -364,7 +303,7 @@ export function buildKfs(loanAmount: number, tenure: number): KeyFactStatement {
 }
 
 export function consentText(kfs: KeyFactStatement): string {
-  return `I have read the Key Fact Statement. I agree to borrow ${formatINR(kfs.loanAmount)} from ${kfs.lender} at ${kfs.annualRatePct}% a year, and I understand I must repay ${formatINR(kfs.totalRepayable)} ${kfs.tenureDays} days after the money reaches my bank account.`;
+  return `I have read the Key Fact Statement. I agree to borrow ${formatINR(kfs.loanAmount)} from ${kfs.lender} at ${kfs.annualRatePct}% a year, and I understand I expect to repay ${formatINR(kfs.totalRepayable)} about ${kfs.tenureDays} days after the money reaches my bank account, and I can repay sooner with no pre-closure charge.`;
 }
 
 // ---------- Approval rules ----------
@@ -382,7 +321,7 @@ export function approvalBlockers(view: ViewResult): string[] {
   return plan.fullyCovered
     ? []
     : [
-        `This plan covers only ${formatINR(plan.covered)} of the ${formatINR(plan.gap)} gap, so ${formatINR(plan.uncovered)} is not covered. Go back and choose another plan, or add cash available elsewhere.`,
+        `This plan covers only ${formatINR(plan.covered)} of the ${formatINR(plan.gap)} gap, so ${formatINR(plan.uncovered)} is not covered. Go back and add cash available elsewhere.`,
       ];
 }
 

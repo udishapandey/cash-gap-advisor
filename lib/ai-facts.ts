@@ -11,9 +11,10 @@ import { CONFIG } from "./engine/config";
 import type { OptionId, Plan } from "./engine/options";
 import { expectedLostMargin } from "./engine/stock";
 import { formatINR, formatPct } from "./format";
-import { earlyPayDay, tenureDays } from "./journey";
+import { earlyPayDay } from "./journey";
 
 const SOURCE_NAMES: Record<OptionId, string> = {
+  own_cash: "your own cash",
   early_settlement: "your Razorpay sales money early",
   credit_line: "Razorpay credit line",
   bank_overdraft: "your bank's overdraft",
@@ -69,17 +70,13 @@ export interface ExplainFacts {
     cashSavedByRightSizingRupees: number;
     expectedLostMarginRupees: number;
   };
+  /** Illustrative rates. The two loans charge interest per day on what is used and can be repaid any time. */
   ratesPercent: {
-    earlySettlementFeePercent: number;
-    earlySettlementAnnualisedPercent: number;
-    creditLineAnnualPercent: number;
     overdraftAnnualPercent: number;
-    /** What the cheaper loan costs for the days it would really be out, as a share of the amount. */
-    cheapestLoanCostForItsDaysPercent: number;
+    creditLineAnnualPercent: number;
+    /** The flat fee, GST included, each time sales money is settled early. */
+    instantSettlementFeePercent: number;
   };
-  /** How many days each kind of money would be out: early settlement only comes forward a few days; a loan runs much longer. */
-  earlySettlementDays: number;
-  loanDays: number;
   lowConfidenceForecast: boolean;
 }
 
@@ -126,9 +123,6 @@ export function planFacts(result: EngineResult): ExplainFacts {
   const { keepFull, rightSized } = result.views;
   const { stock } = result;
   const demand = stock.demandByScenario[stock.basis];
-  // The loans are priced for the days they are really out under the recommended plan (a few more if it pays early).
-  const loanOptions = result.recommended.recommended.timing === "pay_early_for_discount" ? result.recommended.earlyOptions : result.recommended.options;
-  const rate = (id: OptionId) => keepFull.options.find((o) => o.id === id)?.annualisedPct ?? 0;
   return {
     salesDropPercent: keepFull.gap.salesDropPercent,
     invoiceRupees: keepFull.invoice.amount,
@@ -148,17 +142,11 @@ export function planFacts(result: EngineResult): ExplainFacts {
       }).expectedLostMargin,
     },
     ratesPercent: {
-      earlySettlementFeePercent: CONFIG.earlySettlementFeePct,
-      earlySettlementAnnualisedPercent: round2(rate("early_settlement")),
-      creditLineAnnualPercent: round2(rate("credit_line")),
-      overdraftAnnualPercent: round2(rate("bank_overdraft")),
-      cheapestLoanCostForItsDaysPercent: round2(
-        Math.min(...(["credit_line", "bank_overdraft"] as const).map((id) => (loanOptions.find((o) => o.id === id)?.costRate ?? 0) * 100)),
-      ),
+      overdraftAnnualPercent: round2(keepFull.terms.overdraft.ratePct),
+      creditLineAnnualPercent: round2(keepFull.terms.creditLine.ratePct),
+      instantSettlementFeePercent: Math.round(keepFull.terms.instant.feePct * 1000) / 1000,
     },
-    earlySettlementDays: merchant.settlementDays,
-    loanDays: tenureDays(result.recommended),
-    lowConfidenceForecast: keepFull.gap.lowConfidence,
+    lowConfidenceForecast: keepFull.focusGap.lowConfidence,
   };
 }
 
@@ -261,8 +249,6 @@ export interface RecommendedFacts {
   cashElsewhereRupees: number;
   plan: ViewFacts;
   ratesPercent: ExplainFacts["ratesPercent"];
-  earlySettlementDays: number;
-  loanDays: number;
   lowConfidenceForecast: boolean;
 }
 
@@ -276,8 +262,6 @@ export function recommendedFacts(f: ExplainFacts): RecommendedFacts {
     cashElsewhereRupees: f.cashElsewhereRupees,
     plan: f.recommendedPlan === "right_sized" ? f.rightSized : f.keepFull,
     ratesPercent: f.ratesPercent,
-    earlySettlementDays: f.earlySettlementDays,
-    loanDays: f.loanDays,
     lowConfidenceForecast: f.lowConfidenceForecast,
   };
 }
@@ -303,9 +287,7 @@ export interface ResultsFacts {
   pairsLeftOver: number;
   /** Pairs customers wanted that the order did not cover. */
   pairsMissed: number;
-  /** Borrowed beyond the real peak need. */
-  unnecessaryBorrowingRupees: number;
-  /** The part of the real need the plan did not cover that would be drawn from standby (unused credit-line headroom), and the part beyond even that. */
+  /** Credit drawn beyond the plan, from the backup (the unused credit line), and what even the backup could not cover. */
   drawnFromStandbyRupees: number;
   beyondStandbyRupees: number;
   usualUpliftTimes: number;
@@ -327,9 +309,8 @@ export function resultsFacts(o: OutcomeResult): ResultsFacts {
     pairsSold: o.stock.sold,
     pairsLeftOver: o.stock.leftOver,
     pairsMissed: o.stock.missedPairs,
-    unnecessaryBorrowingRupees: o.borrowing.unnecessary,
-    drawnFromStandbyRupees: o.borrowing.drawnFromStandby,
-    beyondStandbyRupees: o.borrowing.beyondStandby,
+    drawnFromStandbyRupees: o.borrowing.extraCredit,
+    beyondStandbyRupees: o.borrowing.beyondBackup,
     usualUpliftTimes: o.learned.uplift.before,
     nextUpliftTimes: o.learned.uplift.after,
     codAssumedPercent: o.learned.codReturnRate.assumedPercent,

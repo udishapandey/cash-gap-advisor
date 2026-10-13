@@ -1,23 +1,25 @@
 // One call that runs the whole engine. Change any input (e.g. salesDropPercent) and everything reruns.
 //
-// Two views are always returned:
-//   keepFull   - order every pair on the invoice. The gap grows as sales drop.
-//   rightSized - order only the pairs the forecast says will sell. The order and loan shrink.
-// The plan in each view uses confirmed sources only. A supplier extension is never in the
-// plan; it comes back separately as `askFirst`.
+// The engine pays the supplier on one of two days: the discount deadline (paying the smaller amount) or the due date.
+// For each, the planner works out day by day how to fund it, and the cheaper safe one is recommended.
+// The plan uses confirmed sources only. A supplier extension is never in the plan; it comes back separately as `askFirst`.
+//
+// Two views are returned. keepFull is the whole order and is always the recommendation. rightSized (only the pairs the
+// forecast says will sell) is kept for the options table: ordering fewer pairs is not part of paying the supplier.
 
 import { CONFIG, type Scenario } from "./config";
-import { computeGap, type GapResult } from "./gap";
+import { amountDueOn, cashSeries, computeGap, type GapResult } from "./gap";
 import {
-  buildFundingOptions,
-  buildPlan,
+  buildOptions,
   evaluateDiscount,
   lateFeeIfMissed,
+  planFromSim,
   type DiscountAnalysis,
   type FundingOption,
   type OptionId,
   type Plan,
 } from "./options";
+import { bestPlan, simulate, SOURCE_IDS, termsFor, type SourceId, type Terms } from "./plan";
 import { demandUnits, rightSize, withUnits, type RightSizing } from "./stock";
 import type { Merchant } from "../data/merchant";
 import type { Invoice } from "../data/invoice";
@@ -44,7 +46,7 @@ export type ViewId = "keep_full" | "right_sized";
 /** What happens IF the supplier agrees. Not part of the plan and never counted as cash. */
 export interface AskFirst {
   extraDays: number;
-  /** Gap measured on the extended due date, using the same confirmed sources. */
+  /** The cash to find if the bill is paid on the extended due date. */
   gapAtExtendedDate: number;
   planAtExtendedDate: Plan;
   borrowingIfPaidOnDueDate: number;
@@ -60,15 +62,23 @@ export interface ViewResult {
   units: number;
   orderValue: number;
   invoice: Invoice;
-  gap: GapResult; // measured on the due date
-  earlyGap: GapResult; // measured on the last day of the discount window
+  /** The cash to find if the bill is paid on the due date. */
+  gap: GapResult;
+  /** The cash to find if the bill is paid on the last day of the discount window. */
+  earlyGap: GapResult;
+  /** The same for the day the recommended plan pays: the "likely short" the founder sees. */
+  focusGap: GapResult;
+  /** The ways to find the money, each tried alone, for the day the recommended plan pays. */
   options: FundingOption[];
-  earlyOptions: FundingOption[];
   duePlan: Plan;
   earlyPlan: Plan;
   discount: DiscountAnalysis;
   recommended: { timing: Timing; plan: Plan };
-  /** Credit line + overdraft in the recommended plan. */
+  /** The founder's usual way: pay on the due date, no discount, any shortfall on the credit line, repaid as cash arrives. */
+  defaultPlan: Plan;
+  /** The rates and limits this view was worked out with. */
+  terms: Terms;
+  /** The overdraft and credit line owed at most, in the recommended plan. */
   loan: number;
   askFirst: AskFirst;
 }
@@ -76,49 +86,55 @@ export interface ViewResult {
 export interface EngineResult {
   stock: RightSizing;
   views: { keepFull: ViewResult; rightSized: ViewResult };
-  /** (b) right-sized when expected unsold stock is over 10% of the order, otherwise (a). */
+  /** Always the whole order: ordering fewer pairs is not part of paying the supplier. */
   recommendedView: ViewId;
   recommended: ViewResult;
 }
 
-function computeView(
-  id: ViewId,
-  invoice: Invoice,
-  input: EngineInput,
-  planScenario: Scenario,
-): ViewResult {
+function computeView(id: ViewId, invoice: Invoice, input: EngineInput, planScenario: Scenario): ViewResult {
   const { merchant } = input;
   const salesDropPercent = input.salesDropPercent ?? 0;
-  const earlyDay = Math.min(invoice.earlyPayWithinDays, invoice.dueInDays);
-  const daysEarly = invoice.dueInDays - earlyDay;
-  const demand = demandUnits(merchant, planScenario, salesDropPercent);
-  // "Keep the full order" means no part of the order is deferred.
-  const exclude: OptionId[] = [...(input.exclude ?? []), ...(id === "keep_full" ? (["split_order"] as OptionId[]) : [])];
+  const dueDay = invoice.dueInDays;
+  const earlyDay = Math.min(invoice.earlyPayWithinDays, dueDay);
+  const hasDiscount = invoice.earlyPayDiscountPct > 0 && earlyDay < dueDay;
+  const extraDays = input.extensionDays ?? CONFIG.extensionDays;
+  const terms = termsFor(merchant, input.overdraftRatePct);
+  const horizon = dueDay + extraDays + CONFIG.repaymentHorizonDays;
+  const excluded = new Set(input.exclude ?? []);
+  const allowed = SOURCE_IDS.filter((s) => !excluded.has(s as OptionId));
 
-  const common = { merchant, invoice, demandUnits: demand, overdraftRatePct: input.overdraftRatePct };
-  const gapAt = (byDay?: number) =>
-    computeGap({ merchant, invoice, salesDropPercent, byDay, cashElsewhere: input.cashElsewhere });
+  const seriesFor = (scenario: Scenario) =>
+    cashSeries({ merchant, scenario, salesDropPercent, cashElsewhere: input.cashElsewhere, horizon });
+  const series = seriesFor(planScenario);
+  const low = seriesFor("low");
+  const gapAt = (byDay: number) => computeGap({ merchant, invoice, salesDropPercent, byDay, cashElsewhere: input.cashElsewhere });
 
-  const gap = gapAt();
-  const earlyGap = gapAt(earlyDay);
-  const options = buildFundingOptions({ ...common, scenario: gap.scenarios[planScenario] });
-  const earlyOptions = buildFundingOptions({
-    ...common,
-    scenario: earlyGap.scenarios[planScenario],
-    borrowDays: CONFIG.borrowDays + daysEarly, // money is needed that much sooner
-  });
-  const duePlan = buildPlan(gap.scenarios[planScenario].gap, options, exclude);
-  const earlyPlan = buildPlan(earlyGap.scenarios[planScenario].gap, earlyOptions, exclude);
-  const discount = evaluateDiscount(invoice, duePlan, earlyPlan);
+  const planFor = (day: number, gap: GapResult, sources: SourceId[] = allowed): Plan => {
+    const payAmount = Math.round(amountDueOn(invoice, day));
+    const sim = bestPlan({ series, payDay: day, payAmount, terms, horizon, allowed: sources });
+    const simLow = simulate({ series: low, payDay: day, payAmount, order: sim.order, terms, horizon });
+    return planFromSim(sim, simLow, gap.scenarios[planScenario].gap);
+  };
+
+  const gap = gapAt(dueDay);
+  const earlyGap = hasDiscount ? gapAt(earlyDay) : gap;
+  const duePlan = planFor(dueDay, gap);
+  const earlyPlan = hasDiscount ? planFor(earlyDay, earlyGap) : duePlan;
+  const discount = hasDiscount
+    ? evaluateDiscount(invoice, duePlan, earlyPlan)
+    : { discountAmount: 0, daysEarly: dueDay - earlyDay, extraFundingCost: 0, netSaving: 0, affordable: false, worthIt: false };
   const recommended = discount.worthIt
     ? { timing: "pay_early_for_discount" as const, plan: earlyPlan }
     : { timing: "on_due_date" as const, plan: duePlan };
+  const focusGap = recommended.timing === "pay_early_for_discount" ? earlyGap : gap;
 
-  // Ask first: what if the supplier agreed to N more days?
-  const extraDays = input.extensionDays ?? CONFIG.extensionDays;
-  const extGap = gapAt(invoice.dueInDays + extraDays);
-  const extOptions = buildFundingOptions({ ...common, scenario: extGap.scenarios[planScenario] });
-  const planAtExtendedDate = buildPlan(extGap.scenarios[planScenario].gap, extOptions, exclude);
+  // The usual way: pay on the due date, no discount, any shortfall on the credit line.
+  const defaultPlan = planFor(dueDay, gap, ["credit_line"]);
+
+  // Ask first: what if the supplier agreed to N more days? Paid on the extended date, full amount.
+  const extDay = dueDay + extraDays;
+  const extGap = gapAt(extDay);
+  const planAtExtendedDate = planFor(extDay, extGap);
   const askFirst: AskFirst = {
     extraDays,
     gapAtExtendedDate: extGap.scenarios[planScenario].gap,
@@ -129,6 +145,16 @@ function computeView(
     lateFeeIfMissed: lateFeeIfMissed(invoice, extraDays),
   };
 
+  const options = buildOptions({
+    series,
+    terms,
+    payDay: recommended.plan.payDay,
+    payAmount: recommended.plan.payAmount,
+    horizon,
+    invoice,
+    demandUnits: demandUnits(merchant, planScenario, salesDropPercent),
+  });
+
   return {
     id,
     units: invoice.units,
@@ -136,12 +162,14 @@ function computeView(
     invoice,
     gap,
     earlyGap,
+    focusGap,
     options,
-    earlyOptions,
     duePlan,
     earlyPlan,
     discount,
     recommended,
+    defaultPlan,
+    terms,
     loan: recommended.plan.borrowed,
     askFirst,
   };
@@ -152,20 +180,9 @@ export function runEngine(input: EngineInput): EngineResult {
   const stock = rightSize(input.invoice, input.merchant, planScenario, input.salesDropPercent ?? 0);
 
   const keepFull = computeView("keep_full", input.invoice, input, planScenario);
-  const rightSized = computeView(
-    "right_sized",
-    withUnits(input.invoice, stock.recommendedUnits),
-    input,
-    planScenario,
-  );
+  const rightSized = computeView("right_sized", withUnits(input.invoice, stock.recommendedUnits), input, planScenario);
 
-  const recommendedView: ViewId = stock.recommend ? "right_sized" : "keep_full";
-  return {
-    stock,
-    views: { keepFull, rightSized },
-    recommendedView,
-    recommended: recommendedView === "right_sized" ? rightSized : keepFull,
-  };
+  return { stock, views: { keepFull, rightSized }, recommendedView: "keep_full", recommended: keepFull };
 }
 
 export interface WhatIfRow {
@@ -176,14 +193,14 @@ export interface WhatIfRow {
   rightSized: { units: number; orderValue: number; gapExpected: number; loan: number; planCost: number };
 }
 
-/** Rerun the engine for each sales drop, giving both views side by side. */
+/** Rerun the engine for each sales drop. */
 export function runWhatIf(input: EngineInput, drops: number[] = [0, 10, 20, 30]): WhatIfRow[] {
   return drops.map((salesDropPercent) => {
     const r = runEngine({ ...input, salesDropPercent });
     const summary = (v: ViewResult) => ({
       units: v.units,
       orderValue: v.orderValue,
-      gapExpected: v.gap.gapExpected,
+      gapExpected: v.focusGap.gapExpected,
       loan: v.loan,
       planCost: v.recommended.plan.totalCost,
     });

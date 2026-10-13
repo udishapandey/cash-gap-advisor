@@ -10,11 +10,11 @@ export const preReadSampleExtraction: InvoiceExtraction = {
   supplierName: { value: "Shree Ganesh Footwear Pvt Ltd", evidence: "Shree Ganesh Footwear Pvt Ltd", confidence: "high" },
   invoiceNumber: { value: "SGF/26-27/0142", evidence: "SGF/26-27/0142", confidence: "high" },
   invoiceDate: { value: "2026-10-11", evidence: "11 Oct 2026", confidence: "high" },
-  dueDate: { value: "2026-10-21", evidence: "21 Oct 2026", confidence: "high" },
+  dueDate: { value: "2026-11-10", evidence: "10 Nov 2026", confidence: "high" },
   totalAmount: { value: 500000, evidence: "5,00,000.00", confidence: "high" },
   quantity: { value: 500, evidence: "500 pairs", confidence: "high" },
   unitPrice: { value: 1000, evidence: "1,000.00", confidence: "high" },
   earlyPaymentDiscountPercent: { value: 2, evidence: "2%", confidence: "high" },
-  earlyPaymentDiscountDays: { value: 7, evidence: "7 days", confidence: "high" },
+  earlyPaymentDiscountDays: { value: 10, evidence: "10 days", confidence: "high" },
   lateFeePercentPerMonth: { value: 1.5, evidence: "1.5% per month", confidence: "high" },
 };

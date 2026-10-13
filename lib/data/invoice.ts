@@ -23,8 +23,8 @@ export const sampleInvoice: Invoice = {
   units: 500,
   unitPrice: 1_000,
   amount: 500_000,
-  dueInDays: 10,
+  dueInDays: 30,
   earlyPayDiscountPct: 2,
-  earlyPayWithinDays: 7,
+  earlyPayWithinDays: 10, // 2/10 net 30
   lateFeePctPerMonth: 1.5,
 };

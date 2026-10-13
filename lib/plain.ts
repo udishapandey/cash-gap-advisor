@@ -1,15 +1,16 @@
 // The words on the screens, built only from the engine's numbers. Plain TypeScript, no AI, no React.
 // The copy follows Razorpay dashboard patterns: a label, a number, a short caption, and the detail in tables.
-// The engine's names ("Early settlement", "Bank overdraft", "Peak shortfall") stay as they are in code.
+// The engine's names ("Instant settlement", "Bank overdraft") stay as they are in code.
 
-import { merchant as simulatedMerchant } from "./data/merchant";
+import { merchant as simulatedMerchant, PREPAID_SHARE } from "./data/merchant";
 import type { Invoice } from "./data/invoice";
 import type { EngineResult, ViewId, ViewResult } from "./engine";
 import type { OptionId } from "./engine/options";
+import { CONFIG } from "./engine/config";
 import { standbyFor } from "./engine/standby";
 import { expectedLostMargin } from "./engine/stock";
-import { formatDayMonth, formatINR, formatPct } from "./format";
-import { daysOut, earlyPayDay, earlySettlementWhy, quoteOption, tenureDays } from "./journey";
+import { formatCompactINR, formatDayMonth, formatINR, formatPct } from "./format";
+import { earlyPayDay } from "./journey";
 import { SAVING_BASIS, outcomeForState } from "./results";
 
 export { SAVING_BASIS };
@@ -18,24 +19,30 @@ export { SAVING_BASIS };
 
 /** The rows of the funding table on the recommended plan. */
 export const SOURCE_ROW: Record<OptionId, string> = {
-  early_settlement: "Settle your sales early",
+  own_cash: "Your cash",
   bank_overdraft: "Your bank overdraft",
   credit_line: "Razorpay credit line",
+  early_settlement: "Instant settlement",
   split_order: "Split the order",
 };
 
-/** Names in the "All options" table, and anywhere a plain name of an option is needed. */
+/** Names in the options table. */
 export const OPTION_LABEL: Record<OptionId, string> = {
-  early_settlement: "Settle sales early",
+  own_cash: "Your cash",
   bank_overdraft: "Bank overdraft",
   credit_line: "Razorpay credit line",
+  early_settlement: "Instant settlement",
   split_order: "Split the order",
 };
 
 export const TERMS = {
   orderFewer: "Order fewer pairs",
-  standby: "Backup",
 } as const;
+
+/** Fixed lines on the Plan screen. */
+export const CLOSING_LINE = "Each loan is closed the day your sales money arrives.";
+export const RATES_FOOTER = "Rates are illustrative. Your actual terms come from your Key Fact Statement.";
+export const CREDIT_NEEDS_APPROVAL = "Razorpay credit needs lender approval and a final Key Fact Statement. Values shown are illustrative.";
 
 /** "Shree Ganesh Footwear Pvt Ltd" -> "Shree Ganesh Footwear": the company form is noise in a caption. */
 export function tidyName(name: string): string {
@@ -48,11 +55,10 @@ export function dayLabel(invoice: Invoice, day: number): string {
 }
 
 const viewOf = (result: EngineResult, id: ViewId): ViewResult => (id === "right_sized" ? result.views.rightSized : result.views.keepFull);
-const planOptionsOf = (view: ViewResult) => (view.recommended.timing === "pay_early_for_discount" ? view.earlyOptions : view.options);
 
 // ---------- the one headline saving ----------
 
-/** Money saved against the usual way, if sales come in as forecast. Options and Results show this same number. */
+/** Money saved against paying on the due date the usual way, if sales come in as forecast. Plan and Results show this same number. */
 export function forecastSaving(
   result: EngineResult,
   viewId: ViewId,
@@ -69,15 +75,14 @@ export function fewerPairsSameAsFull(result: EngineResult): boolean {
 }
 
 /**
- * The grey line about the backup (the engine calls it standby): the most that could be needed if sales are slow, and
- * that your unused credit line covers it. When the unused credit line falls short it is a warning instead. Null if no backup is needed.
+ * The grey line about the backup: the credit line that is left unused if sales are slow, at no cost unless used.
+ * When slow sales would leave the safety buffer uncovered it is a warning instead. Null if there is no credit left to mention.
  */
 export function backupLine(view: ViewResult): { text: string; warn: boolean } | null {
   const sb = standbyFor(view);
-  if (sb.amount === 0) return null;
-  return sb.coveredByHeadroom
-    ? { text: `Backup ${formatINR(sb.amount)} on your credit line if sales are slow. No cost unless used.`, warn: false }
-    : { text: `Backup ${formatINR(sb.amount)} needs ${formatINR(sb.shortBy)} more credit.`, warn: true };
+  if (!sb.lowSalesCovered) return { text: `Backup: ${formatINR(sb.shortBy)} short if sales are slow.`, warn: true };
+  if (sb.unusedCredit <= 0) return null;
+  return { text: `Backup: ${formatINR(sb.unusedCredit)} unused credit if sales are slow. No cost unless used.`, warn: false };
 }
 
 // ---------- the recommended plan ----------
@@ -86,7 +91,7 @@ export interface HeroRow {
   id: OptionId;
   label: string;
   amount: number;
-  /** Days the money is out. Null where that does not apply. */
+  /** Days the money is out. Null for your own cash. */
   days: number | null;
   cost: number;
   share: number;
@@ -94,67 +99,112 @@ export interface HeroRow {
 
 export interface HeroPlan {
   viewId: ViewId;
-  /** "Pay by 18 Oct and get ₹10,000 off" */
+  /** "Pay by 21 Oct and get ₹10,000 off" */
   title: string;
-  /** "₹11,310 better off than borrowing the usual way" */
+  /** "₹9,583 better off than paying on the due date" */
   caption: string;
-  /** Only when the order is cut: "Order 364 of 500 pairs". */
-  orderChip: string | null;
   rows: HeroRow[];
   totalCost: number;
-  /** Green chip: only when getting the sales money early is the cheapest source. */
-  insight: string | null;
-  /** Grey line about the backup, or a warning when the unused credit limit cannot cover it. */
+  /** True if the plan borrows anything. */
+  hasLoans: boolean;
+  closingLine: string | null;
   backup: { text: string; warn: boolean } | null;
-  noBorrowing: boolean;
-  /** The headline saving against the usual way. */
+  footer: string;
+  /** The headline saving against paying on the due date the usual way. */
   saving: number;
+  payAmount: number;
+  payDay: number;
+  payDate: string;
+  /** The amounts the Home mini-plan shows. */
+  ownCash: number;
+  overdraft: number;
+  credit: number;
+  instant: number;
+  buffer: number;
 }
 
 export function buildHeroPlan(result: EngineResult, viewId: ViewId, saving: number): HeroPlan {
   const view = viewOf(result, viewId);
   const plan = view.recommended.plan;
   const early = view.recommended.timing === "pay_early_for_discount";
-  const planOptions = planOptionsOf(view);
-  const loanDays = tenureDays(view);
-  const settlementDays = simulatedMerchant.settlementDays;
-  const payDay = early ? earlyPayDay(view.invoice) : view.invoice.dueInDays;
+  const total = plan.steps.reduce((t, s) => t + s.amount, 0);
+  const amountOf = (id: OptionId) => plan.steps.find((s) => s.optionId === id)?.amount ?? 0;
 
-  const rows: HeroRow[] = plan.steps.map((s) => {
-    const option = planOptions.find((o) => o.id === s.optionId)!;
-    return {
-      id: s.optionId,
-      label: SOURCE_ROW[s.optionId],
-      amount: s.amount,
-      days: daysOut(option, settlementDays, loanDays),
-      cost: s.cost,
-      share: plan.covered > 0 ? s.amount / plan.covered : 0,
-    };
-  });
-
-  const earlyStep = plan.steps.find((s) => s.optionId === "early_settlement");
-  const cheapest = earlyStep ? earlySettlementWhy({ options: planOptions, amount: earlyStep.amount, settlementDays, loanDays }) : null;
+  const rows: HeroRow[] = plan.steps.map((s) => ({
+    id: s.optionId,
+    label: SOURCE_ROW[s.optionId],
+    amount: s.amount,
+    days: s.days,
+    cost: s.cost,
+    share: total > 0 ? s.amount / total : 0,
+  }));
+  const hasLoans = plan.steps.some((s) => s.isBorrowing);
 
   return {
     viewId,
-    title: early ? `Pay by ${dayLabel(view.invoice, payDay)} and get ${formatINR(view.discount.discountAmount)} off` : `Pay on ${dayLabel(view.invoice, payDay)}`,
+    title: early
+      ? `Pay by ${dayLabel(view.invoice, plan.payDay)} and get ${formatINR(view.discount.discountAmount)} off`
+      : `Pay on ${dayLabel(view.invoice, plan.payDay)}`,
     caption:
       saving > 0
-        ? `${formatINR(saving)} better off than borrowing the usual way`
+        ? `${formatINR(saving)} better off than paying on the due date`
         : saving === 0
-          ? "Same cost as borrowing the usual way"
-          : `${formatINR(-saving)} more than borrowing the usual way`,
-    orderChip: view.units < result.stock.fullUnits ? `Order ${view.units} of ${result.stock.fullUnits} pairs` : null,
+          ? "Same cost as paying on the due date"
+          : `${formatINR(-saving)} more than paying on the due date`,
     rows,
     totalCost: plan.totalCost,
-    insight: earlyStep && cheapest ? `Early settlement is costly per year, but you need it for only ${settlementDays} days.` : null,
+    hasLoans,
+    closingLine: hasLoans ? CLOSING_LINE : null,
     backup: backupLine(view),
-    noBorrowing: rows.length === 0,
+    footer: RATES_FOOTER,
     saving,
+    payAmount: plan.payAmount,
+    payDay: plan.payDay,
+    payDate: dayLabel(view.invoice, plan.payDay),
+    ownCash: amountOf("own_cash"),
+    overdraft: amountOf("bank_overdraft"),
+    credit: amountOf("credit_line"),
+    instant: amountOf("early_settlement"),
+    buffer: plan.buffer,
   };
 }
 
-// ---------- the "All options" table ----------
+// ---------- Home ----------
+
+export interface HomeAlert {
+  title: string;
+  line: string;
+  /** "Your cash ₹A · Overdraft ₹B · Razorpay credit ₹C · Safety buffer kept ₹D", as separate parts. */
+  mini: { label: string; value: number }[];
+  saving: number;
+  caption: string;
+}
+
+export function homeAlert(result: EngineResult, saving: number): HomeAlert {
+  const view = result.recommended;
+  const plan = view.recommended.plan;
+  const early = view.recommended.timing === "pay_early_for_discount";
+  const hero = buildHeroPlan(result, result.recommendedView, saving);
+  const gap = view.focusGap.gapExpected;
+  const mini: HomeAlert["mini"] = [{ label: "Your cash", value: hero.ownCash }];
+  if (hero.overdraft > 0) mini.push({ label: "Overdraft", value: hero.overdraft });
+  if (hero.credit > 0) mini.push({ label: "Razorpay credit", value: hero.credit });
+  if (hero.instant > 0) mini.push({ label: "Instant settlement", value: hero.instant });
+  mini.push({ label: "Safety buffer kept", value: plan.buffer });
+  return {
+    title: `Supplier bill due ${dayLabel(view.invoice, view.invoice.dueInDays)}`,
+    line: early
+      ? `Pay by ${dayLabel(view.invoice, earlyPayDay(view.invoice))} for ${formatINR(view.discount.discountAmount)} off. ${gap > 0 ? `You're likely short ${formatINR(gap)} that week.` : "You have the cash for it."}`
+      : gap > 0
+        ? `You're likely short ${formatINR(gap)} on the due date.`
+        : "You have enough cash to pay on the due date.",
+    mini,
+    saving,
+    caption: saving > 0 ? `${formatINR(saving)} better off` : saving === 0 ? "Same cost as paying on the due date" : `${formatINR(-saving)} more than paying on the due date`,
+  };
+}
+
+// ---------- the options table ----------
 
 export interface CompareRow {
   id: string;
@@ -167,23 +217,33 @@ export interface CompareRow {
 const DASH = "-";
 
 /**
- * One row per way of finding the money, on the same footing: priced for the plan's own worst point, and loans for the
- * plan's own number of days, so the table agrees with the plan.
+ * One row per way of finding the money, each tried alone with your own cash first: how much it can cover and what it
+ * costs over the days it is used. Instant settlement says it is not needed when the plan does not use it.
  */
 export function compareRows(result: EngineResult, viewId: ViewId): CompareRow[] {
   const view = viewOf(result, viewId);
-  const options = planOptionsOf(view);
-  const gap = view.recommended.plan.gap;
-  const rows: CompareRow[] = options.map((o) => {
-    const q = quoteOption(o, gap);
-    return {
+  const usedInPlan = (id: OptionId) => view.recommended.plan.steps.some((s) => s.optionId === id);
+  const od = view.options.find((o) => o.id === "bank_overdraft");
+  const rows: CompareRow[] = [];
+
+  for (const o of view.options) {
+    if (o.id === "split_order") {
+      rows.push({ id: o.id, label: OPTION_LABEL[o.id], covers: formatINR(o.maxAmount), cost: formatINR(o.stockOut?.expectedLostMargin ?? 0), yearly: DASH });
+      continue;
+    }
+    if (o.id === "early_settlement" && !usedInPlan("early_settlement")) {
+      const overdraftCheaper = od?.solo && o.solo ? od.solo.cost <= o.solo.cost : false;
+      rows.push({ id: o.id, label: OPTION_LABEL[o.id], covers: overdraftCheaper ? "Not needed. Your overdraft is cheaper." : "Not needed.", cost: DASH, yearly: DASH });
+      continue;
+    }
+    rows.push({
       id: o.id,
       label: OPTION_LABEL[o.id],
-      covers: q.available ? formatINR(q.covers) : "None",
-      cost: q.available ? formatINR(q.cost) : DASH,
+      covers: o.solo ? formatINR(o.solo.covers) : DASH,
+      cost: o.solo ? formatINR(o.solo.cost) : DASH,
       yearly: o.annualisedPct === null ? DASH : formatPct(o.annualisedPct),
-    };
-  });
+    });
+  }
 
   if (fewerPairsSameAsFull(result)) {
     rows.push({ id: "order_fewer", label: TERMS.orderFewer, covers: "Not needed", cost: DASH, yearly: DASH });
@@ -195,14 +255,82 @@ export function compareRows(result: EngineResult, viewId: ViewId): CompareRow[] 
     }).expectedLostMargin;
     rows.push({ id: "order_fewer", label: TERMS.orderFewer, covers: formatINR(result.stock.cashSaved), cost: formatINR(lost), yearly: DASH });
   }
-
-  const d = view.discount;
-  rows.push({
-    id: "pay_early",
-    label: "Pay early for discount",
-    covers: d.discountAmount > 0 && d.affordable ? formatINR(d.discountAmount) : "None",
-    cost: d.discountAmount > 0 && d.affordable ? formatINR(Math.max(0, d.extraFundingCost)) : DASH,
-    yearly: DASH,
-  });
   return rows;
+}
+
+// ---------- Cash gap ----------
+
+export type SourceLabel = "Connected banking" | "Store and courier data" | "Entered by you";
+
+export interface GapView {
+  headline: string;
+  hero: string;
+  caption: string;
+  /** "Forecast" label and how sure it is. */
+  forecastLabel: string;
+  confidence: string;
+  lowConfidence: boolean;
+  summary: { label: string; value: string; caption?: string }[];
+  /** "How we estimated this": each estimate with where its data comes from. All simulated. */
+  estimates: { label: string; value: string; source: SourceLabel }[];
+}
+
+export function gapView(result: EngineResult): GapView {
+  const view = result.recommended;
+  const gap = view.focusGap;
+  const e = gap.scenarios.expected;
+  const early = view.recommended.timing === "pay_early_for_discount";
+  const lastDay = early ? earlyPayDay(view.invoice) : view.invoice.dueInDays;
+  const m = simulatedMerchant;
+  return {
+    headline: gap.gapExpected > 0 ? `You're likely ${formatINR(gap.gapExpected)} short` : "You have enough cash",
+    hero: formatINR(gap.gapExpected),
+    caption: gap.gapMax === 0 ? "Enough cash in every case" : `Likely range ${formatINR(gap.gapMin)} to ${formatINR(gap.gapMax)}`,
+    forecastLabel: "Forecast",
+    confidence: gap.lowConfidence ? "Low confidence: wide range" : "Medium confidence: narrow range",
+    lowConfidence: gap.lowConfidence,
+    summary: [
+      { label: "Cash coming in", value: formatINR(e.cash.totalIn) },
+      { label: "Cash going out", value: formatINR(e.cashOut) },
+      {
+        label: "Timing",
+        value: early ? `Discount ends ${dayLabel(view.invoice, lastDay)}` : `Bill due ${dayLabel(view.invoice, view.invoice.dueInDays)}`,
+        caption: early ? `Bill due ${dayLabel(view.invoice, view.invoice.dueInDays)}` : undefined,
+      },
+    ],
+    estimates: [
+      { label: "Festive uplift", value: `${CONFIG.scenarioUplift.expected}x normal sales`, source: "Store and courier data" },
+      { label: "COD share", value: formatPct((1 - PREPAID_SHARE) * 100), source: "Store and courier data" },
+      { label: "COD timing", value: `${m.codPayoutDelayDays.min} to ${m.codPayoutDelayDays.max} days after order`, source: "Store and courier data" },
+      { label: "Returns", value: `${formatPct(m.codReturnRate * 100)} of COD orders`, source: "Store and courier data" },
+      { label: "Settlement timing", value: `${m.settlementDays} days after sale`, source: "Connected banking" },
+    ],
+  };
+}
+
+// ---------- Bill ----------
+
+export const LATE_FEE_LAW =
+  "If your supplier is a registered micro/small enterprise, the law sets late interest at 3x the RBI bank rate, compounded monthly.";
+export const BILL_PRIVACY = "We don't save your bill. It is sent to our AI provider only to read it.";
+
+const num = (s: string) => Number(s.replace(/[,₹\s]/g, ""));
+
+/** The early-payment opportunity from the bill's fields as typed. Null if the fields do not give one. */
+export function billHero(values: {
+  totalAmount: string;
+  invoiceDate: string;
+  dueDate: string;
+  earlyPaymentDiscountPercent: string;
+  earlyPaymentDiscountDays: string;
+}): { hero: string; caption: string } | null {
+  const amount = num(values.totalAmount);
+  const pct = num(values.earlyPaymentDiscountPercent);
+  const days = num(values.earlyPaymentDiscountDays);
+  if (!(amount > 0) || !(pct > 0) || !(days > 0) || !values.invoiceDate || !values.dueDate) return null;
+  const off = Math.round((amount * pct) / 100);
+  return {
+    hero: `${formatINR(off)} off`,
+    caption: `Pay ${formatCompactINR(amount - off)} by ${formatDayMonth(values.invoiceDate, days)} instead of ${formatCompactINR(amount)} by ${formatDayMonth(values.dueDate, 0)}.`,
+  };
 }

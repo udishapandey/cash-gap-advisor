@@ -19,6 +19,7 @@ import {
   type InvoiceExtraction,
 } from "@/lib/invoice-extraction";
 import { ACCEPTED_EXTENSIONS, MAX_INVOICE_BYTES } from "@/lib/invoice-upload";
+import { BILL_PRIVACY, billHero, LATE_FEE_LAW } from "@/lib/plain";
 import Disclosure from "./Disclosure";
 import Stepper from "./Stepper";
 import { useJourney } from "./JourneyProvider";
@@ -318,6 +319,7 @@ export default function InvoiceFlow() {
   }
 
   const reading = phase === "reading";
+  const billHeroView = values ? billHero(values) : null;
 
   // Count the seconds while reading, so a slow read is visible rather than silent.
   useEffect(() => {
@@ -331,7 +333,7 @@ export default function InvoiceFlow() {
     <div className="mx-auto max-w-3xl space-y-6">
       <Stepper current="invoice" />
       <header>
-        <h1 className="font-heading text-2xl font-semibold">Supplier bill</h1>
+        <h1 className="font-heading text-2xl font-semibold">{phase === "review" && billHeroView ? "We found an early-payment opportunity" : "Supplier bill"}</h1>
         <p className="mt-1 text-sm text-muted">Upload the bill. Check what we read.</p>
       </header>
       <section className="rounded-xl border border-line bg-card shadow-sm p-5">
@@ -348,8 +350,9 @@ export default function InvoiceFlow() {
         </div>
         <p className="mt-1 text-sm text-muted">
           Upload a PDF, PNG or JPG (up to 5 MB). The AI reads it and you check every field before anything is
-          planned. The file is processed in memory and never saved.
+          planned.
         </p>
+        <p className="mt-1 text-xs text-muted">{BILL_PRIVACY}</p>
 
         <div
           onDragOver={(e) => {
@@ -526,14 +529,14 @@ export default function InvoiceFlow() {
                     className={`mt-2 w-full rounded-md border border-line bg-white px-3 py-2 outline-none focus:border-brand ${big ? "text-base font-semibold" : "text-sm"}`}
                   />
                   {err && <p className="mt-1 text-xs text-red-700">{err}</p>}
-                  <p className="mt-2 flex items-center gap-1.5 text-xs text-muted">
+                  <p className={`mt-2 flex items-center gap-1.5 text-xs text-muted ${big ? "empty:hidden" : ""}`}>
                     {isEdited ? (
                       "Edited by you."
                     ) : source === "manual" ? (
                       <>Type this from your invoice. {meta.hint}</>
                     ) : f.value === null ? (
                       <>Not found on the invoice. {meta.hint}</>
-                    ) : f.evidence ? (
+                    ) : big ? null : f.evidence ? (
                       <span
                         tabIndex={0}
                         title={`${unclear ? "Unclear, please check. " : ""}The AI read this from your invoice: “${f.evidence}”`}
@@ -557,15 +560,43 @@ export default function InvoiceFlow() {
             const moreNeedsLook = more.some((m) => formErrors[m.key] || checkNeeded(m.key));
             return (
               <>
+                {billHeroView && (
+                  <div className="mt-4 rounded-lg bg-green-50 p-4">
+                    <p className="font-heading text-3xl font-semibold text-green-700">{billHeroView.hero}</p>
+                    <p className="mt-1 text-sm text-subtle">{billHeroView.caption}</p>
+                  </div>
+                )}
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">{main.map((m) => renderField(m, true))}</div>
+                <p className="mt-2 text-xs text-muted">{LATE_FEE_LAW}</p>
                 <Disclosure
-                  title="More details"
-                  hint="supplier, invoice number, date, pairs, price"
+                  title="View bill details"
                   open={moreOpen || moreNeedsLook}
                   onOpenChange={setMoreOpen}
                   className="mt-4"
                 >
                   <div className="grid gap-4 sm:grid-cols-2">{more.map((m) => renderField(m, false))}</div>
+                  {source !== "manual" && (
+                    <div className="mt-5 overflow-x-auto">
+                      <table className="w-full min-w-[26rem] text-sm">
+                        <thead>
+                          <tr className="border-b border-line text-xs text-muted">
+                            <th className="py-2 text-left font-medium">Field</th>
+                            <th className="px-3 py-2 text-left font-medium">Read from the bill</th>
+                            <th className="py-2 text-left font-medium">Confidence</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-line">
+                          {FIELDS.map((m) => (
+                            <tr key={m.key}>
+                              <td className="py-2 font-medium">{m.label}</td>
+                              <td className="px-3 py-2 text-muted">{extraction[m.key].evidence ?? "Not found"}</td>
+                              <td className="py-2 capitalize">{extraction[m.key].confidence}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </Disclosure>
               </>
             );

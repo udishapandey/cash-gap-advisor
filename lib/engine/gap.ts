@@ -34,6 +34,8 @@ export interface GapInput {
    * what the real peak need turned out to be. Unlike salesDropPercent it can go above 1. Default 1.
    */
   salesVsForecast?: number;
+  /** The least the account must hold on any day. The gap is how far the balance falls below it. Default: CONFIG.safetyBufferRupees. */
+  buffer?: number;
 }
 
 export interface CashBreakdown {
@@ -181,9 +183,9 @@ function cashByDay(ctx: ScenarioContext, day: number): CashAt {
 
 function computeScenario(
   scenario: Scenario,
-  input: Required<Pick<GapInput, "merchant" | "invoice" | "byDay" | "windowEnd" | "salesDropPercent" | "cashElsewhere" | "salesVsForecast">>,
+  input: Required<Pick<GapInput, "merchant" | "invoice" | "byDay" | "windowEnd" | "salesDropPercent" | "cashElsewhere" | "salesVsForecast" | "buffer">>,
 ): ScenarioResult {
-  const { merchant, invoice, byDay: payDay, windowEnd, salesDropPercent, cashElsewhere, salesVsForecast } = input;
+  const { merchant, invoice, byDay: payDay, windowEnd, salesDropPercent, cashElsewhere, salesVsForecast, buffer } = input;
   const uplift = CONFIG.scenarioUplift[scenario];
   const ctx: ScenarioContext = {
     merchant,
@@ -198,7 +200,7 @@ function computeScenario(
   const invoiceDue = round(amountDueOn(invoice, payDay));
   const otherOutflows = round(merchant.otherOutflowsPerDay * payDay);
   const cashOut = invoiceDue + otherOutflows;
-  const shortfallOnPayDay = cashOut - onPayDay.cash.totalIn;
+  const shortfallOnPayDay = cashOut + buffer - onPayDay.cash.totalIn;
 
   // The balance on every day of the window. The invoice leaves on the payment day and stays paid.
   const balanceByDay: number[] = [];
@@ -207,7 +209,7 @@ function computeScenario(
     const at = t === payDay ? onPayDay : cashByDay(ctx, t);
     const balance = at.cash.totalIn - round(merchant.otherOutflowsPerDay * t) - (t >= payDay ? invoiceDue : 0);
     balanceByDay.push(balance);
-    if (-balance > peak.shortfall) peak = { shortfall: -balance, day: t, earnedNotSettled: at.earnedNotSettled };
+    if (buffer - balance > peak.shortfall) peak = { shortfall: buffer - balance, day: t, earnedNotSettled: at.earnedNotSettled };
   }
 
   return {
@@ -234,7 +236,8 @@ export function computeGap(input: GapInput): GapResult {
   const salesDropPercent = Math.min(100, Math.max(0, input.salesDropPercent ?? 0));
   const cashElsewhere = Math.max(0, input.cashElsewhere ?? 0);
   const salesVsForecast = Math.max(0, input.salesVsForecast ?? 1);
-  const args = { merchant: input.merchant, invoice: input.invoice, byDay, windowEnd, salesDropPercent, cashElsewhere, salesVsForecast };
+  const buffer = Math.max(0, input.buffer ?? CONFIG.safetyBufferRupees);
+  const args = { merchant: input.merchant, invoice: input.invoice, byDay, windowEnd, salesDropPercent, cashElsewhere, salesVsForecast, buffer };
 
   const scenarios = Object.fromEntries(
     SCENARIOS.map((s) => [s, computeScenario(s, args)]),
@@ -255,4 +258,49 @@ export function computeGap(input: GapInput): GapResult {
     widthShare,
     lowConfidence: widthShare > CONFIG.lowConfidenceWidthShare,
   };
+}
+
+// ---------- The cash path, day by day ----------
+
+export interface CashSeriesInput {
+  merchant: Merchant;
+  scenario: Scenario;
+  /** What-if: forecast sales are this % lower. */
+  salesDropPercent?: number;
+  /** Actual sales as a multiple of the forecast. Default 1. */
+  salesVsForecast?: number;
+  cashElsewhere?: number;
+  /** The last day to work out. Days after the bill window keep following the forecast. */
+  horizon: number;
+}
+
+export interface CashSeries {
+  /** The account balance at the end of each day, 0 to `horizon`, before any supplier payment and any borrowing. */
+  balance: number[];
+  /** Prepaid sales earned by each day that would only settle after it: the most instant settlement could bring forward. */
+  earnedNotSettled: number[];
+}
+
+/**
+ * The account balance for every day if nothing is paid to the supplier and nothing is borrowed. A plan is then worked out
+ * on top of this path: the supplier payment goes out on its day, loans are drawn when the balance would fall below the
+ * safety buffer and repaid as soon as cash allows.
+ */
+export function cashSeries(input: CashSeriesInput): CashSeries {
+  const { merchant, scenario, horizon } = input;
+  const ctx: ScenarioContext = {
+    merchant,
+    forecastFactor: CONFIG.scenarioUplift[scenario] * (1 - (input.salesDropPercent ?? 0) / 100) * Math.max(0, input.salesVsForecast ?? 1),
+    cashElsewhere: Math.max(0, input.cashElsewhere ?? 0),
+    base: baselineDaily(merchant),
+    history: new Map(merchant.dailyOrders.map((r) => [r.day, r])),
+  };
+  const balance: number[] = [];
+  const earnedNotSettled: number[] = [];
+  for (let t = 0; t <= horizon; t++) {
+    const at = cashByDay(ctx, t);
+    balance.push(at.cash.totalIn - round(merchant.otherOutflowsPerDay * t));
+    earnedNotSettled.push(at.earnedNotSettled);
+  }
+  return { balance, earnedNotSettled };
 }

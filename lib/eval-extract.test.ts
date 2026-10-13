@@ -47,7 +47,7 @@ describe("comparing a field with the ground truth", () => {
     expect(fieldCorrect("lateFeePercentPerMonth", 1.6, clean)).toBe(false);
   });
   it("dates must be exactly YYYY-MM-DD", () => {
-    expect(fieldCorrect("dueDate", "2026-10-21", clean)).toBe(true);
+    expect(fieldCorrect("dueDate", "2026-11-10", clean)).toBe(true);
     expect(fieldCorrect("dueDate", "2026-21-10", clean)).toBe(false);
     expect(fieldCorrect("dueDate", "21 Oct 2026", clean)).toBe(false);
   });
@@ -82,7 +82,7 @@ describe("is a quote really in the invoice?", () => {
     expect(evidenceExact("5,00,000.00", cleanPrinted)).toBe(true);
     expect(evidenceExact("11 OCT 2026", cleanPrinted)).toBe(true);
     expect(evidenceExact("500   pairs", cleanPrinted)).toBe(true);
-    expect(evidenceExact("2% discount if paid within 7 days of invoice date", cleanPrinted)).toBe(true);
+    expect(evidenceExact("2% discount if paid within 10 days of invoice date", cleanPrinted)).toBe(true);
   });
   it("rejects a misread or invented quote", () => {
     expect(evidenceExact("5,000,00.00", cleanPrinted)).toBe(false); // the live photo run misread this
@@ -97,7 +97,7 @@ describe("is a quote really in the invoice?", () => {
 describe("scoring one invoice", () => {
   it("a perfect answer scores 10 of 10, every clause caught, every quote exact", () => {
     const s = scoreInvoice(
-      perfect(clean, { supplierName: "Shree Ganesh Footwear Pvt Ltd", invoiceNumber: "SGF/26-27/0142", invoiceDate: "11 Oct 2026", dueDate: "21 Oct 2026", totalAmount: "5,00,000.00", quantity: "500 pairs", unitPrice: "1,000.00", earlyPaymentDiscountPercent: "2% discount", earlyPaymentDiscountDays: "within 7 days", lateFeePercentPerMonth: "1.5% per month" }),
+      perfect(clean, { supplierName: "Shree Ganesh Footwear Pvt Ltd", invoiceNumber: "SGF/26-27/0142", invoiceDate: "11 Oct 2026", dueDate: "10 Nov 2026", totalAmount: "5,00,000.00", quantity: "500 pairs", unitPrice: "1,000.00", earlyPaymentDiscountPercent: "2% discount", earlyPaymentDiscountDays: "within 10 days", lateFeePercentPerMonth: "1.5% per month" }),
       clean,
       cleanPrinted,
     );
@@ -121,7 +121,7 @@ describe("scoring one invoice", () => {
 
   it("a discount is only caught when BOTH the percent and the days are right", () => {
     const base = perfect(clean);
-    expect(scoreInvoice(withField(base, "earlyPaymentDiscountDays", { value: 10 }), clean, cleanPrinted).discount.outcome).toBe("missed");
+    expect(scoreInvoice(withField(base, "earlyPaymentDiscountDays", { value: 7 }), clean, cleanPrinted).discount.outcome).toBe("missed");
     expect(scoreInvoice(withField(base, "earlyPaymentDiscountPercent", { value: null, evidence: null }), clean, cleanPrinted).discount.outcome).toBe("missed");
   });
 

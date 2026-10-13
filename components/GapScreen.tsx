@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { GapResult, ScenarioResult } from "@/lib/engine/gap";
-import { gapView } from "@/lib/plain";
+import { ESTIMATE_LINE, gapView } from "@/lib/plain";
 import { formatINR } from "@/lib/format";
 import Disclosure from "./Disclosure";
 import JourneyShell from "./JourneyShell";
@@ -76,7 +76,7 @@ export default function GapScreen() {
         const gap = result.recommended.focusGap;
         return (
           <>
-            <PageHeader title="Cash gap" crumbs={["Supplier bills"]} subtitle="Cash needed to take the early-payment discount" />
+            <PageHeader title={view.headline} crumbs={["Supplier bills", "Cash gap"]} />
 
             <Panel aria-label={view.headline}>
               <div className="flex flex-wrap items-start justify-between gap-6 p-6">
@@ -109,6 +109,7 @@ export default function GapScreen() {
             </Panel>
 
             {view.dueLine && <Alert tone="positive">{view.dueLine}</Alert>}
+            <p className="text-xs text-muted">{ESTIMATE_LINE}</p>
 
             <Disclosure title="How we estimated this">
               <div className="overflow-x-auto">
@@ -169,7 +170,7 @@ export default function GapScreen() {
 
             <div>
               <Link href="/options" className={BTN.primary}>
-                See funding plan
+                See cheapest plan
               </Link>
             </div>
           </>

@@ -47,7 +47,7 @@ describe("the default scenario is the pre-read sample bill", () => {
   });
   it("gives the Cash gap numbers: cash in ₹12,09,100, cash out ₹13,90,000, likely short ₹2,30,900", () => {
     const v = gapView(runDefault());
-    expect(v.headline).toBe("Cash shortfall: ₹2.31L for 8 days");
+    expect(v.headline).toBe("To pay early, you'd be ₹2.31L short for about a week.");
     expect(v.hero).toBe("₹2.31L");
     expect(v.duration).toBe("for 8 days");
     expect(v.dueLine).toBe("Paying on 10 Nov needs no borrowing.");
@@ -100,7 +100,7 @@ describe("when paying early is not recommended", () => {
     expect(homeAlert(r, 0).title).toBe("Bill due 10 Nov");
     expect(homeAlert(r, 0).facts[1]).toEqual({ label: "Cash needed", value: "₹2.02L", caption: "for 24 days" });
     const g = gapView(r);
-    expect(g.headline).toBe("Cash shortfall: ₹2.02L on 10 Nov");
+    expect(g.headline).toBe("You're likely ₹2.02L short on 10 Nov.");
     expect(g.duration).toBe("on 10 Nov");
     expect(g.dueLine).toBeNull();
   });
@@ -180,7 +180,7 @@ describe("Repaid by, and the day-by-day table", () => {
 describe("Bill", () => {
   it("shows the early-payment opportunity from the fields as typed", () => {
     const h = billHero({ totalAmount: "5,00,000", invoiceDate: "2026-10-11", dueDate: "2026-11-10", earlyPaymentDiscountPercent: "2", earlyPaymentDiscountDays: "10" });
-    expect(h).toEqual({ hero: "₹10,000 off", caption: "Pay ₹4.90L by 21 Oct instead of ₹5.00L by 10 Nov." });
+    expect(h).toEqual({ hero: "Save ₹10,000", caption: "Pay ₹4.90L by 21 Oct instead of ₹5.00L by 10 Nov." });
   });
   it("shows nothing when the bill has no discount or a field is empty", () => {
     expect(billHero({ totalAmount: "500000", invoiceDate: "2026-10-11", dueDate: "2026-11-10", earlyPaymentDiscountPercent: "", earlyPaymentDiscountDays: "10" })).toBeNull();

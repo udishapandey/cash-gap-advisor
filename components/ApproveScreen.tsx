@@ -68,7 +68,6 @@ function ApproveBody({ state, result, update }: ShellContext) {
   if (stage === "done") return <Success view={view} pay={pay} result={result} saving={savingNow} />;
 
   const approved = stage !== "review";
-  const saving = savingNow;
   const funding = [
     ...(sections.nonCredit.some((x) => x.id === "own_cash")
       ? [{ id: "own_cash", label: "Cash", amount: plan.ownCash, by: null as string | null, group: "Your money" }]
@@ -81,54 +80,66 @@ function ApproveBody({ state, result, update }: ShellContext) {
       : []),
   ];
 
+  const repayments = [sections.overdraft, sections.creditLine]
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .sort((a, b) => (a.closedDay ?? 1e9) - (b.closedDay ?? 1e9));
+
   return (
     <>
-      <PageHeader title={`Pay ${supplier}`} crumbs={["Supplier bills", "Approve"]} />
+      <PageHeader title={`You're about to pay ${supplier}`} crumbs={["Supplier bills", "Approve"]} />
 
       <Panel aria-label="Plan summary">
         <div className="flex flex-wrap items-start justify-between gap-4 p-6">
-          <Metric size="lg" label="Supplier payment" value={formatLakh(pay)} caption={`on ${date(payDay)}${early ? `, ${formatINR(view.discount.discountAmount)} off` : ""}`} />
+          <Metric
+            size="lg"
+            label="Supplier payment"
+            value={`${formatLakh(pay)} on ${date(payDay)}`}
+            caption={`${formatINR(pay)} in full${early ? `, ${formatINR(view.discount.discountAmount)} off` : ""}`}
+          />
           <Link href="/options" className={BTN.link}>
             Change plan
           </Link>
         </div>
-        <div className="grid gap-6 border-t border-line px-6 py-4 sm:grid-cols-4">
-          <Metric label="Amount financed" value={inrShort(view.loan)} />
-          <Metric label="Financing cost" value={formatINR(plan.totalCost)} />
-          <Metric label="Repaid by" value={plan.closedDay === null ? "-" : date(plan.closedDay)} />
-          <Metric label="Net benefit" tone={saving > 0 ? "saved" : "plain"} value={formatINR(Math.max(0, saving))} />
+        <div className="grid gap-6 border-t border-line px-6 py-4 sm:grid-cols-3">
+          <section aria-label="Payment sources">
+            <SectionLabel>Payment sources</SectionLabel>
+            <ul className="mt-2 space-y-1 text-sm">
+              {funding.map((f) => (
+                <li key={f.id}>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted">{f.label}</span>
+                    <span className="tabular-nums">{inrShort(f.amount)}</span>
+                  </div>
+                  {f.id === "od" && <p className="text-xs text-muted">{SOURCE_TAGS.bank_overdraft.label}</p>}
+                  {f.id === "cl" && <p className="text-xs text-muted">{SOURCE_TAGS.credit_line.label}</p>}
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section aria-label="Cost">
+            <SectionLabel>Cost</SectionLabel>
+            <div className="mt-2">
+              <Metric label="Estimated financing cost" value={formatINR(plan.totalCost)} />
+            </div>
+          </section>
+          <section aria-label="Repayment">
+            <SectionLabel>Repayment</SectionLabel>
+            {repayments.length === 0 ? (
+              <p className="mt-2 text-sm text-muted">Nothing to repay</p>
+            ) : (
+              <ul className="mt-2 space-y-1 text-sm">
+                {repayments.map((r) => (
+                  <li key={r.optionId} className="flex justify-between gap-3">
+                    <span className="text-muted">{r.optionId === "bank_overdraft" ? "Bank overdraft" : "Razorpay credit"}</span>
+                    <span className="tabular-nums">{r.closedDay === null ? "When cash allows" : date(r.closedDay)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
+        {backup && <p className={`border-t border-line px-6 py-3 text-xs ${backup.warn ? "text-red-700" : "text-muted"}`}>{backup.text}</p>}
       </Panel>
-
-      <Card aria-label="Funding">
-        <SectionLabel>Funding</SectionLabel>
-        <table className="mt-2 w-full text-sm">
-          <thead>
-            <tr className="border-b border-line text-xs text-muted">
-              <th className="py-2 text-left font-medium">Source</th>
-              <th className="px-3 py-2 text-right font-medium">Amount</th>
-              <th className="py-2 text-right font-medium">Repaid by</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {funding.map((f) => (
-              <tr key={f.id}>
-                <td className="py-2.5">
-                  {f.label}{" "}
-                  <span className="ml-1">
-                    <Badge tone={f.group === "Borrowed" ? "notice" : "neutral"}>{f.group}</Badge>
-                  </span>
-                  {f.id === "od" && <span className="ml-2 text-xs text-muted">{SOURCE_TAGS.bank_overdraft.label}</span>}
-                  {f.id === "cl" && <span className="ml-2 text-xs text-muted">{SOURCE_TAGS.credit_line.label}</span>}
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{inrShort(f.amount)}</td>
-                <td className="py-2.5 text-right tabular-nums">{f.by ?? "-"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {backup && <p className={`mt-3 text-xs ${backup.warn ? "text-red-700" : "text-muted"}`}>{backup.text}</p>}
-      </Card>
 
       <Card aria-label="Financing approval">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -184,7 +195,7 @@ function ApproveBody({ state, result, update }: ShellContext) {
             )}
             <div className="mt-4">
               <button type="button" onClick={approve} disabled={!allowed || busy !== null} className={BTN.primary}>
-                {busy === "touch" ? "Verifying…" : kfs ? "Approve financing" : "Approve plan"}
+                {busy === "touch" ? "Verifying…" : `Approve ${formatLakh(pay)} payment`}
               </button>
               <p className="mt-2 text-xs text-muted">Touch ID is simulated. Nothing is approved automatically.</p>
             </div>

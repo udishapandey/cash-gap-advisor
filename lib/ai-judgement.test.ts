@@ -22,7 +22,8 @@ import { checkGrounding } from "./grounding";
 import { UNMAPPABLE_MESSAGE } from "./whatif";
 
 const inr = formatINR;
-const run = (drop = 0, extra = {}) => runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop, ...extra });
+// ₹1,000 of other cash keeps these scenarios off the saved demo plan, so they still exercise the AI call.
+const run = (drop = 0, extra = {}) => runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop, cashElsewhere: 1_000, ...extra });
 
 const geminiReply = (text: string) =>
   new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] }, finishReason: "STOP" }] }));
@@ -84,6 +85,25 @@ describe("cleaning the AI's text", () => {
 });
 
 // ---------------------------------------------------------------------------
+describe("the saved demo explanation", () => {
+  it("makes no AI call for the demo plan, in English or Hindi, and says it is saved", async () => {
+    const fetchMock = mockFetch(() => geminiReply("{}"));
+    const demo = runEngine({ merchant, invoice: sampleInvoice });
+    for (const language of ["en", "hi"] as const) {
+      const o = await explainPlan(demo, language);
+      expect(o).toMatchObject({ status: "verified", saved: true, mock: false, language });
+      expect(o.text.length).toBeGreaterThan(80);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("still asks the AI for any other plan", async () => {
+    const fetchMock = mockFetch(() => geminiReply("{}"));
+    const o = await explainPlan(runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: 5 }), "en");
+    expect(fetchMock).toHaveBeenCalled();
+    expect(o.saved).toBeUndefined();
+  });
+});
+
 describe("explainPlan: three labelled parts", () => {
   const result = run(30);
   const facts = planFacts(result);

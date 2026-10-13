@@ -4,7 +4,7 @@ import type { Merchant } from "./data/merchant";
 import { merchant as simulatedMerchant } from "./data/merchant";
 import type { EngineResult } from "./engine";
 import { computeOutcome, midSeasonCheck, SIMULATED_OUTCOMES, type MidSeason, type MidSeasonChange, type OutcomeId, type OutcomeResult } from "./engine/outcome";
-import { formatINR } from "./format";
+import { formatINR, inrShort } from "./format";
 import type { JourneyState } from "./journey";
 
 /** The outcome of the approved plan under one simulated result. Null until a plan is chosen. */
@@ -92,7 +92,6 @@ export function nextTimeBullets(o: OutcomeResult, salesDropPercent: number): str
 
 // ---------- the mid-season check ----------
 
-export const NEXT_TIME_CAPTION = "Simple update rule in this prototype. The live product would learn from your history.";
 export const MID_SEASON_CAPTION = "Plan updates as sales arrive. Sales are simulated.";
 
 /** Each change the re-plan makes, in a short line. `date` turns a day count into a date. */
@@ -148,5 +147,16 @@ export function midSeasonView(m: MidSeason, date: (day: number) => string) {
     verdictWhy: m.stillWorthIt ? null : m.early.feasible ? STILL_SAVES : "Credit limits no longer cover paying early.",
     changes: m.changes.map((c) => changeLine(c, date)),
     nothingChanges: m.nothingChanges ? "Nothing changes." : null,
+  };
+}
+
+/** The slow-sales note on the Plan screen: four short lines, from the same re-run as the day-5 check. */
+export function slowSalesView(m: MidSeason, date: (day: number) => string) {
+  const miss = Math.round(Math.abs(m.vsForecastPercent));
+  return {
+    salesLine: `Sales ${miss}% ${m.vsForecastPercent < 0 ? "below" : "above"} forecast`,
+    gapLine: `Expected gap: ${inrShort(m.forecastGap)} → ${inrShort(m.updatedGap)}`,
+    recommendation: m.stillWorthIt ? "Paying early still works." : `Don't pay early. Pay on ${date(m.due.payDay)} instead.`,
+    risk: m.stillWorthIt ? null : "Slower sales would leave you without enough credit if sales fell further.",
   };
 }

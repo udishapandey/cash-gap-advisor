@@ -13,7 +13,8 @@ import LanguageToggle from "./LanguageToggle";
 import { useAiResource } from "./useAiResource";
 
 export const VERIFIED_LABEL = "AI-generated. Figures checked against the plan.";
-export const UNAVAILABLE_NOTE = "Standard explanation. AI unavailable.";
+export const SAVED_LABEL = "Saved explanation. Figures checked against the plan.";
+export const UNAVAILABLE_NOTE = "AI is busy right now. Showing the standard explanation.";
 
 export function isVerifiedTextOutcome(v: unknown): v is VerifiedTextOutcome {
   return (
@@ -41,6 +42,7 @@ export function AiExplanationView({
   text,
   parts,
   mock,
+  saved = false,
   language,
   onLanguage,
   onExplain,
@@ -50,6 +52,8 @@ export function AiExplanationView({
   /** The three labelled blocks. When missing, `text` is shown as one paragraph. */
   parts?: ExplanationParts;
   mock: boolean;
+  /** The saved text of the demo plan, shown with no AI call. */
+  saved?: boolean;
   language: Language;
   onLanguage: (l: Language) => void;
   /** Only for "stale": asks the AI to explain the plan as it is now. */
@@ -62,7 +66,7 @@ export function AiExplanationView({
           {status === "verified" && (
             <h3 className="text-sm font-semibold">
               <span aria-hidden>✓ </span>
-              {VERIFIED_LABEL}
+              {saved ? SAVED_LABEL : VERIFIED_LABEL}
             </h3>
           )}
           {status === "unavailable" && <h3 className="text-sm font-semibold">Explanation</h3>}
@@ -179,5 +183,5 @@ export default function AiExplanation({
     return <AiExplanationView status="unavailable" text={templateText} parts={template} mock={false} language={language} onLanguage={chooseLanguage} />;
   }
   const o = resource.value;
-  return <AiExplanationView status={o.status} text={o.text} parts={o.parts} mock={o.mock} language={language} onLanguage={chooseLanguage} />;
+  return <AiExplanationView status={o.status} text={o.text} parts={o.parts} mock={o.mock} saved={o.saved} language={language} onLanguage={chooseLanguage} />;
 }

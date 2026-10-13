@@ -51,8 +51,8 @@ const SOURCE_NOTICE: Record<Exclude<Source, "live">, { title: string; text: stri
     text: "Sample values. No AI call was made.",
   },
   "pre-read": {
-    title: "Pre-read sample",
-    text: "Saved from an earlier read of the sample bill.",
+    title: "Read by AI earlier",
+    text: "Saved reading of the sample bill.",
   },
   manual: {
     title: "Manual entry",
@@ -248,7 +248,8 @@ export default function InvoiceFlow() {
     showExtraction(emptyExtraction(), "manual");
   }
 
-  async function useSample() {
+  /** Read the sample bill with the AI again, from the file (a live call). */
+  async function readSampleAgain() {
     setError(null);
     setAiFailed(false);
     try {
@@ -319,6 +320,7 @@ export default function InvoiceFlow() {
     return () => clearInterval(id);
   }, [reading]);
 
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const FIELD_LABEL: Record<FieldKey, string> = {
     supplierName: "Supplier",
     invoiceNumber: "Invoice number",
@@ -331,11 +333,9 @@ export default function InvoiceFlow() {
     earlyPaymentDiscountPercent: "Discount (%)",
     earlyPaymentDiscountDays: "Pay within (days)",
   };
-  const GROUPS: { title: string; keys: FieldKey[] }[] = [
-    { title: "Invoice", keys: ["supplierName", "invoiceNumber", "invoiceDate", "quantity", "unitPrice"] },
-    { title: "Payment terms", keys: ["totalAmount", "dueDate", "lateFeePercentPerMonth"] },
-    { title: "Early-payment opportunity", keys: ["earlyPaymentDiscountPercent", "earlyPaymentDiscountDays"] },
-  ];
+  // Shown by default: who, how much, when, and the discount. The rest is under "View bill details".
+  const MAIN: FieldKey[] = ["supplierName", "totalAmount", "dueDate", "earlyPaymentDiscountPercent", "earlyPaymentDiscountDays"];
+  const MORE: FieldKey[] = ["invoiceNumber", "invoiceDate", "quantity", "unitPrice", "lateFeePercentPerMonth"];
 
   /** One field: its label, the input and a small status. Confident reads get a quiet tick; unclear or missing ones are flagged. */
   const renderField = (key: FieldKey) => {
@@ -382,6 +382,9 @@ export default function InvoiceFlow() {
     );
   };
 
+  const needsLook = (key: FieldKey) =>
+    !!extraction && source !== "manual" && !edited[key] && (extraction[key].value === null || extraction[key].confidence !== "high");
+  const detailsNeedLook = !!extraction && MORE.some((k) => formErrors[k] || needsLook(k));
   const anyToCheck =
     !!extraction && source !== "manual" && FIELDS.some((m) => !edited[m.key] && (extraction[m.key].value === null || extraction[m.key].confidence !== "high"));
 
@@ -389,7 +392,7 @@ export default function InvoiceFlow() {
     <div className="space-y-6">
       <Stepper current="invoice" />
       <PageHeader
-        title={phase === "review" ? "Review bill" : "Upload supplier bill"}
+        title={phase === "review" ? (billHeroView ? "We found an early-payment opportunity" : "Review bill") : "Upload supplier bill"}
         crumbs={["Supplier bills"]}
         subtitle={phase === "review" ? undefined : "PDF, PNG or JPG, up to 5 MB"}
         actions={
@@ -440,7 +443,7 @@ export default function InvoiceFlow() {
                   }}
                 />
               </label>
-              <button type="button" onClick={useSample} disabled={reading} className={BTN.secondary}>
+              <button type="button" onClick={usePreReadSample} disabled={reading} className={BTN.secondary}>
                 Use sample bill
               </button>
             </div>
@@ -484,9 +487,14 @@ export default function InvoiceFlow() {
                 <Badge tone="notice">{SOURCE_NOTICE[source].title}</Badge>
               </span>
             )}
-            {source === "cached" && lastFile && (
-              <button type="button" onClick={() => void readFile(lastFile, { force: true })} disabled={reading} className={BTN.link}>
-                Read again
+            {(source === "cached" || source === "pre-read") && (
+              <button
+                type="button"
+                onClick={() => (lastFile ? void readFile(lastFile, { force: true }) : void readSampleAgain())}
+                disabled={reading}
+                className={BTN.link}
+              >
+                Read again with AI
               </button>
             )}
             {anyToCheck && <span className="text-xs text-muted">Review highlighted fields.</span>}
@@ -501,19 +509,16 @@ export default function InvoiceFlow() {
             </Panel>
           )}
 
-          <div className="grid gap-4 md:grid-cols-3">
-            {GROUPS.map((g) => (
-              <Card key={g.title} aria-label={g.title}>
-                <SectionLabel>{g.title}</SectionLabel>
-                <div className="mt-3 space-y-4">{g.keys.map((k) => renderField(k))}</div>
-                {g.title === "Payment terms" && <p className="mt-3 text-xs text-muted">{LATE_FEE_LAW}</p>}
-              </Card>
-            ))}
-          </div>
+          <Card aria-label="Bill">
+            <SectionLabel>Bill</SectionLabel>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2 md:grid-cols-3">{MAIN.map((k) => renderField(k))}</div>
+          </Card>
 
-          {source !== "manual" && (
-            <Disclosure title="View bill details">
-              <div className="overflow-x-auto">
+          <Disclosure title="View bill details" open={detailsOpen || detailsNeedLook} onOpenChange={setDetailsOpen}>
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">{MORE.map((k) => renderField(k))}</div>
+            <p className="mt-3 text-xs text-muted">{LATE_FEE_LAW}</p>
+            {source !== "manual" && (
+              <div className="mt-5 overflow-x-auto">
                 <table className="w-full min-w-[26rem] text-sm">
                   <thead>
                     <tr className="border-b border-line text-xs text-muted">
@@ -533,8 +538,8 @@ export default function InvoiceFlow() {
                   </tbody>
                 </table>
               </div>
-            </Disclosure>
-          )}
+            )}
+          </Disclosure>
 
           <div className="flex flex-wrap items-center gap-4">
             {confirmed ? (

@@ -13,7 +13,7 @@ import LanguageToggle from "./LanguageToggle";
 import { useAiResource } from "./useAiResource";
 
 export const SCRIPT_VERIFIED_LABEL = "Figures checked against your plan";
-export const SCRIPT_UNAVAILABLE_NOTE = "Standard script. AI unavailable.";
+export const SCRIPT_UNAVAILABLE_NOTE = "AI is busy right now. Showing the standard script.";
 
 async function copyText(text: string): Promise<boolean> {
   try {

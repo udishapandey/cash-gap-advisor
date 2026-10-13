@@ -60,17 +60,24 @@ describe("the copy, as written", () => {
     has("lib/plain.ts", "Save ${formatINR(", "Cash needed", "Financing cost", "Bill due", "Overdraft", "Razorpay credit");
   });
   it("Bill", () => {
-    has("components/InvoiceFlow.tsx", "Upload supplier bill", "Review bill", "Early-payment opportunity", "Payment terms", "View bill details", "Confirm bill", "Extracted automatically", "Needs review", "Missing");
+    has("components/InvoiceFlow.tsx", "Upload supplier bill", "We found an early-payment opportunity", "View bill details", "Confirm bill", "Extracted automatically", "Needs review", "Missing", "Read again with AI", "Read by AI earlier");
     expect(read("components/InvoiceFlow.tsx")).not.toContain("Evidence:");
     expect(read("components/InvoiceFlow.tsx")).not.toMatch(/Check what the AI read|The AI reads it/);
-    has("lib/plain.ts", "We don't store your bill. It is shared with our AI provider only to read it.", "can charge late interest of 3x the RBI bank rate, compounded monthly.");
+    has("lib/plain.ts", "We don't store your bill. It is shared with our AI provider only to read it.", "can charge late interest of 3x the RBI bank rate, compounded monthly.", "Save ${formatINR(off)}");
+  });
+  it("Bill shows only supplier, total, due date and the discount by default; the rest is under 'View bill details'", () => {
+    const f = read("components/InvoiceFlow.tsx");
+    expect(f).toContain('const MAIN: FieldKey[] = ["supplierName", "totalAmount", "dueDate", "earlyPaymentDiscountPercent", "earlyPaymentDiscountDays"]');
+    expect(f).toContain('const MORE: FieldKey[] = ["invoiceNumber", "invoiceDate", "quantity", "unitPrice", "lateFeePercentPerMonth"]');
+    // The sample bill loads the saved reading, with no AI call.
+    expect(f).toContain("onClick={usePreReadSample}");
   });
   it("Cash gap", () => {
-    has("components/GapScreen.tsx", "Cash needed to take the early-payment discount", "Expected shortfall", "How we estimated this", "Other available cash", "See funding plan", '"Low sales"', '"Expected"', '"High sales"');
-    has("lib/plain.ts", "Cash shortfall:", '"Forecast"', "Low confidence", "Cash available", "Cash going out", "Discount deadline", "Festive uplift", "COD share", "COD timing", "Returns", "Settlement timing", "Connected banking", "Store and courier data", "Entered by you");
+    has("components/GapScreen.tsx", "Expected shortfall", "How we estimated this", "Other available cash", "See cheapest plan", "ESTIMATE_LINE", '"Low sales"', '"Expected"', '"High sales"');
+    has("lib/plain.ts", "To pay early, you'd be", "short for", "This estimate combines expected sales, settlements, COD cash and upcoming outflows.", "Includes ${formatINR(", "safety buffer", "needs no borrowing.", '"Forecast"', "Low confidence", "Cash available", "Cash going out", "Discount deadline", "Festive uplift", "COD share", "COD timing", "Returns", "Settlement timing", "Connected banking", "Store and courier data", "Entered by you");
   });
   it("Plan", () => {
-    has("components/OptionsScreen.tsx", "Recommended plan", "Net benefit", "Financing cost", "Review &amp; approve", "Why this plan?", "Ask for more days", "Get call script", '"Compare options"', '"What if sales change"', "Source", "Amount", "Repaid by");
+    has("components/OptionsScreen.tsx", "Recommended plan", "Net benefit", "Supplier discount", "Financing cost", "Review &amp; approve", "Why this plan?", "What if sales are lower?", "Ask for more days", "Get call script", '"Compare options"', '"What if sales change"', "Source", "Amount", "Repaid by");
     has("lib/plain.ts", "No cost unless used.", "Net benefit ${formatINR(saving)}", "Your cash", "Your bank overdraft", "Razorpay credit line", "Loans are repaid as sales money arrives.", "Rates are illustrative. Final terms are in your Key Fact Statement.", "Not needed. Overdraft costs less.");
     expect(read("lib/plain.ts")).not.toMatch(/54\.75|annualis/i);
   });
@@ -92,14 +99,27 @@ describe("the copy, as written", () => {
     expect(a).toContain("Pay by ${date(payDay)} for the discount · bill due ${date(view.invoice.dueInDays)}");
   });
   it("Approve", () => {
-    has("components/ApproveScreen.tsx", "Plan summary", "Amount financed", "Financing cost", "Repaid by", "Net benefit", "Funding", "Financing approval", "Key Fact Statement", "View full statement", "Approve financing", "Pay supplier", "Supplier paid", "Simulated. No real money moved.", "See results");
-    has("lib/plain.ts", "Razorpay credit needs lender approval and a final Key Fact Statement. Values are illustrative.");
+    has("components/ApproveScreen.tsx", "You're about to pay", "Payment sources", "Repayment", "Estimated financing cost", "Financing approval", "Key Fact Statement", "View full statement", "payment`", "Pay supplier", "Supplier paid", "Simulated. No real money moved.", "See results");
+    has("lib/plain.ts", "Razorpay credit is subject to eligibility and final lender terms. Values are illustrative.");
     expect(read("components/ApproveScreen.tsx")).not.toContain("Start another invoice");
   });
   it("Results", () => {
     has("components/ResultsScreen.tsx", "Payment complete", "Supplier paid", "Expected net benefit", "Early-payment discount", "Estimated financing cost", "What happens next", "How did the forecast perform?", "Actual (simulated)", "On forecast", "Done");
     has("lib/results.ts", "Saved", "Day ${m.day}: sales", "Nothing changes.");
     expect(read("components/ResultsScreen.tsx")).not.toMatch(/sold out|Approve updated plan|15% lower|15% higher|Mid-season|simple update rule|1\.4x/i);
+  });
+});
+
+describe("words that must not appear on a default view", () => {
+  const BANNED = /peak shortfall|annualis|right-?siz|standby|1\.4x|simple update rule|54\.75/i;
+  it.each([...DEFAULT_SCREENS, "components/ApproveScreen.tsx", "components/InvoiceFlow.tsx"])("%s", (file) => {
+    expect(visibleText(file).filter((t) => BANNED.test(t))).toEqual([]);
+  });
+  it("lib/plain.ts and lib/results.ts keep them out of their strings (the estimates table sits in a collapsed section)", () => {
+    const strings = (src: string) =>
+      [...src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "").matchAll(/(["`])((?:\\.|(?!\1)[^\\\n])*)\1/g)].map((m) => m[2]);
+    const found = [...strings(read("lib/plain.ts")), ...strings(read("lib/results.ts"))].filter((t) => BANNED.test(t) && !t.includes("normal sales") && !t.startsWith("./"));
+    expect(found).toEqual([]);
   });
 });
 

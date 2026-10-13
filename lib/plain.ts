@@ -51,7 +51,7 @@ export const CLOSING_LINE =
 export const RATES_FOOTER =
   "Rates are illustrative. Final terms are in your Key Fact Statement.";
 export const CREDIT_NEEDS_APPROVAL =
-  "Razorpay credit needs lender approval and a final Key Fact Statement. Values are illustrative.";
+  "Razorpay credit is subject to eligibility and final lender terms. Values are illustrative.";
 
 /** "Shree Ganesh Footwear Pvt Ltd" -> "Shree Ganesh Footwear": the company form is noise in a caption. */
 export function tidyName(name: string): string {
@@ -416,6 +416,8 @@ export interface GapView {
   estimates: { label: string; value: string; source: SourceLabel }[];
 }
 
+export const ESTIMATE_LINE = "This estimate combines expected sales, settlements, COD cash and upcoming outflows.";
+
 export function gapView(result: EngineResult): GapView {
   const view = result.recommended;
   const gap = view.focusGap;
@@ -428,8 +430,8 @@ export function gapView(result: EngineResult): GapView {
       gap.gapExpected <= 0
         ? "No cash shortfall"
         : early
-          ? `Cash shortfall: ${inrShort(gap.gapExpected)} for ${daysOut(view) ?? "a few"} days`
-          : `Cash shortfall: ${inrShort(gap.gapExpected)} on ${dayLabel(view.invoice, view.invoice.dueInDays)}`,
+          ? `To pay early, you'd be ${inrShort(gap.gapExpected)} short for ${aboutHowLong(view)}.`
+          : `You're likely ${inrShort(gap.gapExpected)} short on ${dayLabel(view.invoice, view.invoice.dueInDays)}.`,
     hero: inrShort(gap.gapExpected),
     bufferLine: `Includes ${formatINR(view.recommended.plan.buffer)} safety buffer`,
     duration: gap.gapExpected <= 0 ? null : early ? `for ${daysOut(view) ?? "a few"} days` : `on ${dayLabel(view.invoice, view.invoice.dueInDays)}`,
@@ -513,7 +515,7 @@ export function billHero(values: {
     return null;
   const off = Math.round((amount * pct) / 100);
   return {
-    hero: `${formatINR(off)} off`,
+    hero: `Save ${formatINR(off)}`,
     caption: `Pay ${formatLakh(amount - off)} by ${formatDayMonth(values.invoiceDate, days)} instead of ${formatLakh(amount)} by ${formatDayMonth(values.dueDate, 0)}.`,
   };
 }

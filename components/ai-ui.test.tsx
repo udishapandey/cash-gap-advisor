@@ -29,9 +29,9 @@ describe("the AI explanation on the Options screen", () => {
   });
 
   it("shows the plain template with a small 'Standard explanation. AI unavailable.' note when it didn't", () => {
-    expect(UNAVAILABLE_NOTE).toBe("Standard explanation. AI unavailable.");
+    expect(UNAVAILABLE_NOTE).toBe("AI is busy right now. Showing the standard explanation.");
     const html = renderToStaticMarkup(<AiExplanationView status="unavailable" text={explanation} mock={false} language="en" onLanguage={noop} />);
-    expect(html).toContain("Standard explanation. AI unavailable.");
+    expect(html).toContain("AI is busy right now. Showing the standard explanation.");
     expect(html).toContain(explanation.slice(0, 40));
     // and it must NOT claim the numbers were verified
     expect(html).not.toContain("numbers verified");

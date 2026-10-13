@@ -7,7 +7,7 @@ import { CONFIG } from "@/lib/engine/config";
 import { formatINR, inrShort } from "@/lib/format";
 import { SALES_DROPS, type JourneyState } from "@/lib/journey";
 import type { Language } from "@/lib/language";
-import { midSeasonForState, midSeasonView } from "@/lib/results";
+import { midSeasonForState, slowSalesView } from "@/lib/results";
 import { dayLabel } from "@/lib/plain";
 import { UNCOVERED_TITLE, buildHeroPlan, compareRows, dayByDay, forecastSaving, type HeroPlan } from "@/lib/plain";
 import type { AppliedWhatIf } from "@/lib/whatif";
@@ -261,34 +261,13 @@ function AskCard({
 
 // ---------- If sales are slow ----------
 
-function SlowSales({ view }: { view: ReturnType<typeof midSeasonView> }) {
+function SlowSales({ view }: { view: ReturnType<typeof slowSalesView> }) {
   return (
-    <div className="space-y-3 text-sm">
-      <p className="text-muted">{view.intro}</p>
-      <p className="font-heading text-lg font-semibold">{view.headline}</p>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[22rem]">
-          <thead>
-            <tr className="border-b border-line text-xs text-muted">
-              <th className="py-2 text-left font-medium">Updated plan</th>
-              <th className="px-3 py-2 text-right font-medium">Cost</th>
-              <th className="py-2 text-right font-medium">Saving</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {view.plans.map((p) => (
-              <tr key={p.label}>
-                <td className="py-2">{p.label}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{p.cost}</td>
-                <td className="py-2 text-right tabular-nums">{p.saving}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="font-semibold">{view.verdict}</p>
-      {view.verdictWhy && <p className="text-muted">{view.verdictWhy}</p>}
-      <p className="text-xs text-muted">{view.cashInNote}</p>
+    <div className="space-y-2 text-sm">
+      <p className="font-medium">{view.salesLine}</p>
+      <p className="tabular-nums">{view.gapLine}</p>
+      <p className="font-semibold">{view.recommendation}</p>
+      {view.risk && <p className="text-muted">{view.risk}</p>}
     </div>
   );
 }
@@ -447,15 +426,15 @@ function PlanBody({
         onWhy={openWhy}
       />
 
-      {whyOpen && (
-        <Disclosure id="why" title="Why this plan" open onOpenChange={setWhyOpen}>
-          <AiExplanation result={result} state={state} language={state.language} onLanguage={setLanguage} typedToken={typedToken} />
+      {hero.covered && slow && (
+        <Disclosure title="What if sales are lower?">
+          <SlowSales view={slowSalesView(slow, (day) => dayLabel(recView.invoice, day))} />
         </Disclosure>
       )}
 
-      {hero.covered && slow && (
-        <Disclosure title="If sales are slow">
-          <SlowSales view={midSeasonView(slow, (day) => dayLabel(recView.invoice, day))} />
+      {whyOpen && (
+        <Disclosure id="why" title="Why this plan" open onOpenChange={setWhyOpen}>
+          <AiExplanation result={result} state={state} language={state.language} onLanguage={setLanguage} typedToken={typedToken} />
         </Disclosure>
       )}
 

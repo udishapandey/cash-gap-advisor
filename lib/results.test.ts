@@ -6,7 +6,7 @@ import { computeOutcome, OUTCOME_IDS, SIMULATED_OUTCOMES } from "./engine/outcom
 import { formatINR, formatSignedINR } from "./format";
 import { DEFAULT_JOURNEY } from "./journey";
 import { dayLabel } from "./plain";
-import { MID_SEASON_CAPTION, NEXT_TIME_CAPTION, SAVING_BASIS, gapRow, midSeasonForState, midSeasonView, nextTimeBullets, outcomeForState, savedBreakdown, savedHeadline } from "./results";
+import { slowSalesView, MID_SEASON_CAPTION, SAVING_BASIS, gapRow, midSeasonForState, midSeasonView, nextTimeBullets, outcomeForState, savedBreakdown, savedHeadline } from "./results";
 
 const run = (drop = 0) => runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop });
 const state = (drop = 0, chosenView: "keep_full" | "right_sized" | null = "keep_full") => ({ ...DEFAULT_JOURNEY, salesDropPercent: drop, chosenView });
@@ -80,6 +80,19 @@ describe("forecast gap against actual gap", () => {
   });
 });
 
+describe("the slow-sales note on the Plan screen", () => {
+  const date = (d: number) => dayLabel(sampleInvoice, d);
+  const v = slowSalesView(midSeasonForState(run(), state())!, date);
+  it("is four short lines from the engine's re-run", () => {
+    expect(v).toEqual({
+      salesLine: "Sales 15% below forecast",
+      gapLine: "Expected gap: ₹2.31L → ₹3.48L",
+      recommendation: "Don't pay early. Pay on 10 Nov instead.",
+      risk: "Slower sales would leave you without enough credit if sales fell further.",
+    });
+  });
+});
+
 describe("the mid-season check", () => {
   const date = (d: number) => dayLabel(sampleInvoice, d);
   const mid = midSeasonForState(run(), state())!;
@@ -115,7 +128,6 @@ describe("the mid-season check", () => {
   });
   it("has the captions as written", () => {
     expect(MID_SEASON_CAPTION).toBe("Plan updates as sales arrive. Sales are simulated.");
-    expect(NEXT_TIME_CAPTION).toBe("Simple update rule in this prototype. The live product would learn from your history.");
   });
 });
 

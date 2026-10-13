@@ -6,7 +6,9 @@ import { sourceName, templateExplanationParts, templateScript, templateSummary, 
 import { explainPromptFacts, planFacts, promptFacts, recommendedFacts, scriptFacts, withSourceNames, type ResultsFacts } from "./ai-facts";
 import type { Invoice } from "./data/invoice";
 import { preReadSampleExtraction } from "./data/sample-extraction";
-import type { EngineResult } from "./engine";
+import { defaultInvoice } from "./data/default-scenario";
+import { merchant as demoMerchant } from "./data/merchant";
+import { runEngine, type EngineResult } from "./engine";
 import type { Plan } from "./engine/options";
 import { checkGrounding, findLeakedNames } from "./grounding";
 import { hashInput } from "./hash";
@@ -773,6 +775,8 @@ export interface VerifiedTextOutcome {
   mock: boolean;
   /** True if this came from the cache instead of a new AI call. */
   cached: boolean;
+  /** True for the saved text of the demo plan: written ahead of time, checked against the plan, and shown with no AI call. */
+  saved?: boolean;
   reason?: "ai_error" | "ungrounded" | "empty";
   message?: string;
   /** The ₹ amounts and percentages in the AI's text that matched nothing. Never shown as advice. */
@@ -932,6 +936,13 @@ const joinParts = (p: ExplanationParts) => [p.doThis, p.whyCheapest, p.watchOut]
  * engine's numbers. Every ₹ amount and % in every part is checked against them; if any part fails, the whole answer is
  * dropped and the plain template (same three parts) is returned.
  */
+let demoFacts: string | null = null;
+/** Is this the demo plan (the default bill on the default assumptions)? Its explanation is saved, so no AI call is made. */
+function isDemoPlan(facts: unknown): boolean {
+  demoFacts ??= JSON.stringify(recommendedFacts(planFacts(runEngine({ merchant: demoMerchant, invoice: defaultInvoice }))));
+  return JSON.stringify(facts) === demoFacts;
+}
+
 export async function explainPlan(result: EngineResult, language: Language): Promise<ExplainOutcome> {
   const allFacts = planFacts(result);
   // Everything the AI is shown, and everything its numbers are checked against, is the RECOMMENDED plan only.
@@ -955,6 +966,11 @@ export async function explainPlan(result: EngineResult, language: Language): Pro
     return g.ok
       ? { ...base, status: "verified", parts: template, text: joinParts(template), mock: true }
       : { ...fallback("ungrounded", { ungrounded: g.ungrounded.map((m) => m.text) }), mock: true };
+  }
+
+  // The demo path: the saved explanation, checked against the same numbers, with no live call.
+  if (isDemoPlan(facts) && checkGrounding(joinParts(template), facts).ok) {
+    return { ...base, status: "verified", parts: template, text: joinParts(template), mock: false, saved: true };
   }
 
   const key = await cacheKey("explain", { facts, language });

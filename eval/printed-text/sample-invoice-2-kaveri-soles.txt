@@ -1,0 +1,32 @@
+SAMPLE INVOICE - SYNTHETIC, FOR DEMO ONLY. Not a real business or transaction.
+Kaveri Soles & Uppers
+Plot 14, Leather Cluster Road, Agra 282007 (fictional address)
+Micro enterprise (sample) | Phone: 00000 00000
+GSTIN: SAMPLE-NOT-REAL
+TAX INVOICE
+Invoice no.: KSU/26-27/0387
+Invoice date: 14 Oct 2026
+Due date: 28 Nov 2026
+Payment terms: Net 45 days
+Bill to
+Rahul's Shoe Brand (sample D2C merchant)
+Bengaluru, Karnataka
+Description Qty (pairs) Rate Amount
+Men's casual sneaker - white, sizes 6-11 200 ₹ 900.00 ₹ 1,80,000.00
+Women's loafer - tan, sizes 4-8 100 ₹ 900.00 ₹ 90,000.00
+Total quantity: 300 pairs
+Total payable ₹ 2,70,000.00
+(inclusive of applicable taxes)
+Amount in words: Rupees Two Lakh Seventy Thousand only
+Terms & conditions
+1. Payment due within 45 days of invoice date.
+2. A cash discount of 1.5% will be allowed if full payment is received within 15 days of invoice date.
+3. Interest at 18% per annum will be charged on amounts overdue beyond the due date.
+4. Goods once sold will not be taken back. Subject to Agra jurisdiction.
+5. Payment by bank transfer (NEFT/RTGS/IMPS) to the account below.
+Bank details (sample)
+Account name: Kaveri Soles & Uppers
+Account no.: XXXXXXXX0000 (sample)
+IFSC: SAMP0000000 (sample) For Kaveri Soles & Uppers
+Authorised signatory
+SAMPLE - synthetic invoice created for the Cash Gap Advisor concept prototype.

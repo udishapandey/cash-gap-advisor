@@ -211,7 +211,7 @@ function ApproveBody({ state, result, update }: ShellContext) {
             {busy === "pay" ? "Paying…" : "Pay supplier"}
           </button>
         </div>
-        <p className="mt-2 text-xs text-muted">{approved ? "Simulated. No real money moves." : "Approve financing first."}</p>
+        <p className="mt-2 text-xs text-muted">{approved ? "Simulated. No real money moves." : kfs ? "Approve financing first." : "Approve the payment first."}</p>
       </Card>
     </>
   );

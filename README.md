@@ -141,6 +141,15 @@ I fact-checked the engine's assumptions against public sources. Razorpay's credi
 
 Paying ₹4,90,000 on 21 Oct instead of ₹5,00,000 on 10 Nov leaves the founder **₹9,583 better off** (₹10,000 discount less ₹417). Instant settlement is not used because the overdraft is cheaper.
 
+## Try it
+
+Open the live demo and choose **Use sample bill** on the Bill screen, or download a synthetic bill and upload it:
+
+- [Bill 1: Shree Ganesh Footwear](public/samples/invoice-clean.pdf) (₹5,00,000, 2% off within 10 days, due in 30 days). The demo plan funds it with cash, an overdraft and Razorpay credit.
+- [Bill 2: Kaveri Soles & Uppers](public/samples/sample-invoice-2-kaveri-soles.pdf) (₹2,70,000, 1.5% off within 15 days, net 45 days). Paying early needs no borrowing, so the plan uses cash only.
+
+Both are made up and carry a "synthetic" notice. If the AI is busy, each loads its saved reading instead of an error.
+
 ## How to run
 
 ```bash

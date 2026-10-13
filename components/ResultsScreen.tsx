@@ -46,7 +46,7 @@ function ResultsBody({ state, result, reset }: ShellContext) {
           <KeyValues
             rows={[
               ...(early ? [{ label: "Early-payment discount", value: `+${formatINR(discount)}` }] : []),
-              { label: "Estimated financing cost", value: `−${formatINR(plan.totalCost)}` },
+              { label: "Estimated financing cost", value: `${plan.totalCost > 0 ? "−" : ""}${formatINR(plan.totalCost)}` },
               { label: "Expected net benefit", value: formatINR(Math.max(0, saving)), strong: true },
             ]}
           />

@@ -165,6 +165,18 @@ describe("the sample bill never ends in an error", () => {
     expect(body).toMatchObject({ ok: true, saved: true, reason: kind });
     expect(body.extraction.totalAmount.value).toBe(500000);
   });
+  it("an unchanged download of sample bill 2 gets its own saved reading, found by its hash", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocked.mockResolvedValue({ ok: false, kind: "provider_error", message: "busy" });
+    const pdf = new Uint8Array(readFileSync("public/samples/sample-invoice-2-kaveri-soles.pdf"));
+    const form = new FormData();
+    form.append("file", new File([pdf as BlobPart], "whatever-name.pdf", { type: "application/pdf" }));
+    const res = await POST(new Request("http://localhost/api/parse-invoice", { method: "POST", body: form }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ ok: true, saved: true, badge: "Saved reading" });
+    expect(body.extraction.supplierName.value).toBe("Kaveri Soles & Uppers");
+  });
   it("an uploaded bill (no sample flag) still gets the error, so the page can open manual entry", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     mocked.mockResolvedValue({ ok: false, kind: "provider_error", message: "busy" });

@@ -6,6 +6,8 @@ import { sourceName, templateExplanationParts, templateScript, templateSummary, 
 import { explainPromptFacts, planFacts, promptFacts, recommendedFacts, scriptFacts, withSourceNames, type ResultsFacts } from "./ai-facts";
 import type { Invoice } from "./data/invoice";
 import { preReadSampleExtraction } from "./data/sample-extraction";
+import { savedReadingFor } from "./data/sample-bills";
+import { hashBytes } from "./extraction-cache";
 import { defaultInvoice } from "./data/default-scenario";
 import { merchant as demoMerchant } from "./data/merchant";
 import { runEngine, type EngineResult } from "./engine";
@@ -550,7 +552,9 @@ export function isMockAi(): boolean {
 export async function extractInvoice(file: InvoiceFile): Promise<ExtractInvoiceResult> {
   if (isMockAi()) {
     await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
-    const parsed = parseExtraction(preReadSampleExtraction);
+    // Mock mode answers with the saved reading of the sample file it was given (bill 1 for anything else).
+    const sample = savedReadingFor(await hashBytes(file.data.buffer.slice(file.data.byteOffset, file.data.byteOffset + file.data.byteLength) as ArrayBuffer));
+    const parsed = parseExtraction(sample?.extraction ?? preReadSampleExtraction);
     if (!parsed.ok) return fail("invalid_response", parsed.message);
     return { ok: true, data: parsed.data, model: "mock", attempts: 0, mock: true };
   }

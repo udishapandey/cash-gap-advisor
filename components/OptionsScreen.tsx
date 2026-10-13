@@ -210,7 +210,7 @@ function HeroCard({
                 <td className="py-2.5">Financing cost</td>
                 <td />
                 <td />
-                <td className="py-2.5 text-right tabular-nums">−{formatINR(hero.totalCost)}</td>
+                <td className="py-2.5 text-right tabular-nums">{hero.totalCost > 0 ? "−" : ""}{formatINR(hero.totalCost)}</td>
               </tr>
               {hero.saving > 0 && (
                 <tr className="font-semibold text-green-700">

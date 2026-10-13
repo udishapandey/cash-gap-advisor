@@ -354,7 +354,7 @@ export function compareRows(
       rows.push({
         id: o.id,
         label: OPTION_LABEL[o.id],
-        covers: overdraftCheaper
+        covers: overdraftCheaper && view.recommended.plan.steps.some((s) => s.isBorrowing)
           ? "Not needed. Overdraft costs less."
           : "Not needed.",
         cost: DASH,

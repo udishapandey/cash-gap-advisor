@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Invoice } from "@/lib/data/invoice";
-import { preReadSampleExtraction } from "@/lib/data/sample-extraction";
+import { SAMPLE_BILLS, savedReadingFor } from "@/lib/data/sample-bills";
 import { hashBytes, readCached, writeCached } from "@/lib/extraction-cache";
 import {
   FIELDS,
@@ -90,6 +90,8 @@ export default function InvoiceFlow() {
   const [elapsed, setElapsed] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const lastIsSample = useRef(false);
+  /** The badge for a saved sample reading: "Read by AI earlier" for bill 1, "Saved reading" for bill 2. */
+  const [savedBadge, setSavedBadge] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Is development mock mode on? (AI_MOCK=true on the server.)
@@ -167,9 +169,12 @@ export default function InvoiceFlow() {
    * The AI could not read the bill (busy, rate-limited, timed out, or no answer). Stop the spinner and carry on:
    * the sample bill shows its saved reading; an uploaded bill opens as manual entry; a bill that already has a reading keeps it.
    */
-  function aiBusy(isSample: boolean, hadReading: boolean) {
-    if (isSample) {
-      showExtraction(preReadSampleExtraction, "pre-read");
+  function aiBusy(isSample: boolean, hadReading: boolean, fileHash: string | null = null) {
+    // An unchanged sample file (found by its hash), or the sample button, shows its saved reading.
+    const known = savedReadingFor(fileHash) ?? (isSample ? SAMPLE_BILLS[0] : null);
+    if (known) {
+      showExtraction(known.extraction, "pre-read");
+      setSavedBadge(known.badge);
       setNotice(BUSY_SAVED);
     } else if (hadReading) {
       setPhase("review");
@@ -197,7 +202,8 @@ export default function InvoiceFlow() {
     lastIsSample.current = isSample;
 
     // Same file as before? Reuse the earlier reading instead of calling the AI. (Not in mock mode.)
-    const hash = mockAi ? null : await hashBytes(await file.arrayBuffer());
+    const fileHash = await hashBytes(await file.arrayBuffer());
+    const hash = mockAi ? null : fileHash;
     if (hash && !opts.force) {
       try {
         const hit = readCached(sessionStorage, hash);
@@ -229,7 +235,7 @@ export default function InvoiceFlow() {
       if (!res.ok || !data?.ok) {
         // An AI failure (the server says which kind) falls back at once. A wrong file type or size is the founder's to fix.
         if (data?.kind || res.status >= 500) {
-          aiBusy(isSample, hadReading);
+          aiBusy(isSample, hadReading, fileHash);
         } else {
           setError(data?.error ?? "Couldn't read this bill. Try again.");
           setPhase(hadReading ? "review" : "idle");
@@ -237,13 +243,20 @@ export default function InvoiceFlow() {
         return;
       }
       if (data.saved === true) {
-        // The server could not reach the AI for the sample bill and sent its saved reading.
-        aiBusy(true, hadReading);
+        // The server could not reach the AI for a sample bill and sent its saved reading.
+        const saved = parseExtraction(data.extraction);
+        if (saved.ok) {
+          showExtraction(saved.data, "pre-read");
+          setSavedBadge(typeof data.badge === "string" ? data.badge : "Saved reading");
+          setNotice(BUSY_SAVED);
+        } else {
+          aiBusy(isSample, hadReading, fileHash);
+        }
         return;
       }
       const parsed = parseExtraction(data.extraction);
       if (!parsed.ok) {
-        aiBusy(isSample, hadReading);
+        aiBusy(isSample, hadReading, fileHash);
         return;
       }
       const isMock = data.mock === true;
@@ -252,7 +265,7 @@ export default function InvoiceFlow() {
     } catch {
       if (controller.signal.aborted) return; // the founder started something else
       // A timeout (35 seconds) or a dropped connection: the same fallback.
-      aiBusy(isSample, hadReading);
+      aiBusy(isSample, hadReading, fileHash);
     } finally {
       if (fileInput.current) fileInput.current.value = "";
     }
@@ -261,7 +274,8 @@ export default function InvoiceFlow() {
   /** After an AI failure: values saved from an earlier reading of the synthetic sample invoice. */
   function usePreReadSample() {
     abortRef.current?.abort();
-    showExtraction(preReadSampleExtraction, "pre-read");
+    showExtraction(SAMPLE_BILLS[0].extraction, "pre-read");
+    setSavedBadge(SAMPLE_BILLS[0].badge);
   }
 
   /** Read the sample bill with the AI again, from the file (a live call). */
@@ -461,7 +475,18 @@ export default function InvoiceFlow() {
                 Use sample bill
               </button>
             </div>
-            <p className="text-xs text-muted">The sample is synthetic. {BILL_PRIVACY}</p>
+            <p className="text-xs text-muted">The samples are synthetic. {BILL_PRIVACY}</p>
+            <p className="text-xs text-muted">
+              Download sample bills to try:{" "}
+              {SAMPLE_BILLS.map((b, i) => (
+                <span key={b.id}>
+                  {i > 0 && " · "}
+                  <a href={b.href} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-text hover:underline">
+                    {b.label}
+                  </a>
+                </span>
+              ))}
+            </p>
           </div>
         </Card>
       )}
@@ -486,7 +511,7 @@ export default function InvoiceFlow() {
               <Badge tone="neutral">Extracted automatically</Badge>
             ) : (
               <span title={SOURCE_NOTICE[source].text}>
-                <Badge tone="notice">{SOURCE_NOTICE[source].title}</Badge>
+                <Badge tone="notice">{source === "pre-read" && savedBadge ? savedBadge : SOURCE_NOTICE[source].title}</Badge>
               </span>
             )}
             {(source === "cached" || source === "pre-read") && (

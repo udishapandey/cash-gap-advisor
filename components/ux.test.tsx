@@ -77,7 +77,9 @@ describe("the copy, as written", () => {
     expect(f).toContain("const CLIENT_TIMEOUT_MS = 35_000");
     expect(f).toContain('"AI is busy right now. Showing the reading saved earlier."');
     expect(f).toContain('"AI is busy right now. Please check and fill the fields."');
-    expect(f).toContain("aiBusy(isSample, hadReading)");
+    expect(f).toContain("aiBusy(isSample, hadReading, fileHash)");
+    expect(f).toContain("Download sample bills to try:");
+    expect(f).toContain('target="_blank"');
     expect(f).toContain('showExtraction(emptyExtraction(), "manual")');
   });
   it("Cash gap", () => {

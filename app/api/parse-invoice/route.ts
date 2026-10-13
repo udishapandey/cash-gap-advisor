@@ -1,5 +1,6 @@
 import { describeFailure, extractInvoice, type ExtractInvoiceFailure } from "@/lib/ai";
-import { preReadSampleExtraction } from "@/lib/data/sample-extraction";
+import { SAMPLE_BILLS, savedReadingFor } from "@/lib/data/sample-bills";
+import { hashBytes } from "@/lib/extraction-cache";
 import { MAX_INVOICE_BYTES, sniffMimeType } from "@/lib/invoice-upload";
 
 // Privacy: the uploaded invoice is processed in memory only. It is never written to disk,
@@ -54,8 +55,10 @@ export async function POST(request: Request) {
   if (!result.ok) {
     // Log why it failed (HTTP status, provider error type and message, each attempt), never the invoice.
     console.error(`[parse-invoice] ${describeFailure(result)}`);
-    // The synthetic sample bill never ends in an error: if the AI is down, send its saved reading, flagged as saved.
-    if (isSample) return json({ ok: true, saved: true, extraction: preReadSampleExtraction, reason: result.kind }, 200);
+    // A synthetic sample bill never ends in an error: if the AI is down, send its saved reading, flagged as saved.
+    // The file is recognised by its hash, so an unchanged download of either sample bill counts.
+    const known = savedReadingFor(await hashBytes(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer)) ?? (isSample ? SAMPLE_BILLS[0] : null);
+    if (known) return json({ ok: true, saved: true, extraction: known.extraction, badge: known.badge, reason: result.kind }, 200);
     return json(
       { ok: false, kind: result.kind, error: result.message },
       STATUS[result.kind],

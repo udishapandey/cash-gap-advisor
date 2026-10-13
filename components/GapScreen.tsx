@@ -83,11 +83,16 @@ function GapBody({ state, result, update, invoice }: ShellContext) {
       let fromConfirm = false;
       try {
         fromConfirm = sessionStorage.getItem(CHECKING_KEY) === "1";
-        sessionStorage.removeItem(CHECKING_KEY);
       } catch {}
       if (!fromConfirm) return setChecking("no");
       setChecking("yes");
-      timer = setTimeout(() => setChecking("no"), 1000);
+      // The flag is cleared when the moment is over, not when it starts, so a development remount cannot swallow it.
+      timer = setTimeout(() => {
+        try {
+          sessionStorage.removeItem(CHECKING_KEY);
+        } catch {}
+        setChecking("no");
+      }, 1000);
     });
     return () => clearTimeout(timer);
   }, []);

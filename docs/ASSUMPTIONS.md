@@ -212,6 +212,10 @@ Every value below was checked against a public source. **Illustrative** means a 
 
 With these inputs, right-sizing shrinks the loan a lot **compared with keeping the full order** (about ₹2.11L against ₹3.44L at −30% sales), but the right-sized loan at −30% is still **higher than the loan at 0%** (about ₹2.11L against ₹1.17L). A 30% sales drop cuts forecast cash-in by about ₹2.5L, while right-sizing saves only about ₹1.4L of stock cost. The main reason is that "other outflows" (#1) are fixed. In reality courier, fees and part of ad spend would fall with sales, which would narrow this. Treat the "loan shrinks" claim in the spec as true relative to keeping the full order, not relative to the 0% case, until #1 is replaced with real data. (These figures use the peak-shortfall sizing rule, #76.)
 
+### Known limitation: the slow-sales check is cautious
+
+The 'What if sales are lower?' check is deliberately cautious. It only recommends paying early if your unused credit limits would cover a low-sales case all the way to the due date. For bills with long due dates (e.g. sample bill 2), it may say 'pay on the due date' even when paying early costs very little. A future version would weigh the size of the risk, not just yes or no.
+
 ## Not modelled yet
 
 - Non-money costs: the relationship cost of asking the supplier for more time.

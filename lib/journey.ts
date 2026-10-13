@@ -45,6 +45,8 @@ export interface JourneyState {
   chosenView: ViewId | null;
   /** Which plan the founder picked on the Plan screen: the recommended one, or paying on the due date. */
   planChoice: PlanChoice;
+  /** The founder cancelled a scheduled payment: the Plan screen says so until they move on. */
+  cancelled: boolean;
   approved: boolean;
   paid: boolean;
   /** The language of the AI explanation and call script. */
@@ -59,6 +61,7 @@ export const DEFAULT_JOURNEY: JourneyState = {
   overdraftRatePct: CONFIG.overdraftRatePct,
   chosenView: null,
   planChoice: "recommended",
+  cancelled: false,
   approved: false,
   paid: false,
   language: "en",
@@ -90,6 +93,7 @@ const journeySchema = z.object({
   overdraftRatePct: z.number().min(0).max(100).catch(DEFAULT_JOURNEY.overdraftRatePct),
   chosenView: z.enum(["keep_full", "right_sized"]).nullable().catch(null),
   planChoice: z.enum(["recommended", "due_date"]).catch("recommended"),
+  cancelled: z.boolean().catch(false),
   approved: z.boolean().catch(false),
   paid: z.boolean().catch(false),
   language: z.enum(["en", "hi"]).catch("en"),

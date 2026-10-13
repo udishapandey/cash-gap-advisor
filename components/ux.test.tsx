@@ -56,7 +56,7 @@ describe("the copy, as written", () => {
     for (const t of texts) expect(src, `${file}: ${t}`).toContain(t);
   };
   it("Home", () => {
-    has("app/page.tsx", "Supplier bills", "Opportunity", "Net benefit", "Review plan");
+    has("app/page.tsx", "Supplier bills", "Opportunity", "alert.breakdown", "Review plan");
     has("lib/plain.ts", "Save ${formatINR(", "Cash needed", "Financing cost", "Bill due", "Overdraft", "Razorpay credit");
   });
   it("Bill", () => {
@@ -102,7 +102,7 @@ describe("the copy, as written", () => {
     expect(o).toContain('role="radiogroup" aria-label="Choose a plan"');
     expect(o).toContain("planChoiceCards(result, state)");
     expect(o).toContain('useState<PlanChoice>(state.planChoice)'); // starts as "recommended"
-    expect(o).toContain("update({ chosenView: recId, planChoice: choice })");
+    expect(o).toContain("update({ chosenView: recId, planChoice: choice, cancelled: false })");
     expect(o.indexOf('aria-label="Choose a plan"')).toBeLessThan(o.indexOf("{actions(uncovered > 0)}"));
     expect(read("lib/plain.ts")).toContain("You decide. You can also change any number above and the plan updates.");
     expect(read("components/ApproveScreen.tsx")).toContain("pickPlan(");

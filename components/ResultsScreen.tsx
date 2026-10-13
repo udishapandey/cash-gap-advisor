@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { formatINR, formatLakh, inrShort } from "@/lib/format";
-import { dayLabel, forecastSaving } from "@/lib/plain";
+import { dayLabel, forecastSaving, timeLabels } from "@/lib/plain";
 import { forecastReview, outcomeForState } from "@/lib/results";
 import { pickPlan } from "@/lib/plan-choice";
 import JourneyShell, { type ShellContext } from "./JourneyShell";
@@ -28,7 +28,7 @@ function ResultsBody({ state, result, reset }: ShellContext) {
 
   return (
     <>
-      <PageHeader title="Payment complete" crumbs={["Supplier bills"]} />
+      <PageHeader title="Payment complete" crumbs={["Supplier bills"]} subtitle={timeLabels.daysLater(chosen)} />
 
       <Panel aria-label="Payment complete">
         <div className="flex flex-wrap items-start justify-between gap-4 p-6">

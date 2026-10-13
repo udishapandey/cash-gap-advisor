@@ -40,9 +40,9 @@ export default function Home() {
           <div>
             <Badge tone="positive">Opportunity</Badge>
             <h2 className="mt-3 font-heading text-3xl font-semibold">{alert.title}</h2>
+            {alert.breakdown && <p className="mt-1 text-sm font-medium text-green-700">{alert.breakdown}</p>}
             <p className="mt-1 text-sm text-subtle">{alert.line}</p>
           </div>
-          {alert.saving > 0 && <Metric size="lg" tone="saved" label="Net benefit" value={alert.caption} />}
         </div>
 
         <div className="grid gap-6 border-t border-line px-6 py-4 sm:grid-cols-3">

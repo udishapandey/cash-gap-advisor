@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { EngineResult } from "@/lib/engine";
 import { formatINR, formatLakh, inrShort } from "@/lib/format";
-import { CREDIT_NEEDS_APPROVAL, backupLine, dayLabel, forecastSaving, tidyName } from "@/lib/plain";
+import { CREDIT_NEEDS_APPROVAL, backupLine, dayLabel, forecastSaving, paymentIsScheduled, tidyName, timeLabels, whoDoesWhat } from "@/lib/plain";
 import {
   approvalBlockers,
   approvalStage,
@@ -29,6 +30,7 @@ export default function ApproveScreen() {
 }
 
 function ApproveBody({ state, result, update }: ShellContext) {
+  const router = useRouter();
   const view = pickPlan(state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull, state.planChoice);
   const plan = view.recommended.plan;
   const sections = splitPlan(view, result.stock.fullUnits);
@@ -66,9 +68,18 @@ function ApproveBody({ state, result, update }: ShellContext) {
     }, 1000);
   }
 
-  if (stage === "done") return <Success view={view} pay={pay} result={result} saving={savingNow} />;
+  // Cancelling is possible while the payment date is ahead. Nothing was paid or borrowed, so the journey starts again at the plan.
+  const cancel = paymentIsScheduled(view)
+    ? () => {
+        update({ approved: false, paid: false, chosenView: null, cancelled: true });
+        router.push("/options");
+      }
+    : null;
+
+  if (stage === "done") return <Success view={view} pay={pay} result={result} saving={savingNow} onCancel={cancel} />;
 
   const approved = stage !== "review";
+  const who = whoDoesWhat(view);
   const funding = [
     ...(sections.nonCredit.some((x) => x.id === "own_cash")
       ? [{ id: "own_cash", label: "Cash", amount: plan.ownCash, by: null as string | null, group: "Your money" }]
@@ -97,9 +108,14 @@ function ApproveBody({ state, result, update }: ShellContext) {
             value={`${formatLakh(pay)} on ${date(payDay)}`}
             caption={`${formatINR(pay)} in full${early ? `, ${formatINR(view.discount.discountAmount)} off` : ""}`}
           />
-          <Link href="/options" className={BTN.link}>
-            Change plan
-          </Link>
+          <div className="flex flex-col items-end gap-2">
+            <Badge tone={approved ? "positive" : "neutral"}>{timeLabels.scheduledFor(view)}</Badge>
+            {!approved && (
+              <Link href="/options" className={BTN.link}>
+                Change plan
+              </Link>
+            )}
+          </div>
         </div>
         <div className="grid gap-4 border-t border-line px-6 py-5 md:grid-cols-3">
           <Tile label="Payment sources">
@@ -139,6 +155,35 @@ function ApproveBody({ state, result, update }: ShellContext) {
         {backup && <p className={`border-t border-line px-6 py-3 text-xs ${backup.warn ? "text-red-700" : "text-muted"}`}>{backup.text}</p>}
       </Panel>
 
+      <Card aria-label="Who does what">
+        <div className={`grid gap-6 ${who.you.length > 0 ? "md:grid-cols-2" : ""}`}>
+          <section aria-label="Razorpay will do">
+            <SectionLabel>Razorpay will do</SectionLabel>
+            <ul className="mt-3 space-y-2 text-sm">
+              {who.razorpay.map((row) => (
+                <li key={row} className="flex gap-2">
+                  <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
+                  {row}
+                </li>
+              ))}
+            </ul>
+          </section>
+          {who.you.length > 0 && (
+            <section aria-label="You'll need to do">
+              <SectionLabel>You&apos;ll need to do</SectionLabel>
+              <ul className="mt-3 space-y-2 text-sm">
+                {who.you.map((row) => (
+                  <li key={row} className="flex gap-2">
+                    <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                    {row}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+      </Card>
+
       <Card aria-label="Financing approval">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SectionLabel>{kfs ? "Financing approval" : "Approval"}</SectionLabel>
@@ -146,15 +191,21 @@ function ApproveBody({ state, result, update }: ShellContext) {
         </div>
 
         {approved ? (
-          <ul className="mt-3 space-y-1.5 text-sm">
-            {kfs && sections.creditLine && (
-              <li>
-                {formatINR(kfs.loanAmount)} credited to account {SIMULATED_ACCOUNT} by {kfs.lender}. Not paid to the supplier.
-              </li>
+          <>
+            <ul className="mt-3 space-y-1.5 text-sm">
+              {kfs && sections.creditLine && (
+                <li>
+                  {formatINR(kfs.loanAmount)} credited to account {SIMULATED_ACCOUNT} by {kfs.lender}. Not paid to the supplier.
+                </li>
+              )}
+              <li className="text-xs text-muted">Touch ID approval is simulated.</li>
+            </ul>
+            {cancel && (
+              <button type="button" onClick={cancel} className={`mt-3 ${BTN.link}`}>
+                Cancel scheduled payment
+              </button>
             )}
-            {sections.overdraft && <li>Draw {formatINR(sections.overdraft.amount)} from your overdraft at your bank.</li>}
-            <li className="text-xs text-muted">Touch ID approval is simulated.</li>
-          </ul>
+          </>
         ) : (
           <>
             {blockers.map((b) => (
@@ -215,7 +266,19 @@ function ApproveBody({ state, result, update }: ShellContext) {
   );
 }
 
-function Success({ view, pay, result, saving }: { view: EngineResult["views"]["keepFull"]; pay: number; result: EngineResult; saving: number }) {
+function Success({
+  view,
+  pay,
+  result,
+  saving,
+  onCancel,
+}: {
+  view: EngineResult["views"]["keepFull"];
+  pay: number;
+  result: EngineResult;
+  saving: number;
+  onCancel: (() => void) | null;
+}) {
   void result;
   const plan = view.recommended.plan;
   const early = view.recommended.timing === "pay_early_for_discount";
@@ -227,6 +290,7 @@ function Success({ view, pay, result, saving }: { view: EngineResult["views"]["k
         </div>
         <h1 className="mt-3 font-heading text-xl font-semibold">Supplier paid</h1>
         <p className="mt-1 font-heading text-3xl font-semibold tabular-nums">{formatINR(pay)}</p>
+        <p className="mt-1 text-sm font-medium">{timeLabels.paidOn(view)}</p>
         <p className="mt-1 text-xs text-muted">Simulated. No real money moved.</p>
         <div className="mx-auto mt-5 max-w-sm text-left">
           <KeyValues
@@ -244,6 +308,11 @@ function Success({ view, pay, result, saving }: { view: EngineResult["views"]["k
           <Link href="/" className={BTN.link}>
             Back to home
           </Link>
+          {onCancel && (
+            <button type="button" onClick={onCancel} className={BTN.link}>
+              Cancel scheduled payment
+            </button>
+          )}
         </div>
       </div>
     </Panel>

@@ -9,7 +9,7 @@ import { SALES_DROPS, type JourneyState } from "@/lib/journey";
 import type { Language } from "@/lib/language";
 import { midSeasonForState, slowSalesView } from "@/lib/results";
 import { dayLabel } from "@/lib/plain";
-import { CHOICE_LINE, SINGLE_CHOICE_LINE, UNCOVERED_TITLE, buildHeroPlan, compareRows, dayByDay, forecastSaving, planChoiceCards, type HeroPlan, type PlanCard } from "@/lib/plain";
+import { CANCEL_NOTE, CHOICE_LINE, SINGLE_CHOICE_LINE, UNCOVERED_TITLE, buildHeroPlan, compareRows, dayByDay, forecastSaving, planChoiceCards, type HeroPlan, type PlanCard } from "@/lib/plain";
 import { pickResult, type PlanChoice } from "@/lib/plan-choice";
 import type { AppliedWhatIf } from "@/lib/whatif";
 import AiExplanation from "./AiExplanation";
@@ -431,6 +431,7 @@ function PlanBody({
     overdraftRatePct?: number;
     chosenView?: ViewId | null;
     planChoice?: PlanChoice;
+    cancelled?: boolean;
     language?: Language;
   }) => void;
   extensionDays: number;
@@ -478,6 +479,7 @@ function PlanBody({
   return (
     <>
       <PageHeader title="Plan" crumbs={["Supplier bills"]} />
+      {state.cancelled && <Alert tone="information">{CANCEL_NOTE}</Alert>}
 
       <HeroCard
         hero={hero}
@@ -486,7 +488,7 @@ function PlanBody({
         choice={choice}
         onChoice={setPicked}
         onApprove={() => {
-          update({ chosenView: recId, planChoice: choice });
+          update({ chosenView: recId, planChoice: choice, cancelled: false });
           router.push("/approve");
         }}
         onWhy={openWhy}

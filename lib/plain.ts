@@ -254,6 +254,8 @@ export function buildHeroPlan(
 
 export interface HomeAlert {
   title: string;
+  /** "₹10,000 discount − ₹417 interest". Null when the plan takes no discount. */
+  breakdown: string | null;
   line: string;
   /** The facts under the title: the bill, the cash needed and the cost of financing. */
   facts: { label: string; value: string; caption?: string }[];
@@ -300,7 +302,9 @@ export function homeAlert(result: EngineResult, saving: number): HomeAlert {
   const due = dayLabel(view.invoice, view.invoice.dueInDays);
   const supplier = tidyName(view.invoice.supplier);
   return {
-    title: early ? `Save ${formatINR(view.discount.discountAmount)}` : `Bill due ${due}`,
+    // The headline is what the founder keeps: the discount less the interest, with both shown under it.
+    title: early ? `Save ${formatINR(saving > 0 ? saving : view.discount.discountAmount)}` : `Bill due ${due}`,
+    breakdown: early && saving > 0 ? `${formatINR(view.discount.discountAmount)} discount − ${formatINR(plan.totalCost)} interest` : null,
     line: early ? `Pay ${supplier} by ${dayLabel(view.invoice, earlyPayDay(view.invoice))}` : supplier,
     facts: [
       { label: "Bill", value: inrShort(view.invoice.amount), caption: `Due ${due}` },
@@ -595,3 +599,47 @@ export function planChoiceCards(result: EngineResult, state: { salesDropPercent:
     };
   });
 }
+
+// ---------- Who does what, and when ----------
+
+export const CANCEL_NOTE = "Payment cancelled. Nothing was paid or borrowed.";
+
+/** The first day a source was drawn, as a date. Falls back to the payment day. */
+function drawDate(view: ViewResult, id: "credit_line" | "bank_overdraft" | "early_settlement"): string {
+  const plan = view.recommended.plan;
+  return dayLabel(view.invoice, plan.sim.stats[id].firstDay ?? plan.payDay);
+}
+
+/**
+ * Approve: what Razorpay will do and what the founder has to do, only for the steps of the plan on offer.
+ * "You'll need to do" is empty when the plan needs nothing from the founder.
+ */
+export function whoDoesWhat(view: ViewResult): { razorpay: string[]; you: string[] } {
+  const plan = view.recommended.plan;
+  const step = (id: string) => plan.steps.find((s) => s.optionId === id);
+  const razorpay: string[] = [];
+  const you: string[] = [];
+  const credit = step("credit_line");
+  const instant = step("early_settlement");
+  const overdraft = step("bank_overdraft");
+  if (credit) razorpay.push(`Draw ${inrShort(credit.amount)} from your Razorpay credit line on ${drawDate(view, "credit_line")}`);
+  if (instant) razorpay.push(`Settle ${inrShort(instant.amount)} of your sales early on ${drawDate(view, "early_settlement")}`);
+  razorpay.push(`Pay ${tidyName(view.invoice.supplier)} ${inrShort(plan.payAmount)} on ${dayLabel(view.invoice, plan.payDay)}`);
+  if (overdraft) you.push(`Move ${inrShort(overdraft.amount)} from your bank overdraft into your RazorpayX account by ${drawDate(view, "bank_overdraft")}`);
+  return { razorpay, you };
+}
+
+/** True while the payment date is still ahead: the founder can cancel. Day 0 is today. */
+export function paymentIsScheduled(view: ViewResult): boolean {
+  return view.recommended.plan.payDay > 0;
+}
+
+export const timeLabels = {
+  scheduledFor: (view: ViewResult) => `Scheduled for ${dayLabel(view.invoice, view.recommended.plan.payDay)}`,
+  paidOn: (view: ViewResult) => `On ${dayLabel(view.invoice, view.recommended.plan.payDay)} (simulated)`,
+  /** Results come after the last repayment, or after the payment if nothing is repaid. */
+  daysLater: (view: ViewResult) => {
+    const plan = view.recommended.plan;
+    return `Simulated: ${plan.closedDay ?? plan.payDay} days later`;
+  },
+};

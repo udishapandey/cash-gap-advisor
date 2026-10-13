@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { defaultInvoice } from "./data/default-scenario";
 import { merchant } from "./data/merchant";
@@ -5,7 +6,7 @@ import { SAMPLE_BILLS } from "./data/sample-bills";
 import { runEngine } from "./engine";
 import { parseConfirmed, toEngineInvoice, toFormValues } from "./invoice-extraction";
 import { DEFAULT_JOURNEY, buildKfs, canApprove, needsCreditConsent, parseJourney, splitPlan, supplierPayment, tenureDays } from "./journey";
-import { buildHeroPlan, planChoiceCards } from "./plain";
+import { CANCEL_NOTE, buildHeroPlan, homeAlert, paymentIsScheduled, planChoiceCards, timeLabels, whoDoesWhat } from "./plain";
 import { canChooseDueDate, pickPlan, pickResult } from "./plan-choice";
 import { outcomeForState } from "./results";
 
@@ -109,5 +110,76 @@ describe("the saved choice", () => {
     expect(DEFAULT_JOURNEY.planChoice).toBe("recommended");
     expect(parseJourney({ ...DEFAULT_JOURNEY, planChoice: "due_date" }).planChoice).toBe("due_date");
     expect(parseJourney({ ...DEFAULT_JOURNEY, planChoice: "something else" }).planChoice).toBe("recommended");
+  });
+});
+
+describe("who does what on Approve", () => {
+  const r = bill1();
+  it("the recommended plan: Razorpay draws the credit and pays the supplier, the founder moves the overdraft", () => {
+    expect(whoDoesWhat(pickPlan(r.recommended, "recommended"))).toEqual({
+      razorpay: ["Draw ₹1.31L from your Razorpay credit line on 21 Oct", "Pay Shree Ganesh Footwear ₹4.90L on 21 Oct"],
+      you: ["Move ₹1.00L from your bank overdraft into your RazorpayX account by 21 Oct"],
+    });
+  });
+  it("paying on the due date: Razorpay pays the supplier and the founder has nothing to do", () => {
+    expect(whoDoesWhat(pickPlan(r.recommended, "due_date"))).toEqual({
+      razorpay: ["Pay Shree Ganesh Footwear ₹5.00L on 10 Nov"],
+      you: [],
+    });
+  });
+  it("lists no credit or overdraft row when the plan uses none (bill 2, cash only)", () => {
+    const who = whoDoesWhat(bill2().recommended);
+    expect(who.razorpay).toEqual(["Pay Kaveri Soles & Uppers ₹2.66L on 29 Oct"]);
+    expect(who.you).toEqual([]);
+  });
+});
+
+describe("time labels and cancelling", () => {
+  const r = bill1();
+  it("Approve says when it is scheduled for, the paid screen says it is simulated, Results says how many days later", () => {
+    const v = pickPlan(r.recommended, "recommended");
+    expect(timeLabels.scheduledFor(v)).toBe("Scheduled for 21 Oct");
+    expect(timeLabels.paidOn(v)).toBe("On 21 Oct (simulated)");
+    expect(timeLabels.daysLater(v)).toBe("Simulated: 18 days later");
+    expect(timeLabels.daysLater(pickPlan(r.recommended, "due_date"))).toBe("Simulated: 30 days later");
+  });
+  it("a payment dated after today can be cancelled", () => {
+    expect(paymentIsScheduled(r.recommended)).toBe(true);
+    expect(CANCEL_NOTE).toBe("Payment cancelled. Nothing was paid or borrowed.");
+  });
+  it("Cancel scheduled payment is on the approval step and on the paid step, and sends the founder back to the plan with the note", () => {
+    const a = readFileSync("components/ApproveScreen.tsx", "utf8");
+    expect(a.match(/Cancel scheduled payment/g)).toHaveLength(2);
+    expect(a).toContain('router.push("/options")');
+    expect(a).toContain("update({ approved: false, paid: false, chosenView: null, cancelled: true })");
+    const o = readFileSync("components/OptionsScreen.tsx", "utf8");
+    expect(o).toContain("{state.cancelled && <Alert");
+    expect(o).toContain("CANCEL_NOTE");
+    expect(readFileSync("components/ResultsScreen.tsx", "utf8")).toContain("timeLabels.daysLater(chosen)");
+  });
+});
+
+describe("the cancelled note is saved with the journey", () => {
+  it("is off to begin with, survives a reload, and is cleared by a new bill or a changed number", () => {
+    expect(DEFAULT_JOURNEY.cancelled).toBe(false);
+    expect(parseJourney({ ...DEFAULT_JOURNEY, cancelled: true }).cancelled).toBe(true);
+    expect(parseJourney({ ...DEFAULT_JOURNEY, cancelled: "yes" }).cancelled).toBe(false);
+    const p = readFileSync("components/JourneyProvider.tsx", "utf8");
+    expect(p.match(/cancelled: false/g)!.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("the Home headline", () => {
+  it("is the net saving with its working: ₹9,583 = ₹10,000 discount − ₹417 interest, the same figures as the Plan", () => {
+    const r = bill1();
+    const a = homeAlert(r, 9_583);
+    expect(a.title).toBe("Save ₹9,583");
+    expect(a.breakdown).toBe("₹10,000 discount − ₹417 interest");
+    const hero = buildHeroPlan(r, r.recommendedView, 9_583);
+    expect([hero.discount, hero.totalCost, hero.saving]).toEqual([10_000, 417, 9_583]);
+  });
+  it("has no breakdown when no discount is taken", () => {
+    const r = runEngine({ merchant, invoice: defaultInvoice, salesDropPercent: 10 });
+    expect(homeAlert(r, 0).breakdown).toBeNull();
   });
 });

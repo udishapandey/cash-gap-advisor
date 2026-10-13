@@ -77,7 +77,8 @@ describe("Home alert", () => {
   const r = runDefault();
   const a = homeAlert(r, forecastSaving(r, r.recommendedView, state()));
   it("has the title, the line and the mini plan as written", () => {
-    expect(a.title).toBe("Save ₹10,000");
+    expect(a.title).toBe("Save ₹9,583");
+    expect(a.breakdown).toBe("₹10,000 discount − ₹417 interest");
     expect(a.line).toBe("Pay Shree Ganesh Footwear by 21 Oct");
     expect(a.facts).toEqual([
       { label: "Bill", value: "₹5.00L", caption: "Due 10 Nov" },

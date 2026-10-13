@@ -70,14 +70,14 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
   }, [state, ready]);
 
   const setInvoice = useCallback((invoice: Invoice, notes: string[]) => {
-    setState((prev) => ({ ...prev, invoice, notes, chosenView: null, planChoice: "recommended", approved: false, paid: false }));
+    setState((prev) => ({ ...prev, invoice, notes, chosenView: null, planChoice: "recommended", cancelled: false, approved: false, paid: false }));
   }, []);
 
   const clearInvoice = useCallback(() => {
     setState((prev) =>
       prev.invoice === null && prev.chosenView === null
         ? prev
-        : { ...prev, invoice: null, notes: [], chosenView: null, planChoice: "recommended", approved: false, paid: false },
+        : { ...prev, invoice: null, notes: [], chosenView: null, planChoice: "recommended", cancelled: false, approved: false, paid: false },
     );
   }, []);
 
@@ -85,7 +85,7 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
     setState((prev) => {
       const next = { ...prev, ...patch };
       const numbersChanged = INPUT_KEYS.some((k) => k in patch && patch[k] !== prev[k]);
-      return numbersChanged ? { ...next, chosenView: null, planChoice: "recommended", approved: false, paid: false } : next;
+      return numbersChanged ? { ...next, chosenView: null, planChoice: "recommended", cancelled: false, approved: false, paid: false } : next;
     });
   }, []);
 

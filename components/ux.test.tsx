@@ -92,6 +92,9 @@ describe("the copy, as written", () => {
     expect(f).toContain('target="_blank"');
     expect(f).toContain('showExtraction(emptyExtraction(), "manual")');
   });
+  it("The slow-sales line is hidden when the plan already pays on the due date", () => {
+    expect(read("components/OptionsScreen.tsx")).toContain('recView.recommended.timing === "pay_early_for_discount"');
+  });
   it("Confirm bill shows a green check for a second, then opens Cash gap by itself, which says it is checking once", () => {
     const f = read("components/InvoiceFlow.tsx");
     expect(f).toContain("setAdvancing(true)");

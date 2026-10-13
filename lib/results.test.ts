@@ -84,9 +84,9 @@ describe("the slow-sales note on the Plan screen", () => {
   const date = (d: number) => dayLabel(sampleInvoice, d);
   const v = slowSalesView(midSeasonForState(run(), state())!, date);
   it("is four short lines from the engine's re-run", () => {
-    expect(v.statusLine).toBe("! If sales are 15% lower, pay on the due date instead");
+    expect(v.statusLine).toBe("↻ We'll re-check your sales before paying. If they're running 15% lower, we'll switch you to paying on the due date.");
     expect(v).toEqual({
-      statusLine: "! If sales are 15% lower, pay on the due date instead",
+      statusLine: "↻ We'll re-check your sales before paying. If they're running 15% lower, we'll switch you to paying on the due date.",
       salesLine: "Sales 15% below forecast",
       gapLine: "Expected gap: ₹2.31L → ₹3.48L",
       recommendation: "Don't pay early. Pay on 10 Nov instead.",

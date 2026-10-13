@@ -155,7 +155,7 @@ export function slowSalesView(m: MidSeason, date: (day: number) => string) {
   const miss = Math.round(Math.abs(m.vsForecastPercent));
   return {
     /** The one line shown while the section is closed. */
-    statusLine: m.stillWorthIt ? `✓ Still safe if sales are ${miss}% lower` : `! If sales are ${miss}% lower, pay on the due date instead`,
+    statusLine: m.stillWorthIt ? `✓ Still safe if sales are ${miss}% lower` : `↻ We'll re-check your sales before paying. If they're running ${miss}% lower, we'll switch you to paying on the due date.`,
     salesLine: `Sales ${miss}% ${m.vsForecastPercent < 0 ? "below" : "above"} forecast`,
     gapLine: `Expected gap: ${inrShort(m.forecastGap)} → ${inrShort(m.updatedGap)}`,
     recommendation: m.stillWorthIt ? "Paying early still works." : `Don't pay early. Pay on ${date(m.due.payDay)} instead.`,

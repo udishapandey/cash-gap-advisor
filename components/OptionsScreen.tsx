@@ -426,7 +426,7 @@ function PlanBody({
         onWhy={openWhy}
       />
 
-      {hero.covered && slow && (
+      {hero.covered && slow && recView.recommended.timing === "pay_early_for_discount" && (
         <Disclosure title={slowSalesView(slow, (day) => dayLabel(recView.invoice, day)).statusLine}>
           <SlowSales view={slowSalesView(slow, (day) => dayLabel(recView.invoice, day))} />
         </Disclosure>

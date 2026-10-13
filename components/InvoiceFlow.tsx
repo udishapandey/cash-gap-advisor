@@ -373,7 +373,6 @@ export default function InvoiceFlow() {
     return () => clearInterval(id);
   }, [reading]);
 
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const FIELD_LABEL: Record<FieldKey, string> = {
     supplierName: "Supplier",
     invoiceNumber: "Invoice number",
@@ -386,9 +385,9 @@ export default function InvoiceFlow() {
     earlyPaymentDiscountPercent: "Discount (%)",
     earlyPaymentDiscountDays: "Pay within (days)",
   };
-  // Shown by default: who, how much, when, and the discount. The rest is under "View bill details".
-  const MAIN: FieldKey[] = ["supplierName", "totalAmount", "dueDate", "earlyPaymentDiscountPercent", "earlyPaymentDiscountDays"];
-  const MORE: FieldKey[] = ["invoiceNumber", "invoiceDate", "quantity", "unitPrice", "lateFeePercentPerMonth"];
+  // Two boxes side by side: who sent the bill, and what it says about paying. Every field stays editable.
+  const SUPPLIER: FieldKey[] = ["supplierName", "invoiceNumber", "invoiceDate", "quantity", "unitPrice"];
+  const TERMS: FieldKey[] = ["totalAmount", "earlyPaymentDiscountPercent", "earlyPaymentDiscountDays", "dueDate", "lateFeePercentPerMonth"];
 
   /** One field: its label, the input and a small status. Confident reads get a quiet tick; unclear or missing ones are flagged. */
   const renderField = (key: FieldKey) => {
@@ -408,9 +407,9 @@ export default function InvoiceFlow() {
             {meta.required && <span className="text-red-600"> *</span>}
           </label>
           {missing ? (
-            <Badge tone="negative">Missing</Badge>
+            <Badge tone="notice">Please check</Badge>
           ) : unclear ? (
-            <Badge tone="notice">Needs review</Badge>
+            <Badge tone="notice">Please check</Badge>
           ) : isEdited ? (
             <Badge tone="neutral">Edited</Badge>
           ) : source !== "manual" ? (
@@ -436,9 +435,6 @@ export default function InvoiceFlow() {
     );
   };
 
-  const needsLook = (key: FieldKey) =>
-    !!extraction && source !== "manual" && !edited[key] && (extraction[key].value === null || extraction[key].confidence !== "high");
-  const detailsNeedLook = !!extraction && MORE.some((k) => formErrors[k] || needsLook(k));
   const anyToCheck =
     !!extraction && source !== "manual" && FIELDS.some((m) => !edited[m.key] && (extraction[m.key].value === null || extraction[m.key].confidence !== "high"));
 
@@ -562,16 +558,21 @@ export default function InvoiceFlow() {
             </Panel>
           )}
 
-          <Card aria-label="Bill">
-            <SectionLabel>Bill</SectionLabel>
-            <div className="mt-3 grid gap-4 sm:grid-cols-2 md:grid-cols-3">{MAIN.map((k) => renderField(k))}</div>
-          </Card>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card aria-label="Supplier">
+              <SectionLabel>Supplier</SectionLabel>
+              <div className="mt-3 space-y-4">{SUPPLIER.map((k) => renderField(k))}</div>
+            </Card>
+            <Card aria-label="Payment terms">
+              <SectionLabel>Payment terms</SectionLabel>
+              <div className="mt-3 space-y-4">{TERMS.map((k) => renderField(k))}</div>
+              <p className="mt-3 text-xs text-muted">{LATE_FEE_LAW}</p>
+            </Card>
+          </div>
 
-          <Disclosure title="View bill details" open={detailsOpen || detailsNeedLook} onOpenChange={setDetailsOpen}>
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">{MORE.map((k) => renderField(k))}</div>
-            <p className="mt-3 text-xs text-muted">{LATE_FEE_LAW}</p>
-            {source !== "manual" && (
-              <div className="mt-5 overflow-x-auto">
+          {source !== "manual" && (
+            <Disclosure title="How AI read this bill">
+              <div className="overflow-x-auto">
                 <table className="w-full min-w-[26rem] text-sm">
                   <thead>
                     <tr className="border-b border-line text-xs text-muted">
@@ -591,8 +592,8 @@ export default function InvoiceFlow() {
                   </tbody>
                 </table>
               </div>
-            )}
-          </Disclosure>
+            </Disclosure>
+          )}
 
           <div className="flex flex-wrap items-center gap-4">
             {advancing ? (

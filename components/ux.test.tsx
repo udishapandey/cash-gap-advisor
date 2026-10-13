@@ -60,15 +60,22 @@ describe("the copy, as written", () => {
     has("lib/plain.ts", "Save ${formatINR(", "Cash needed", "Financing cost", "Bill due", "Overdraft", "Razorpay credit");
   });
   it("Bill", () => {
-    has("components/InvoiceFlow.tsx", "Upload supplier bill", "We found an early-payment opportunity", "View bill details", "Confirm bill", "Extracted automatically", "Needs review", "Missing", "Read again with AI", "Read by AI earlier");
+    has("components/InvoiceFlow.tsx", "Upload supplier bill", "We found an early-payment opportunity", "How AI read this bill", "Confirm bill", "Extracted automatically", "Please check", "Supplier", "Payment terms", "Read again with AI", "Read by AI earlier");
     expect(read("components/InvoiceFlow.tsx")).not.toContain("Evidence:");
     expect(read("components/InvoiceFlow.tsx")).not.toMatch(/Check what the AI read|The AI reads it/);
     has("lib/plain.ts", "We don't store your bill. It is shared with our AI provider only to read it.", "can charge late interest of 3x the RBI bank rate, compounded monthly.", "Save ${formatINR(off)}");
   });
-  it("Bill shows only supplier, total, due date and the discount by default; the rest is under 'View bill details'", () => {
+  it("Bill: two boxes side by side, Supplier and Payment terms, every field editable, and the confidence table collapsed at the bottom", () => {
     const f = read("components/InvoiceFlow.tsx");
-    expect(f).toContain('const MAIN: FieldKey[] = ["supplierName", "totalAmount", "dueDate", "earlyPaymentDiscountPercent", "earlyPaymentDiscountDays"]');
-    expect(f).toContain('const MORE: FieldKey[] = ["invoiceNumber", "invoiceDate", "quantity", "unitPrice", "lateFeePercentPerMonth"]');
+    expect(f).toContain('const SUPPLIER: FieldKey[] = ["supplierName", "invoiceNumber", "invoiceDate", "quantity", "unitPrice"]');
+    expect(f).toContain('const TERMS: FieldKey[] = ["totalAmount", "earlyPaymentDiscountPercent", "earlyPaymentDiscountDays", "dueDate", "lateFeePercentPerMonth"]');
+    expect(f).toContain("md:grid-cols-2");
+    expect(f).toContain('<Disclosure title="How AI read this bill">'); // closed by default
+    expect(f).not.toContain("View bill details");
+    expect(f.indexOf("Payment terms")).toBeLessThan(f.indexOf("How AI read this bill"));
+    // A missing or unclear field is flagged in its own box: amber outline and "Please check".
+    expect(f).toContain("border-amber-300");
+    expect(f).not.toMatch(/Needs review|>Missing</);
     // The sample bill loads the saved reading, with no AI call.
     expect(f).toContain("onClick={usePreReadSample}");
   });

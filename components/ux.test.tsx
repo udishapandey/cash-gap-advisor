@@ -107,7 +107,7 @@ describe("the copy, as written", () => {
     has("lib/plain.ts", "To pay early, you'd be", "short for", "This estimate combines expected sales, settlements, COD cash and upcoming outflows.", "Includes ${formatINR(", "safety buffer", "needs no borrowing.", '"Forecast"', "Low confidence", "Cash available", "Cash going out", "Discount deadline", "Festive uplift", "COD share", "COD timing", "Returns", "Settlement timing", "Connected banking", "Store and courier data", "Entered by you");
   });
   it("Plan", () => {
-    has("components/OptionsScreen.tsx", "Recommended plan", "Net benefit", "Supplier discount", "Financing cost", "Review &amp; approve", "Why this plan?", "What if sales are lower?", "Ask for more days", "Get call script", '"Compare options"', '"What if sales change"', "Source", "Amount", "Repaid by");
+    has("components/OptionsScreen.tsx", "Recommended plan", "Net benefit", "Supplier discount", "Financing cost", "Review &amp; approve", "Why this plan?", "slowSalesView(slow", "Ask for more days", "Get call script", '"Compare options"', '"What if sales change"', "Source", "Amount", "Repaid by");
     has("lib/plain.ts", "No cost unless used.", "Net benefit ${formatINR(saving)}", "Your cash", "Your bank overdraft", "Razorpay credit line", "Loans are repaid as sales money arrives.", "Rates are illustrative. Final terms are in your Key Fact Statement.", "Not needed. Overdraft costs less.");
     expect(read("lib/plain.ts")).not.toMatch(/54\.75|annualis/i);
   });

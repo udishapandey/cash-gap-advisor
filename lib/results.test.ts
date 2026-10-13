@@ -84,7 +84,9 @@ describe("the slow-sales note on the Plan screen", () => {
   const date = (d: number) => dayLabel(sampleInvoice, d);
   const v = slowSalesView(midSeasonForState(run(), state())!, date);
   it("is four short lines from the engine's re-run", () => {
+    expect(v.statusLine).toBe("! If sales are 15% lower, pay on the due date instead");
     expect(v).toEqual({
+      statusLine: "! If sales are 15% lower, pay on the due date instead",
       salesLine: "Sales 15% below forecast",
       gapLine: "Expected gap: ₹2.31L → ₹3.48L",
       recommendation: "Don't pay early. Pay on 10 Nov instead.",
@@ -165,5 +167,12 @@ describe("signed rupees", () => {
   it("puts the minus in front of the sign", () => {
     expect(formatSignedINR(-7942)).toBe("−₹7,942");
     expect(formatSignedINR(0)).toBe("₹0");
+  });
+});
+
+describe("the slow-sales status line when the plan stays safe", () => {
+  it("reads as a tick, from the engine's own verdict", () => {
+    const m = midSeasonForState(run(), state())!;
+    expect(slowSalesView({ ...m, stillWorthIt: true }, (d) => dayLabel(sampleInvoice, d)).statusLine).toBe("✓ Still safe if sales are 15% lower");
   });
 });

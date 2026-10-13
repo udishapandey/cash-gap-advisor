@@ -427,7 +427,7 @@ function PlanBody({
       />
 
       {hero.covered && slow && (
-        <Disclosure title="What if sales are lower?">
+        <Disclosure title={slowSalesView(slow, (day) => dayLabel(recView.invoice, day)).statusLine}>
           <SlowSales view={slowSalesView(slow, (day) => dayLabel(recView.invoice, day))} />
         </Disclosure>
       )}

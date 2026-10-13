@@ -154,6 +154,13 @@ All three are made up and carry a "synthetic" notice. If the AI is busy, each lo
 
 Note: The 'What if sales are lower?' check is deliberately cautious. It only recommends paying early if your unused credit limits would cover a low-sales case all the way to the due date. For bills with long due dates (e.g. sample bill 2), it may say 'pay on the due date' even when paying early costs very little. A future version would weigh the size of the risk, not just yes or no.
 
+## What's next
+
+- Hindi and regional languages next, through RAY (Razorpay's assistant, which already supports English and Hindi).
+- Real forecasts from the merchant's own Razorpay settlement and COD data, replacing the simulated forecast.
+- A re-check before every scheduled payment, with an alert if the plan changes.
+- Bank balances and overdraft limits via Account Aggregator (bank data shared with the merchant's consent), instead of typing them in.
+
 ## How to run
 
 ```bash

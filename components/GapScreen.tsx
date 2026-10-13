@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import type { GapResult, ScenarioResult } from "@/lib/engine/gap";
 import { ESTIMATE_LINE, gapView } from "@/lib/plain";
 import { formatINR } from "@/lib/format";
+import { CHECKING_KEY } from "@/lib/journey";
 import Disclosure from "./Disclosure";
-import JourneyShell from "./JourneyShell";
+import JourneyShell, { type ShellContext } from "./JourneyShell";
 import NumberField from "./NumberField";
 import RangeBar from "./RangeBar";
 import Tabs from "./Tabs";
@@ -69,9 +71,35 @@ function Table({ rows, cols }: { rows: Row[]; cols: readonly (readonly [string, 
 }
 
 export default function GapScreen() {
-  return (
-    <JourneyShell step="gap">
-      {({ state, result, update }) => {
+  return <JourneyShell step="gap">{(ctx) => <GapBody {...ctx} />}</JourneyShell>;
+}
+
+/** "Confirm bill" hands over here: for about a second the screen says it is checking, once, then shows the answer. */
+function GapBody({ state, result, update, invoice }: ShellContext) {
+  const [checking, setChecking] = useState<"unknown" | "yes" | "no">("unknown");
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    queueMicrotask(() => {
+      let fromConfirm = false;
+      try {
+        fromConfirm = sessionStorage.getItem(CHECKING_KEY) === "1";
+        sessionStorage.removeItem(CHECKING_KEY);
+      } catch {}
+      if (!fromConfirm) return setChecking("no");
+      setChecking("yes");
+      timer = setTimeout(() => setChecking("no"), 1000);
+    });
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (checking !== "no") {
+    return (
+      <p role="status" className="flex items-center gap-2 text-sm text-muted">
+        <span aria-hidden className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+        {checking === "yes" ? `Checking your cash for the next ${invoice.dueInDays} days…` : "Loading…"}
+      </p>
+    );
+  }
         const view = gapView(result);
         const gap = result.recommended.focusGap;
         return (
@@ -175,10 +203,8 @@ export default function GapScreen() {
             </div>
           </>
         );
-      }}
-    </JourneyShell>
-  );
 }
+
 
 const cols = (gap: GapResult) =>
   [

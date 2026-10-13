@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { Invoice } from "@/lib/data/invoice";
 import { SAMPLE_BILLS, savedReadingFor } from "@/lib/data/sample-bills";
 import { shrinkImage } from "@/lib/image-resize";
+import { CHECKING_KEY } from "@/lib/journey";
 import { hashBytes, readCached, writeCached } from "@/lib/extraction-cache";
 import {
   FIELDS,
@@ -97,6 +98,19 @@ export default function InvoiceFlow() {
   const [elapsed, setElapsed] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const lastIsSample = useRef(false);
+  const router = useRouter();
+  /** True for the second after "Confirm bill": a green check, then the Cash gap screen opens by itself. */
+  const [advancing, setAdvancing] = useState(false);
+  useEffect(() => {
+    if (!advancing) return;
+    const timer = setTimeout(() => {
+      try {
+        sessionStorage.setItem(CHECKING_KEY, "1");
+      } catch {}
+      router.push("/gap");
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [advancing, router]);
   /** The badge for a saved sample reading: "Read by AI earlier" for bill 1, "Saved reading" for bill 2. */
   const [savedBadge, setSavedBadge] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -325,6 +339,7 @@ export default function InvoiceFlow() {
     setFormErrors({});
     setConfirmed({ invoice: mapped.invoice, notes: mapped.notes });
     setInvoice(mapped.invoice, mapped.notes);
+    setAdvancing(true);
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ extraction, values, edited, source }));
     } catch {
@@ -580,13 +595,15 @@ export default function InvoiceFlow() {
           </Disclosure>
 
           <div className="flex flex-wrap items-center gap-4">
-            {confirmed ? (
-              <>
-                <Link href="/gap" className={BTN.primary}>
-                  See cash gap
-                </Link>
-                <Badge tone="positive">Bill confirmed</Badge>
-              </>
+            {advancing ? (
+              <p role="status" className="flex items-center gap-2 text-sm font-medium text-green-700">
+                <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-full bg-green-600 text-xs text-white">
+                  ✓
+                </span>
+                Bill confirmed
+              </p>
+            ) : confirmed ? (
+              <Badge tone="positive">Bill confirmed</Badge>
             ) : (
               <button type="button" onClick={confirm} disabled={reading} className={BTN.primary}>
                 Confirm bill

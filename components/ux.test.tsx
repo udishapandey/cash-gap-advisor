@@ -85,6 +85,16 @@ describe("the copy, as written", () => {
     expect(f).toContain('target="_blank"');
     expect(f).toContain('showExtraction(emptyExtraction(), "manual")');
   });
+  it("Confirm bill shows a green check for a second, then opens Cash gap by itself, which says it is checking once", () => {
+    const f = read("components/InvoiceFlow.tsx");
+    expect(f).toContain("setAdvancing(true)");
+    expect(f).toContain('router.push("/gap")');
+    expect(f).toContain("}, 1000)");
+    expect(f).not.toContain("See cash gap");
+    const g = read("components/GapScreen.tsx");
+    expect(g).toContain("Checking your cash for the next ${invoice.dueInDays} days…");
+    expect(g).toContain("CHECKING_KEY");
+  });
   it("Cash gap", () => {
     has("components/GapScreen.tsx", "Expected shortfall", "How we estimated this", "Other available cash", "See cheapest plan", "ESTIMATE_LINE", '"Low sales"', '"Expected"', '"High sales"');
     has("lib/plain.ts", "To pay early, you'd be", "short for", "This estimate combines expected sales, settlements, COD cash and upcoming outflows.", "Includes ${formatINR(", "safety buffer", "needs no borrowing.", '"Forecast"', "Low confidence", "Cash available", "Cash going out", "Discount deadline", "Festive uplift", "COD share", "COD timing", "Returns", "Settlement timing", "Connected banking", "Store and courier data", "Entered by you");

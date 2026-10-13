@@ -22,6 +22,9 @@ export const STEPS = [
 ] as const;
 export type StepId = (typeof STEPS)[number]["id"];
 
+/** Set when "Confirm bill" hands over to the Cash gap screen, so it can show a short "checking" moment once. */
+export const CHECKING_KEY = "cga.checking.v1";
+
 export const SALES_DROPS = [0, 10, 20, 30] as const;
 
 // ---------- Shared state ----------

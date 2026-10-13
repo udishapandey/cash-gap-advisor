@@ -24,15 +24,15 @@ describe("simulated merchant data", () => {
     expect(monthly).toBeLessThan(3_200_000);
   });
 
-  it("is about 60% prepaid and 40% COD", () => {
-    expect(prepaid / total).toBeCloseTo(0.6, 1);
+  it("is about 55% prepaid and 45% COD", () => {
+    expect(prepaid / total).toBeCloseTo(0.55, 1);
   });
 
   it("matches the brief's headline numbers", () => {
     expect(merchant.bankBalance).toBe(150_000);
     expect(merchant.settlementDays).toBe(2);
-    expect(merchant.codPayoutDelayDays).toEqual({ min: 5, max: 9 });
-    expect(merchant.codReturnRate).toBe(0.2);
+    expect(merchant.codPayoutDelayDays).toEqual({ min: 12, max: 13 });
+    expect(merchant.codReturnRate).toBe(0.3);
   });
 
   it("shows last year's Diwali uplift of ~1.4x, same as the expected scenario", () => {
@@ -43,9 +43,9 @@ describe("simulated merchant data", () => {
 
   it("has the sample invoice from the brief", () => {
     expect(sampleInvoice.amount).toBe(500_000);
-    expect(sampleInvoice.dueInDays).toBe(10);
+    expect(sampleInvoice.dueInDays).toBe(30);
     expect(sampleInvoice.earlyPayDiscountPct).toBe(2);
-    expect(sampleInvoice.earlyPayWithinDays).toBe(7);
+    expect(sampleInvoice.earlyPayWithinDays).toBe(10);
     expect(sampleInvoice.lateFeePctPerMonth).toBe(1.5);
   });
 });

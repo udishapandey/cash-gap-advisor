@@ -1,132 +1,131 @@
 import { describe, expect, it } from "vitest";
+import { defaultInvoice } from "../data/default-scenario";
 import { merchant } from "../data/merchant";
-import { sampleInvoice } from "../data/invoice";
+import { CONFIG } from "./config";
 import { runEngine, runWhatIf } from "./index";
+import { standbyFor } from "./standby";
 
-const run = (drop = 0, extra = {}) => runEngine({ merchant, invoice: sampleInvoice, salesDropPercent: drop, ...extra });
-const DROPS = [0, 10, 20, 30];
-const CONFIRMED = ["early_settlement", "credit_line", "bank_overdraft", "split_order"];
+const demo = () => runEngine({ merchant, invoice: defaultInvoice });
 
-describe("recommended plan uses confirmed sources only", () => {
-  it.each(DROPS)("fully covers the gap at -%i% in both views, with no supplier extension", (drop) => {
-    const r = run(drop);
-    for (const view of [r.views.keepFull, r.views.rightSized]) {
-      const plan = view.recommended.plan;
-      expect(plan.fullyCovered).toBe(true);
-      expect(plan.steps.length).toBeGreaterThan(0);
-      for (const step of plan.steps) {
-        expect(CONFIRMED).toContain(step.optionId);
-        expect(step.optionId as string).not.toBe("supplier_extension");
-      }
+describe("the demo plan (₹5L bill, 2/10 net 30)", () => {
+  const view = demo().recommended;
+  const plan = view.recommended.plan;
+  const step = (id: string) => plan.steps.find((s) => s.optionId === id);
+
+  it("pays early on day 10 for the discount", () => {
+    expect(view.recommended.timing).toBe("pay_early_for_discount");
+    expect(plan.payDay).toBe(10);
+    expect(plan.payAmount).toBe(490_000);
+    expect(view.discount.discountAmount).toBe(10_000);
+    expect(view.discount.worthIt).toBe(true);
+  });
+
+  it("finds a gap of about ₹2.3L, as a range", () => {
+    expect(view.focusGap.gapExpected).toBe(230_900);
+    expect(view.focusGap.gapMin).toBe(96_500);
+    expect(view.focusGap.gapMax).toBe(365_300);
+  });
+
+  it("uses own cash first, then the overdraft, then the credit line; never instant settlement", () => {
+    expect(step("own_cash")?.amount).toBe(259_100);
+    expect(step("bank_overdraft")).toMatchObject({ amount: 100_000, days: 8, cost: 208, closedDay: 18 });
+    expect(step("credit_line")).toMatchObject({ amount: 130_900, days: 5, cost: 209, closedDay: 15 });
+    expect(step("early_settlement")).toBeUndefined();
+  });
+
+  it("costs the sum of its steps: ₹417", () => {
+    expect(plan.totalCost).toBe(417);
+    expect(plan.steps.reduce((t, s) => t + s.cost, 0)).toBe(417);
+  });
+
+  it("the plan covers the gap, and the borrowed amount is the overdraft plus the credit line", () => {
+    expect(plan.fullyCovered).toBe(true);
+    expect(view.loan).toBe(230_900);
+    expect(plan.ownCash + plan.borrowed).toBe(plan.steps.reduce((t, s) => t + s.amount, 0));
+  });
+
+  it("keeps the unused credit as backup, and the low-sales case stays covered", () => {
+    const sb = standbyFor(view);
+    expect(sb.unusedCredit).toBe(169_100);
+    expect(sb.lowSalesCovered).toBe(true);
+  });
+
+  it("compares against paying on the due date with no discount: that default costs nothing here", () => {
+    expect(view.defaultPlan.totalCost).toBe(0);
+    expect(view.discount.netSaving).toBe(9_583);
+  });
+});
+
+describe("pay early only if it is worth it and safe", () => {
+  it("never pays early when the discount is smaller than the extra cost", () => {
+    const stingy = runEngine({ merchant, invoice: { ...defaultInvoice, earlyPayDiscountPct: 0.01 } }).recommended;
+    expect(stingy.recommended.timing).toBe("on_due_date");
+  });
+  it("pays on the due date when there is no discount at all", () => {
+    const none = runEngine({ merchant, invoice: { ...defaultInvoice, earlyPayDiscountPct: 0 } }).recommended;
+    expect(none.recommended.timing).toBe("on_due_date");
+    expect(none.recommended.plan.payDay).toBe(defaultInvoice.dueInDays);
+  });
+  it("always recommends the whole order: ordering fewer pairs is not part of paying the supplier", () => {
+    for (const d of [0, 10, 20, 30]) expect(runEngine({ merchant, invoice: defaultInvoice, salesDropPercent: d }).recommendedView).toBe("keep_full");
+  });
+});
+
+describe("repayment is day by day, not a fixed term", () => {
+  it("each loan is repaid on the day cash allows, and interest is only for the days used", () => {
+    const plan = demo().recommended.recommended.plan;
+    for (const s of plan.steps.filter((x) => x.isBorrowing)) {
+      expect(s.closedDay).not.toBeNull();
+      expect(s.days).toBeLessThan(30);
     }
   });
-
-  it("the extension is never in the confirmed total", () => {
-    const plan = run(0).recommended.recommended.plan;
-    const stepsTotal = plan.steps.reduce((s, x) => s + x.amount, 0);
-    expect(plan.covered).toBe(stepsTotal);
-    expect(plan.covered).toBe(plan.gap); // fully covered without any extension
+  it("interest is the rate x amount x days / 365 on the closing debt (overdraft 11%)", () => {
+    const od = demo().recommended.recommended.plan.steps.find((s) => s.optionId === "bank_overdraft")!;
+    expect(od.cost).toBeLessThanOrEqual(Math.round((od.amount * CONFIG.overdraftRatePct * (od.days ?? 0)) / 100 / 365) + 1);
+    expect(od.cost).toBeGreaterThan(0);
   });
-
-  it("asking for more days never changes the plan, however many days", () => {
-    const base = run(0, { extensionDays: 0 }).recommended.recommended.plan;
-    for (const days of [5, 15, 45]) {
-      expect(run(0, { extensionDays: days }).recommended.recommended.plan).toEqual(base);
-    }
+  it("the most expensive loan is repaid first: the credit line closes before the overdraft", () => {
+    const steps = demo().recommended.recommended.plan.steps;
+    const credit = steps.find((s) => s.optionId === "credit_line")!;
+    const od = steps.find((s) => s.optionId === "bank_overdraft")!;
+    expect(credit.closedDay!).toBeLessThan(od.closedDay!);
   });
 });
 
-describe("ask first: the supplier extension", () => {
-  it("shows how much borrowing it would remove if the supplier agrees", () => {
-    const ask = run(0).views.keepFull.askFirst;
-    expect(ask.extraDays).toBe(15);
-    expect(ask.borrowingIfPaidOnDueDate).toBeGreaterThan(0);
-    expect(ask.borrowingIfExtended).toBeLessThan(ask.borrowingIfPaidOnDueDate);
-    expect(ask.borrowingRemoved).toBe(ask.borrowingIfPaidOnDueDate - ask.borrowingIfExtended);
-    expect(ask.borrowingRemoved).toBeGreaterThan(0);
+describe("instant settlement", () => {
+  it("is a flat fee: 0.30% plus 18% GST, once per settlement", () => {
+    const fee = (CONFIG.earlySettlementFeePct * (100 + CONFIG.earlySettlementGstPct)) / 100;
+    expect(fee).toBeCloseTo(0.354, 5);
   });
-
-  it("says it removes nothing when the extra days don't help (never negative)", () => {
-    // at -30% cash goes out faster than it comes in, so waiting longer makes the gap bigger
-    const ask = run(30).views.keepFull.askFirst;
-    expect(ask.borrowingRemoved).toBe(0);
+  it("is offered up to the earned-but-unsettled sales and the ₹2L daily limit", () => {
+    const opt = demo().recommended.options.find((o) => o.id === "early_settlement")!;
+    expect(opt.maxAmount).toBeLessThanOrEqual(CONFIG.earlySettlementDailyLimit);
+    expect(opt.maxAmount).toBe(156_800);
   });
-
-  it("shows the late fee only as the cost of missing the due date", () => {
-    expect(run(0).views.keepFull.askFirst.lateFeeIfMissed).toBe(3_750);
-  });
-
-  it("uses the number of days asked for", () => {
-    const short = run(0, { extensionDays: 3 }).views.keepFull.askFirst;
-    const long = run(0, { extensionDays: 30 }).views.keepFull.askFirst;
-    expect(short.extraDays).toBe(3);
-    expect(long.lateFeeIfMissed).toBe(7_500);
-    expect(long.borrowingRemoved).toBeGreaterThanOrEqual(short.borrowingRemoved);
+  it("is not forced into the plan when the overdraft is cheaper", () => {
+    for (const d of [0, 10, 20])
+      expect(runEngine({ merchant, invoice: defaultInvoice, salesDropPercent: d }).recommended.recommended.plan.steps.some((s) => s.optionId === "early_settlement")).toBe(false);
   });
 });
 
-describe("what-if: two views", () => {
-  const rows = runWhatIf({ merchant, invoice: sampleInvoice }, DROPS);
-
-  it("(a) keep the full order: the gap grows as sales drop", () => {
-    const gaps = rows.map((r) => r.keepFull.gapExpected);
-    expect(gaps).toEqual([...gaps].sort((a, b) => a - b));
-    expect(gaps[3]).toBeGreaterThan(gaps[0]);
-    expect(rows.every((r) => r.keepFull.units === 500)).toBe(true);
+describe("what-if slider", () => {
+  const rows = runWhatIf({ merchant, invoice: defaultInvoice }, [0, 10, 20, 30]);
+  it("returns one row per drop", () => {
+    expect(rows.map((r) => r.salesDropPercent)).toEqual([0, 10, 20, 30]);
   });
-
-  it("(b) right-sized: the order shrinks as sales drop", () => {
-    const units = rows.map((r) => r.rightSized.units);
-    expect(units).toEqual([500, 468, 416, 364]);
-    expect(rows[3].rightSized.orderValue).toBe(364_000);
-  });
-
-  it("at -30% the right-sized plan borrows far less than keeping the full order", () => {
-    const r = rows[3];
-    expect(r.rightSized.loan).toBeLessThan(r.keepFull.loan);
-    // a lot less, not marginally
-    expect(r.keepFull.loan - r.rightSized.loan).toBeGreaterThan(100_000);
-  });
-
-  it("right-sizing always borrows no more than keeping the full order", () => {
-    for (const r of rows) expect(r.rightSized.loan).toBeLessThanOrEqual(r.keepFull.loan);
-  });
-
-  it("the loan grows far more slowly when the order is right-sized", () => {
-    // NOTE: with these inputs the right-sized loan at -30% is still higher than at 0%,
-    // because forecast cash-in falls by more than the order shrinks. See docs/ASSUMPTIONS.md.
-    const growth = (key: "keepFull" | "rightSized") => rows[3][key].loan - rows[0][key].loan;
-    expect(growth("rightSized")).toBeLessThan(growth("keepFull") / 2);
-  });
-
-  it("recommends (b) only when expected unsold stock is over 10% of the order", () => {
-    expect(rows.map((r) => r.recommendedView)).toEqual([
-      "keep_full", // 0% unsold
-      "keep_full", // 6.4% unsold
-      "right_sized", // 16.8% unsold
-      "right_sized", // 27.2% unsold
-    ]);
-  });
-
-  it("the recommended view is the one the engine hands back", () => {
-    expect(run(10).recommendedView).toBe("keep_full");
-    expect(run(10).recommended.id).toBe("keep_full");
-    expect(run(30).recommendedView).toBe("right_sized");
-    expect(run(30).recommended.id).toBe("right_sized");
-  });
-
-  it("with no unsold stock, both views are the same", () => {
-    const r = run(0);
-    expect(r.views.rightSized.units).toBe(r.views.keepFull.units);
-    expect(r.views.rightSized.loan).toBe(r.views.keepFull.loan);
+  it("a bad enough drop leaves some of the bill uncovered, and the engine says so", () => {
+    const bad = runEngine({ merchant, invoice: defaultInvoice, salesDropPercent: 30 }).recommended.recommended.plan;
+    expect(bad.fullyCovered).toBe(false);
+    expect(bad.uncovered).toBeGreaterThan(0);
   });
 });
 
-describe("right-sized view uses the smaller invoice", () => {
-  it("its gap is measured against the resized order", () => {
-    const r = run(30);
-    expect(r.views.rightSized.invoice.units).toBe(364);
-    expect(r.views.rightSized.invoice.amount).toBe(364_000);
-    expect(r.views.rightSized.gap.gapExpected).toBeLessThan(r.views.keepFull.gap.gapExpected);
+describe("the safety buffer", () => {
+  it("is ₹50,000 and is kept on every day of the plan when the plan is covered", () => {
+    expect(CONFIG.safetyBufferRupees).toBe(50_000);
+    const plan = demo().recommended.recommended.plan;
+    expect(plan.buffer).toBe(50_000);
+    const lowest = Math.min(...plan.sim.balanceByDay);
+    expect(lowest).toBeGreaterThanOrEqual(plan.buffer - 1);
   });
 });

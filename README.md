@@ -13,7 +13,7 @@ AI build log: [docs/AI_BUILD_LOG.md](docs/AI_BUILD_LOG.md)
 |  |  |
 |---|---|
 | **Candidate** | Udisha Pandey (Indian School of Business) |
-| **Demo video** | *Coming Tuesday* |
+| **Demo video** | https://drive.google.com/file/d/1eoj6iDOJASWkW3VOb1i1lTI9LaU8Z_CY/view?usp=sharing |
 | **Status** | Concept prototype for the Razorpay x ISB AI PM challenge. Not affiliated with Razorpay. |
 
 > **AI interprets and predicts. Code calculates and constrains. The merchant decides.**

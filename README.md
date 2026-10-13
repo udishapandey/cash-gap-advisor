@@ -2,10 +2,17 @@
 
 **Forward a supplier bill you can't fully pay, and get the cheapest way to pay it, which is sometimes not borrowing at all.**
 
+Live demo: [cash-gap-advisor-qus7-five.vercel.app](https://cash-gap-advisor-qus7-five.vercel.app/)
+
+Try it: download sample [bill 1](public/samples/invoice-clean.pdf) or [bill 2](public/samples/sample-invoice-2-kaveri-soles.pdf), upload, follow the steps.
+
+Concept prototype. All merchant data is simulated.
+
+AI build log: [docs/AI_BUILD_LOG.md](docs/AI_BUILD_LOG.md)
+
 |  |  |
 |---|---|
-| **Candidate** | Udisha Pandey (Indian School of Business) | 
-| **Live demo** | [cash-gap-advisor-qus7-git-main-razorpay-isb.vercel.app](https://cash-gap-advisor-qus7-git-main-razorpay-isb.vercel.app/) |
+| **Candidate** | Udisha Pandey (Indian School of Business) |
 | **Demo video** | *Coming Tuesday* |
 | **Status** | Concept prototype for the Razorpay x ISB AI PM challenge. Not affiliated with Razorpay. |
 
@@ -144,7 +151,7 @@ Paying ₹4,90,000 on 21 Oct instead of ₹5,00,000 on 10 Nov leaves the founder
 
 ## Try it
 
-Open the [live demo](https://cash-gap-advisor-qus7-git-main-razorpay-isb.vercel.app/) and, on the Bill screen, pick a sample bill. Each is named by its merchant and the scenario it shows, and loads its saved reading at once. You can also download the PDF and upload it.
+Open the [live demo](https://cash-gap-advisor-qus7-five.vercel.app/) and, on the Bill screen, pick a sample bill. Each is named by its merchant and the scenario it shows, and loads its saved reading at once. You can also download the PDF and upload it.
 
 - **Shree Ganesh Footwear · Borrow to pay early** ([PDF](public/samples/invoice-clean.pdf)): ₹5,00,000, 2% off within 10 days, due in 30. Paying early uses cash, an overdraft and Razorpay credit.
 - **Kaveri Soles & Uppers · Pay early from cash** ([PDF](public/samples/sample-invoice-2-kaveri-soles.pdf)): ₹2,70,000, 1.5% off within 15 days, net 45. Paying early needs no borrowing, so the plan uses cash only.

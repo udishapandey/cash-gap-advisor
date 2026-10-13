@@ -7,12 +7,12 @@
     "supplierName": "Shree Ganesh Footwear Pvt Ltd",
     "invoiceNumber": "SGF/26-27/0142",
     "invoiceDate": "2026-10-11",
-    "dueDate": "2026-10-21",
+    "dueDate": "2026-11-10",
     "totalAmount": 500000,
     "quantity": 500,
     "unitPrice": 1000,
     "earlyPaymentDiscountPercent": 2,
-    "earlyPaymentDiscountDays": 7,
+    "earlyPaymentDiscountDays": 10,
     "lateFeePercentPerMonth": 1.5
   }
 }

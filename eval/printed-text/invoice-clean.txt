@@ -5,7 +5,7 @@ Phone: 00000 00000 | accounts@example.invalid
 INVOICE
 Invoice No: SGF/26-27/0142
 Invoice date: 11 Oct 2026
-Due date: 21 Oct 2026
+Due date: 10 Nov 2026
 BILL TO
 Rahul's shoe brand
 Hyderabad, Telangana
@@ -17,5 +17,5 @@ PAYMENT DETAILS
 Bank: Synthetic Bank Ltd A/c name: Shree Ganesh Footwear Pvt Ltd
 A/c no: 0000 0000 0000 IFSC: SYNT0000000
 Authorised signatory (synthetic)
-2% discount if paid within 7 days of invoice date. Late payment charged at 1.5% per month.
+2% discount if paid within 10 days of invoice date. Late payment charged at 1.5% per month.
 Synthetic document generated for a prototype. Names, addresses and bank details are fictional.

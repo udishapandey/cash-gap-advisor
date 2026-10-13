@@ -115,6 +115,8 @@ export function changeLine(c: MidSeasonChange, date: (day: number) => string): s
   }
 }
 
+export const STILL_SAVES = "It still saves money, but if sales fall further you could run out of credit.";
+
 /** The mid-season check as the screen shows it. */
 export function midSeasonView(m: MidSeason, date: (day: number) => string) {
   const miss = Math.round(Math.abs(m.vsForecastPercent));
@@ -134,12 +136,13 @@ export function midSeasonView(m: MidSeason, date: (day: number) => string) {
     /** The updated plan for paying early, and for paying on the due date. */
     plans: [
       { label: `Pay on ${earlyDate}`, cost: formatINR(m.early.cost), saving: formatINR(Math.max(0, m.early.saving)) },
-      { label: `Pay on ${dueDate}`, cost: formatINR(m.due.cost), saving: formatINR(Math.max(0, m.due.saving)) },
+      // The due date is the comparison point, so it has a cost and no saving.
+      { label: `Pay on ${dueDate}`, cost: formatINR(m.due.cost), saving: "-" },
     ],
     verdict: m.stillWorthIt
       ? `Paying early on ${earlyDate} is still worth it.`
       : `Paying early is no longer worth it. Pay on ${dueDate} instead.`,
-    verdictWhy: m.stillWorthIt ? null : m.early.feasible ? "Slow sales would leave you short." : "The credit limits no longer cover it.",
+    verdictWhy: m.stillWorthIt ? null : m.early.feasible ? STILL_SAVES : "The credit limits no longer cover it.",
     changes: m.changes.map((c) => changeLine(c, date)),
     nothingChanges: m.nothingChanges ? "Nothing changes." : null,
   };

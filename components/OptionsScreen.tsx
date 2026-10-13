@@ -7,7 +7,7 @@ import { CONFIG } from "@/lib/engine/config";
 import { formatINR } from "@/lib/format";
 import { SALES_DROPS, type JourneyState } from "@/lib/journey";
 import type { Language } from "@/lib/language";
-import { buildHeroPlan, compareRows, dayByDay, forecastSaving, type HeroPlan } from "@/lib/plain";
+import { UNCOVERED_TITLE, buildHeroPlan, compareRows, dayByDay, forecastSaving, type HeroPlan } from "@/lib/plain";
 import type { AppliedWhatIf } from "@/lib/whatif";
 import AiExplanation from "./AiExplanation";
 import CallScriptPanel from "./CallScriptPanel";
@@ -117,9 +117,40 @@ function HeroCard({
   onApprove: () => void;
   onWhy: () => void;
 }) {
+  if (!hero.covered) {
+    return (
+      <Card aria-label="Recommended plan" className="p-6">
+        <h2 className="font-heading text-xl font-semibold">{UNCOVERED_TITLE}</h2>
+        <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm">
+          {hero.uncoveredOptions.map((o) => (
+            <li key={o}>{o}</li>
+          ))}
+        </ul>
+        {uncovered > 0 && (
+          <p role="alert" className="mt-3 text-sm text-red-700">
+            {formatINR(uncovered)} not covered
+          </p>
+        )}
+        <div className="mt-5 flex flex-wrap items-center gap-5">
+          <button
+            type="button"
+            disabled
+            onClick={onApprove}
+            className="rounded-md bg-brand px-6 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Review &amp; approve
+          </button>
+          <button type="button" onClick={onWhy} className="text-sm font-medium text-brand-text hover:underline">
+            Why this plan
+          </button>
+        </div>
+      </Card>
+    );
+  }
   return (
     <Card aria-label="Recommended plan" className="p-6">
       <h2 className="font-heading text-xl font-semibold">{hero.title}</h2>
+      {hero.reason && <p className="mt-1 text-sm text-muted">{hero.reason}</p>}
       <p className={`mt-2 font-heading text-2xl font-semibold ${hero.saving > 0 ? "text-green-700" : "text-muted"}`}>{hero.caption}</p>
       <div
         role="img"
@@ -374,9 +405,11 @@ function PlanBody({
         </Disclosure>
       )}
 
-      <Disclosure title="How we worked this out" lazy>
-        <DayTable result={result} viewId={recId} />
-      </Disclosure>
+      {hero.covered && (
+        <Disclosure title="How we worked this out" lazy>
+          <DayTable result={result} viewId={recId} />
+        </Disclosure>
+      )}
 
       {/* Only when paying on the due date would need borrowing: otherwise there is nothing to ask for. */}
       {recView.gap.gapExpected > 0 && (

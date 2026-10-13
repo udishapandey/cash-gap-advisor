@@ -141,6 +141,12 @@ export interface HeroPlan {
   title: string;
   /** "₹9,583 better off than paying on the due date" */
   caption: string;
+  /** False when the limits cannot cover the bill: the screen then shows the options below instead of a cost table. */
+  covered: boolean;
+  /** One plain line on why the plan pays on the due date although there is a discount. Null otherwise. */
+  reason: string | null;
+  /** What the founder can do when the limits do not cover the bill. */
+  uncoveredOptions: string[];
   rows: HeroRow[];
   totalCost: number;
   /** True if the plan borrows anything. */
@@ -159,6 +165,18 @@ export interface HeroPlan {
   credit: number;
   instant: number;
   buffer: number;
+}
+
+export const UNCOVERED_TITLE = "Your limits don't cover this bill";
+const UNCOVERED_OPTIONS = ["Ask the supplier for more days", "Pay part now, the rest on {due}", "Ask your lender for a higher limit"];
+
+/** Why the plan pays on the due date when a discount was on offer. Null if it pays early, or there is no discount. */
+export function payEarlyReason(view: ViewResult): string | null {
+  if (view.recommended.timing === "pay_early_for_discount" || view.discount.discountAmount <= 0) return null;
+  const early = view.earlyPlan;
+  if (!early.fullyCovered) return "Your limits cannot cover paying early.";
+  if (!early.simLow.feasible) return "Paying early would leave you short if sales come in low.";
+  return "The discount is smaller than the extra interest.";
 }
 
 export function buildHeroPlan(
@@ -189,6 +207,9 @@ export function buildHeroPlan(
     title: early
       ? `Pay by ${dayLabel(view.invoice, plan.payDay)} and get ${formatINR(view.discount.discountAmount)} off`
       : `Pay on ${dayLabel(view.invoice, plan.payDay)}`,
+    covered: plan.fullyCovered,
+    reason: payEarlyReason(view),
+    uncoveredOptions: UNCOVERED_OPTIONS.map((o) => o.replace("{due}", dayLabel(view.invoice, view.invoice.dueInDays))),
     caption: !plan.fullyCovered
       ? "Your limits do not cover this bill."
       : saving > 0

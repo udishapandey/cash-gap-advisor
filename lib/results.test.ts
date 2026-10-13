@@ -99,10 +99,10 @@ describe("the mid-season check", () => {
   it("shows the updated cost and saving of both ways to pay, and says plainly what to do", () => {
     expect(view.plans).toEqual([
       { label: "Pay on 21 Oct", cost: "₹2,253", saving: "₹8,119" },
-      { label: "Pay on 10 Nov", cost: "₹237", saving: "₹135" },
+      { label: "Pay on 10 Nov", cost: "₹237", saving: "-" },
     ]);
     expect(view.verdict).toBe("Paying early is no longer worth it. Pay on 10 Nov instead.");
-    expect(view.verdictWhy).toBe("Slow sales would leave you short.");
+    expect(view.verdictWhy).toBe("It still saves money, but if sales fall further you could run out of credit.");
   });
   it("says exactly what changes", () => {
     expect(view.changes).toEqual(["Pay on 10 Nov instead of 21 Oct"]);

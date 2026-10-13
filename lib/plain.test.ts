@@ -4,7 +4,8 @@ import { merchant } from "./data/merchant";
 import { runEngine, type ViewId } from "./engine";
 import { formatCompactINR, formatDayMonth, formatINR } from "./format";
 import { DEFAULT_JOURNEY } from "./journey";
-import { BILL_PRIVACY, LATE_FEE_LAW, OPTION_LABEL, SOURCE_ROW, backupLine, billHero, buildHeroPlan, compareRows, dayLabel, fewerPairsSameAsFull, forecastSaving, gapView, homeAlert, tidyName, aboutHowLong, dayByDay } from "./plain";
+import { readFileSync } from "node:fs";
+import { UNCOVERED_TITLE, payEarlyReason, BILL_PRIVACY, LATE_FEE_LAW, OPTION_LABEL, SOURCE_ROW, backupLine, billHero, buildHeroPlan, compareRows, dayLabel, fewerPairsSameAsFull, forecastSaving, gapView, homeAlert, tidyName, aboutHowLong, dayByDay } from "./plain";
 import { outcomeForState } from "./results";
 
 const run = (drop = 0, extra = {}) => runEngine({ merchant, invoice: defaultInvoice, salesDropPercent: drop, ...extra });
@@ -101,15 +102,43 @@ describe("when paying early is not recommended", () => {
 describe("at -30% sales the plan cannot cover the bill", () => {
   const r = runDefault(30);
   const hero = buildHeroPlan(r, r.recommendedView, forecastSaving(r, r.recommendedView, state(30)));
-  it("recommends paying on the due date, says the limits do not cover it, and has no 'repaid' promise", () => {
+  it("recommends paying on the due date and says the limits do not cover it", () => {
     expect(r.recommended.recommended.timing).toBe("on_due_date");
-    expect(hero.title).toBe("Pay on 10 Nov");
-    expect(hero.caption).toBe("Your limits do not cover this bill.");
+    expect(hero.covered).toBe(false);
+    expect(UNCOVERED_TITLE).toBe("Your limits don't cover this bill");
     expect(hero.closingLine).toBeNull();
     expect(r.recommended.recommended.plan.uncovered).toBeGreaterThan(0);
   });
-  it("uses instant settlement only because the other limits are used up", () => {
-    expect(hero.rows.map((x) => x.id)).toEqual(["bank_overdraft", "credit_line", "early_settlement"]);
+  it("offers three plain options instead of a cost table", () => {
+    expect(hero.uncoveredOptions).toEqual(["Ask the supplier for more days", "Pay part now, the rest on 10 Nov", "Ask your lender for a higher limit"]);
+  });
+  it("the screen shows no cost table, total or Backup line, keeps approve disabled and still offers the call script", () => {
+    const o = readFileSync("components/OptionsScreen.tsx", "utf8");
+    const uncoveredCard = o.slice(o.indexOf("if (!hero.covered)"), o.indexOf("aria-label=\"Recommended plan\"", o.indexOf("if (!hero.covered)") + 80));
+    expect(uncoveredCard).toContain("UNCOVERED_TITLE");
+    expect(uncoveredCard).toContain("disabled");
+    expect(uncoveredCard).not.toMatch(/Total cost|hero\.backup|hero\.rows/);
+    expect(o).toContain("recView.gap.gapExpected > 0 && (");
+  });
+});
+
+describe("why the plan pays on the due date", () => {
+  it("gives one plain reason when a discount was on offer but is not taken", () => {
+    expect(payEarlyReason(runDefault(8).recommended)).toBe("Paying early would leave you short if sales come in low.");
+    expect(payEarlyReason(runDefault(30).recommended)).toBe("Your limits cannot cover paying early.");
+    expect(buildHeroPlan(runDefault(10), "keep_full", 0).reason).toBe("Paying early would leave you short if sales come in low.");
+  });
+  it("gives none when the plan pays early or there is no discount", () => {
+    expect(payEarlyReason(runDefault(0).recommended)).toBeNull();
+    expect(payEarlyReason(runEngine({ merchant, invoice: { ...defaultInvoice, earlyPayDiscountPct: 0 } }).recommended)).toBeNull();
+  });
+  it("flips from paying early to paying on the due date between -7% and -8% sales, because the low-sales case stops being covered", () => {
+    expect(runDefault(7).recommended.recommended.timing).toBe("pay_early_for_discount");
+    const at8 = runDefault(8).recommended;
+    expect(at8.recommended.timing).toBe("on_due_date");
+    expect(at8.earlyPlan.fullyCovered).toBe(true);
+    expect(at8.earlyPlan.simLow.feasible).toBe(false);
+    expect(at8.discount.netSaving).toBeGreaterThan(0);
   });
 });
 

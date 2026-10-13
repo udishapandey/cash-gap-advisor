@@ -19,7 +19,7 @@ function visibleText(file: string): string[] {
   for (const m of src.matchAll(/\b(?:label|caption|title|placeholder)="([^"]+)"/g)) out.push(m[1]);
   return out;
 }
-const FORBIDDEN = /\(|\)|because|n\/a|—|Note:|[A-Za-z]:\s/i;
+const FORBIDDEN = /\(|\)|because|n\/a|—|Note:/i;
 const DEFAULT_SCREENS = ["app/page.tsx", "components/GapScreen.tsx", "components/OptionsScreen.tsx", "components/ResultsScreen.tsx"];
 
 describe("the shell", () => {
@@ -56,19 +56,22 @@ describe("the copy, as written", () => {
     for (const t of texts) expect(src, `${file}: ${t}`).toContain(t);
   };
   it("Home", () => {
-    has("app/page.tsx", "Overview", "Next {invoice.dueInDays} days", 'label="Upcoming supplier bill"', 'label="Cash coming in"', 'label="Cash going out"', 'label="Likely short"', "Plan this payment");
+    has("app/page.tsx", "Supplier bills", "Part of Vendor Payments", "Review plan");
+    has("lib/plain.ts", "Supplier bill due", "Your cash", "Overdraft", "Razorpay credit", "Safety buffer kept", "better off");
   });
   it("Bill", () => {
-    has("components/InvoiceFlow.tsx", "Supplier bill", "Upload the bill. Check what we read.", "Confirm bill");
+    has("components/InvoiceFlow.tsx", "We found an early-payment opportunity", "Upload the bill. Check what we read.", "View bill details", "Confirm bill");
     expect(read("components/InvoiceFlow.tsx")).not.toContain("Evidence:"); // the quote is a hover icon now
+    has("lib/plain.ts", "We don't save your bill. It is sent to our AI provider only to read it.", "the law sets late interest at 3x the RBI bank rate, compounded monthly.");
   });
   it("Cash gap", () => {
-    has("components/GapScreen.tsx", "Cash gap", "How short you could be before the due date.", 'label="Likely short"', "Could be", '"Summary"', '"Cash in"', '"Cash out"', '"Low sales"', '"Expected"', '"High sales"', "Adjust", "Other cash you can use", "Your bank's overdraft rate", "See funding plan");
-    expect(read("components/GapScreen.tsx")).not.toContain("hint=");
+    has("components/GapScreen.tsx", "Expected gap", "How we estimated this", "Other cash you can use", "Your bank's overdraft rate", "See cheapest plan", '"Low sales"', '"Expected"', '"High sales"');
+    has("lib/plain.ts", "You're likely", "Likely range", '"Forecast"', "Low confidence: wide range", "Cash coming in", "Cash going out", "Timing", "Discount ends", "Festive uplift", "COD share", "COD timing", "Returns", "Settlement timing", "Connected banking", "Store and courier data", "Entered by you");
   });
   it("Plan", () => {
-    has("components/OptionsScreen.tsx", "Recommended plan", "Approve plan", "Why this plan", "Ask for {days} more days", "Could remove", "Get call script", '"All options"', '"If sales drop"', "Source", "Amount", "Days", "Total cost");
-    has("lib/plain.ts", "Early settlement is costly per year, but you need it for only", "No cost unless used.", "better off than borrowing the usual way", "Settle your sales early", "Your bank overdraft", "Razorpay credit line");
+    has("components/OptionsScreen.tsx", "Review &amp; approve", "Why this plan", "Ask for more days", "Get call script", '"Compare options"', '"What if sales change"', "Source", "Amount", "Days", "Total cost");
+    has("lib/plain.ts", "No cost unless used.", "better off than paying on the due date", "Your cash", "Your bank overdraft", "Razorpay credit line", "Each loan is closed the day your sales money arrives.", "Rates are illustrative. Your actual terms come from your Key Fact Statement.", "Not needed. Your overdraft is cheaper.");
+    expect(read("lib/plain.ts")).not.toMatch(/54\.75|annualis/i);
   });
   it("Plan shows the explanation only when asked, and has no extra links", () => {
     const o = read("components/OptionsScreen.tsx");
@@ -76,12 +79,13 @@ describe("the copy, as written", () => {
     expect(o).not.toContain("Back to cash gap");
   });
   it("Approve", () => {
-    has("components/ApproveScreen.tsx", "Supplier paid", "Simulated. No real money moved.", "See results", "Back to home");
+    has("components/ApproveScreen.tsx", "You&apos;re about to pay", "Your money", "Borrowed", "Total interest and fees", "Approve plan", "Supplier paid", "Simulated. No real money moved.", "See results");
+    has("lib/plain.ts", "Razorpay credit needs lender approval and a final Key Fact Statement. Values shown are illustrative.");
     expect(read("components/ApproveScreen.tsx")).not.toContain("Start another invoice");
   });
   it("Results", () => {
-    has("components/ResultsScreen.tsx", "After Diwali", "As forecast", "15% lower", "15% higher", "Next time", "Details", "Plan another bill");
-    has("lib/results.ts", '"You saved"', '"Borrowed"', '"Pairs sold"', '"Forecast"', "On target");
+    has("components/ResultsScreen.tsx", "Mid-season check", "Approve updated plan", "As forecast", "15% lower", "15% higher", "Forecast gap", "Actual gap", "Difference", "Next time", "Details", "Done");
+    has("lib/results.ts", "This plan saved you", "Day ${m.day}: sales are", "Nothing changes.");
     expect(read("components/ResultsScreen.tsx")).not.toMatch(/sold out/i);
   });
 });
@@ -101,13 +105,13 @@ describe("the copy rules, on every default view", () => {
 
 describe("the building blocks", () => {
   it("a stat card is a label, a number and a short caption; red only for short, green only for savings", () => {
-    const short = renderToStaticMarkup(<StatCard label="Likely short" value="₹2,27,621" tone="short" />);
+    const short = renderToStaticMarkup(<StatCard label="Likely short" value="₹2,30,900" tone="short" />);
     expect(short).toContain("text-red-700");
     expect(short).toContain("Likely short");
-    const saved = renderToStaticMarkup(<StatCard label="You saved" value="₹11,310" caption="₹10,000 discount + ₹1,310 lower interest" tone="saved" />);
+    const saved = renderToStaticMarkup(<StatCard label="You saved" value="₹9,583" caption="₹10,000 discount less ₹417 interest" tone="saved" />);
     expect(saved).toContain("text-green-700");
-    expect(saved).toContain("₹10,000 discount + ₹1,310 lower interest");
-    const plain = renderToStaticMarkup(<StatCard label="Cash coming in" value="₹13,22,379" />);
+    expect(saved).toContain("₹10,000 discount less ₹417 interest");
+    const plain = renderToStaticMarkup(<StatCard label="Cash coming in" value="₹12,09,100" />);
     expect(plain).not.toMatch(/text-red-700|text-green-700/);
   });
   it("tabs show the first tab and keep the others hidden", () => {

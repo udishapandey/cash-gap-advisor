@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { KFS_DISCLAIMER, KFS_LABEL, buildKfs } from "@/lib/journey";
 import KeyFactStatementPanel from "./KeyFactStatement";
 
-const html = renderToStaticMarkup(<KeyFactStatementPanel kfs={buildKfs(100_000, 30)} />);
+const html = renderToStaticMarkup(<KeyFactStatementPanel kfs={buildKfs(100_000, 30, 1_479)} />);
 
 describe("Key Fact Statement panel", () => {
   it("labels the values 'Illustrative values' on screen", () => {

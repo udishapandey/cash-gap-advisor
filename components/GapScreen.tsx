@@ -114,7 +114,7 @@ export default function GapScreen() {
                         <td className="py-2 font-medium">{e.label}</td>
                         <td className="px-3 py-2 tabular-nums">{e.value}</td>
                         <td className="py-2">
-                          {e.source} <span className="text-muted">(simulated)</span>
+                          {e.source} <span className="text-muted">· Simulated</span>
                         </td>
                       </tr>
                     ))}

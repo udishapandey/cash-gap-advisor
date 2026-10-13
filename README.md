@@ -4,6 +4,7 @@
 
 |  |  |
 |---|---|
+| **Candidate** | Udisha Pandey | ISB
 | **Live demo** | [cash-gap-advisor-qus7-git-main-razorpay-isb.vercel.app](https://cash-gap-advisor-qus7-git-main-razorpay-isb.vercel.app/) |
 | **Demo video** | *Coming Tuesday* |
 | **Status** | Concept prototype for the Razorpay x ISB AI PM challenge. Not affiliated with Razorpay. |

@@ -199,7 +199,7 @@ describe("explainPlan: three labelled parts", () => {
   });
 
   it("REJECTS a number that belongs only to the plan that was NOT recommended", async () => {
-    const other = facts.keepFull; // the recommendation here is the right-sized plan
+    const other = { ...facts.rightSized, loanRupees: 654_321 }; // a figure that only the other plan has
     expect(other.loanRupees).not.toBe(v.loanRupees);
     mockFetch(() => bad("whyCheapest", `The full order would need ${inr(other.loanRupees)} of loans.`));
     const o = await explainPlan(result, "en");
@@ -220,7 +220,7 @@ describe("explainPlan: three labelled parts", () => {
     expect(system).toContain("नकदी की कमी");
     expect(system).toContain("जल्दी भुगतान");
     expect(system).not.toContain("नकद की कमी");
-    expect(system).toContain("Never compare yearly rates");
+    expect(system).not.toContain("yearly rates"); // the old instant-settlement insight is gone
   });
 
   it("REJECTS an invented percentage", async () => {

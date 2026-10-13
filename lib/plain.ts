@@ -256,7 +256,7 @@ export interface HomeAlert {
   /** The facts under the title: the bill, the cash needed and the cost of financing. */
   facts: { label: string; value: string; caption?: string }[];
   /** "Your cash ₹A · Overdraft ₹B · Razorpay credit ₹C · Safety buffer kept ₹D", as separate parts. */
-  mini: { label: string; value: number }[];
+  mini: { id: OptionId; label: string; value: number }[];
   saving: number;
   caption: string;
 }
@@ -291,10 +291,10 @@ export function homeAlert(result: EngineResult, saving: number): HomeAlert {
   const hero = buildHeroPlan(result, result.recommendedView, saving);
   const gap = view.focusGap.gapExpected;
   const days = daysOut(view);
-  const mini: HomeAlert["mini"] = [{ label: "Cash", value: hero.ownCash }];
-  if (hero.overdraft > 0) mini.push({ label: "Overdraft", value: hero.overdraft });
-  if (hero.credit > 0) mini.push({ label: "Razorpay credit", value: hero.credit });
-  if (hero.instant > 0) mini.push({ label: "Instant settlement", value: hero.instant });
+  const mini: HomeAlert["mini"] = [{ id: "own_cash", label: "Cash", value: hero.ownCash }];
+  if (hero.overdraft > 0) mini.push({ id: "bank_overdraft", label: "Overdraft", value: hero.overdraft });
+  if (hero.credit > 0) mini.push({ id: "credit_line", label: "Razorpay credit", value: hero.credit });
+  if (hero.instant > 0) mini.push({ id: "early_settlement", label: "Instant settlement", value: hero.instant });
   const due = dayLabel(view.invoice, view.invoice.dueInDays);
   const supplier = tidyName(view.invoice.supplier);
   return {

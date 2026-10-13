@@ -186,3 +186,41 @@ export function KeyValues({ rows }: { rows: { label: string; value: ReactNode; s
     </dl>
   );
 }
+
+/** The colour of each funding source, the same on the Plan bar, the Home tiles and the Approve screen. */
+export const SOURCE_COLOUR: Record<string, string> = {
+  own_cash: "bg-green-600",
+  bank_overdraft: "bg-slate-500",
+  credit_line: "bg-amber-500",
+  early_settlement: "bg-brand",
+  split_order: "bg-slate-300",
+};
+
+/** A small, separate panel inside a card: an accent bar and a label on top, the content below. For summaries read across. */
+export function Tile({ label, children, className = "" }: { label: string; children: ReactNode; className?: string }) {
+  return (
+    <section aria-label={label} className={`overflow-hidden rounded-lg border border-line bg-background ${className}`}>
+      <div className="h-1 bg-brand" aria-hidden />
+      <div className="p-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-brand-text">{label}</h3>
+        <div className="mt-3">{children}</div>
+      </div>
+    </section>
+  );
+}
+
+/** One funding source: a coloured dot, its name and its amount, large enough to catch the eye. */
+export function SourceRow({ id, label, amount, note }: { id: string; label: string; amount: string; note?: string }) {
+  return (
+    <li className="py-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-2 text-sm">
+          <span aria-hidden className={`inline-block h-2.5 w-2.5 rounded-full ${SOURCE_COLOUR[id] ?? "bg-slate-300"}`} />
+          {label}
+        </span>
+        <span className="text-base font-semibold tabular-nums">{amount}</span>
+      </div>
+      {note && <p className="ml-[18px] text-xs text-muted">{note}</p>}
+    </li>
+  );
+}

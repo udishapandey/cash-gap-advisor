@@ -21,7 +21,7 @@ import {
 import type { ShellContext } from "./JourneyShell";
 import JourneyShell from "./JourneyShell";
 import KeyFactStatementPanel from "./KeyFactStatement";
-import { Alert, BTN, Badge, Card, KeyValues, Metric, PageHeader, Panel, SectionLabel } from "./ui";
+import { Alert, BTN, Badge, Card, KeyValues, Metric, PageHeader, Panel, SectionLabel, SourceRow, Tile } from "./ui";
 
 export default function ApproveScreen() {
   return <JourneyShell step="approve">{(ctx) => <ApproveBody {...ctx} />}</JourneyShell>;
@@ -100,43 +100,40 @@ function ApproveBody({ state, result, update }: ShellContext) {
             Change plan
           </Link>
         </div>
-        <div className="grid gap-6 border-t border-line px-6 py-4 sm:grid-cols-3">
-          <section aria-label="Payment sources">
-            <SectionLabel>Payment sources</SectionLabel>
-            <ul className="mt-2 space-y-1 text-sm">
+        <div className="grid gap-4 border-t border-line px-6 py-5 md:grid-cols-3">
+          <Tile label="Payment sources">
+            <ul className="divide-y divide-line">
               {funding.map((f) => (
-                <li key={f.id}>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted">{f.label}</span>
-                    <span className="tabular-nums">{inrShort(f.amount)}</span>
-                  </div>
-                  {f.id === "od" && <p className="text-xs text-muted">{SOURCE_TAGS.bank_overdraft.label}</p>}
-                  {f.id === "cl" && <p className="text-xs text-muted">{SOURCE_TAGS.credit_line.label}</p>}
-                </li>
+                <SourceRow
+                  key={f.id}
+                  id={f.id === "od" ? "bank_overdraft" : f.id === "cl" ? "credit_line" : "own_cash"}
+                  label={f.label}
+                  amount={inrShort(f.amount)}
+                  note={f.id === "od" ? SOURCE_TAGS.bank_overdraft.label : f.id === "cl" ? SOURCE_TAGS.credit_line.label : undefined}
+                />
               ))}
             </ul>
-          </section>
-          <section aria-label="Cost">
-            <SectionLabel>Cost</SectionLabel>
-            <div className="mt-2">
-              <Metric label="Estimated financing cost" value={formatINR(plan.totalCost)} />
-            </div>
-          </section>
-          <section aria-label="Repayment">
-            <SectionLabel>Repayment</SectionLabel>
+          </Tile>
+          <Tile label="Cost">
+            <p className="text-xs text-muted">Estimated financing cost</p>
+            <p className="mt-1 font-heading text-3xl font-semibold tabular-nums">{formatINR(plan.totalCost)}</p>
+          </Tile>
+          <Tile label="Repayment">
             {repayments.length === 0 ? (
-              <p className="mt-2 text-sm text-muted">Nothing to repay</p>
+              <p className="text-sm text-muted">Nothing to repay</p>
             ) : (
-              <ul className="mt-2 space-y-1 text-sm">
+              <ul className="divide-y divide-line">
                 {repayments.map((r) => (
-                  <li key={r.optionId} className="flex justify-between gap-3">
-                    <span className="text-muted">{r.optionId === "bank_overdraft" ? "Bank overdraft" : "Razorpay credit"}</span>
-                    <span className="tabular-nums">{r.closedDay === null ? "When cash allows" : date(r.closedDay)}</span>
+                  <li key={r.optionId} className="flex items-center justify-between gap-3 py-1.5">
+                    <span className="text-sm">{r.optionId === "bank_overdraft" ? "Bank overdraft" : "Razorpay credit"}</span>
+                    <span className="rounded-md bg-card px-2 py-0.5 text-base font-semibold tabular-nums ring-1 ring-line">
+                      {r.closedDay === null ? "When cash allows" : date(r.closedDay)}
+                    </span>
                   </li>
                 ))}
               </ul>
             )}
-          </section>
+          </Tile>
         </div>
         {backup && <p className={`border-t border-line px-6 py-3 text-xs ${backup.warn ? "text-red-700" : "text-muted"}`}>{backup.text}</p>}
       </Panel>

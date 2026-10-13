@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { BTN, Badge, Metric, PageHeader, Panel } from "@/components/ui";
+import { BTN, Badge, Metric, PageHeader, Panel, SOURCE_COLOUR, SectionLabel } from "@/components/ui";
 import { useJourney } from "@/components/JourneyProvider";
 import { defaultInvoice } from "@/lib/data/default-scenario";
 import { merchant } from "@/lib/data/merchant";
@@ -51,14 +51,22 @@ export default function Home() {
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line px-6 py-4">
-          <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-subtle" aria-label="Funding">
+        <div className="border-t border-line px-6 py-5">
+          <SectionLabel>Funding plan</SectionLabel>
+          <ul className="mt-3 grid gap-3 sm:grid-cols-3" aria-label="Funding">
             {alert.mini.map((m) => (
-              <span key={m.label}>
-                {m.label} <span className="font-medium text-foreground tabular-nums">{inrShort(m.value)}</span>
-              </span>
+              <li key={m.id} className="rounded-lg border border-line bg-background px-4 py-3">
+                <p className="flex items-center gap-2 text-xs text-muted">
+                  <span aria-hidden className={`inline-block h-2.5 w-2.5 rounded-full ${SOURCE_COLOUR[m.id]}`} />
+                  {m.label}
+                </p>
+                <p className="mt-1 font-heading text-xl font-semibold tabular-nums">{inrShort(m.value)}</p>
+              </li>
             ))}
-          </p>
+          </ul>
+        </div>
+
+        <div className="flex justify-end border-t border-line px-6 py-4">
           <Link href="/invoice" className={BTN.primary}>
             Review plan
           </Link>

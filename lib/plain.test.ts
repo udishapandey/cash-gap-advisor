@@ -85,9 +85,9 @@ describe("Home alert", () => {
       { label: "Financing cost", value: "₹417" },
     ]);
     expect(a.mini).toEqual([
-      { label: "Cash", value: 259_100 },
-      { label: "Overdraft", value: 100_000 },
-      { label: "Razorpay credit", value: 130_900 },
+      { id: "own_cash", label: "Cash", value: 259_100 },
+      { id: "bank_overdraft", label: "Overdraft", value: 100_000 },
+      { id: "credit_line", label: "Razorpay credit", value: 130_900 },
     ]);
     expect(a.caption).toBe("₹9,583");
   });

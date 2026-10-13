@@ -27,7 +27,9 @@ import { useJourney } from "./JourneyProvider";
 const STORAGE_KEY = "cga.confirmedInvoice.v1";
 const SAMPLE_URL = "/samples/invoice-clean.pdf";
 // The server gives up after 45 seconds; the page waits a little longer so it can show the server's message.
-const CLIENT_TIMEOUT_MS = 50_000;
+const CLIENT_TIMEOUT_MS = 35_000;
+const BUSY_SAVED = "AI is busy right now. Showing the reading saved earlier.";
+const BUSY_MANUAL = "AI is busy right now. Please check and fill the fields.";
 const SLOW_AFTER_S = 15;
 
 type Phase = "idle" | "reading" | "review";
@@ -74,7 +76,8 @@ export default function InvoiceFlow() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   /** True only after the AI failed to read a file. The fallback buttons are shown only then. */
-  const [aiFailed, setAiFailed] = useState(false);
+  /** A short message above the bill, for example when the AI was busy and a saved reading is shown. */
+  const [notice, setNotice] = useState<string | null>(null);
   const [extraction, setExtraction] = useState<InvoiceExtraction | null>(null);
   const [values, setValues] = useState<FormValues | null>(null);
   const [edited, setEdited] = useState<Edited>({});
@@ -86,6 +89,7 @@ export default function InvoiceFlow() {
   const [lastFile, setLastFile] = useState<File | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
+  const lastIsSample = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Is development mock mode on? (AI_MOCK=true on the server.)
@@ -152,16 +156,34 @@ export default function InvoiceFlow() {
     unconfirm();
     setSource(from);
     setError(null);
-    setAiFailed(false);
+    setNotice(null);
     try {
       sessionStorage.removeItem(STORAGE_KEY);
     } catch {}
     setPhase("review");
   }
 
-  async function readFile(file: File, opts: { force?: boolean } = {}) {
+  /**
+   * The AI could not read the bill (busy, rate-limited, timed out, or no answer). Stop the spinner and carry on:
+   * the sample bill shows its saved reading; an uploaded bill opens as manual entry; a bill that already has a reading keeps it.
+   */
+  function aiBusy(isSample: boolean, hadReading: boolean) {
+    if (isSample) {
+      showExtraction(preReadSampleExtraction, "pre-read");
+      setNotice(BUSY_SAVED);
+    } else if (hadReading) {
+      setPhase("review");
+      setNotice(BUSY_SAVED);
+    } else {
+      showExtraction(emptyExtraction(), "manual");
+      setNotice(BUSY_MANUAL);
+    }
+  }
+
+  async function readFile(file: File, opts: { force?: boolean; sample?: boolean } = {}) {
     setError(null);
-    setAiFailed(false);
+    setNotice(null);
+    const isSample = opts.sample === true;
     const name = file.name.toLowerCase();
     if (!/\.(pdf|png|jpe?g)$/.test(name)) {
       setError("Upload a PDF, PNG or JPG.");
@@ -172,6 +194,7 @@ export default function InvoiceFlow() {
       return;
     }
     setLastFile(file);
+    lastIsSample.current = isSample;
 
     // Same file as before? Reuse the earlier reading instead of calling the AI. (Not in mock mode.)
     const hash = mockAi ? null : await hashBytes(await file.arrayBuffer());
@@ -189,12 +212,14 @@ export default function InvoiceFlow() {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const hadReading = extraction !== null;
     setPhase("reading");
     setElapsed(0);
     unconfirm();
     try {
       const body = new FormData();
       body.append("file", file);
+      if (isSample) body.append("sample", "1");
       const res = await fetch("/api/parse-invoice", {
         method: "POST",
         body,
@@ -202,35 +227,32 @@ export default function InvoiceFlow() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) {
-        const wait = res.headers.get("Retry-After");
-        setError(
-          (data?.error ?? "Couldn't read this bill. Try again.") +
-            (res.status === 429 && wait && Number(wait) <= 120 ? ` (Try again in about ${wait} seconds.)` : ""),
-        );
-        // Only an AI failure (the server says which kind) offers the fallbacks. A wrong file type or size does not.
-        setAiFailed(Boolean(data?.kind));
-        setPhase(extraction ? "review" : "idle");
+        // An AI failure (the server says which kind) falls back at once. A wrong file type or size is the founder's to fix.
+        if (data?.kind || res.status >= 500) {
+          aiBusy(isSample, hadReading);
+        } else {
+          setError(data?.error ?? "Couldn't read this bill. Try again.");
+          setPhase(hadReading ? "review" : "idle");
+        }
+        return;
+      }
+      if (data.saved === true) {
+        // The server could not reach the AI for the sample bill and sent its saved reading.
+        aiBusy(true, hadReading);
         return;
       }
       const parsed = parseExtraction(data.extraction);
       if (!parsed.ok) {
-        setError(parsed.message);
-        setAiFailed(true);
-        setPhase(extraction ? "review" : "idle");
+        aiBusy(isSample, hadReading);
         return;
       }
       const isMock = data.mock === true;
       if (!isMock && hash) writeCached(sessionStorage, hash, parsed.data);
       showExtraction(parsed.data, isMock ? "mock" : "live");
-    } catch (e) {
+    } catch {
       if (controller.signal.aborted) return; // the founder started something else
-      setError(
-        e instanceof Error && e.name === "TimeoutError"
-          ? "Reading timed out. Try again."
-          : "Connection failed. Try again.",
-      );
-      setAiFailed(true);
-      setPhase(extraction ? "review" : "idle");
+      // A timeout (35 seconds) or a dropped connection: the same fallback.
+      aiBusy(isSample, hadReading);
     } finally {
       if (fileInput.current) fileInput.current.value = "";
     }
@@ -242,21 +264,14 @@ export default function InvoiceFlow() {
     showExtraction(preReadSampleExtraction, "pre-read");
   }
 
-  /** After an AI failure: an empty form for the founder to fill in. */
-  function enterManually() {
-    abortRef.current?.abort();
-    showExtraction(emptyExtraction(), "manual");
-  }
-
   /** Read the sample bill with the AI again, from the file (a live call). */
   async function readSampleAgain() {
     setError(null);
-    setAiFailed(false);
     try {
       const res = await fetch(SAMPLE_URL);
       if (!res.ok) throw new Error();
       const blob = await res.blob();
-      await readFile(new File([blob], "invoice-clean.pdf", { type: "application/pdf" }));
+      await readFile(new File([blob], "invoice-clean.pdf", { type: "application/pdf" }), { force: true, sample: true });
     } catch {
       setError("Couldn't load the sample bill.");
     }
@@ -302,7 +317,6 @@ export default function InvoiceFlow() {
     setFormErrors({});
     unconfirm();
     setError(null);
-    setAiFailed(false);
     setLastFile(null);
     try {
       sessionStorage.removeItem(STORAGE_KEY);
@@ -461,20 +475,8 @@ export default function InvoiceFlow() {
             </span>
           </Alert>
         )}
+        {notice && <Alert tone="notice">{notice}</Alert>}
         {error && <Alert tone="negative">{error}</Alert>}
-        {aiFailed && !reading && (
-          <Card>
-            <p className="text-sm font-medium">Couldn&apos;t read this bill</p>
-            <div className="mt-3 flex flex-wrap gap-3">
-              <button type="button" onClick={usePreReadSample} className={BTN.secondary}>
-                Use pre-read sample
-              </button>
-              <button type="button" onClick={enterManually} className={BTN.secondary}>
-                Enter manually
-              </button>
-            </div>
-          </Card>
-        )}
       </div>
 
       {phase === "review" && extraction && values && (
@@ -490,7 +492,7 @@ export default function InvoiceFlow() {
             {(source === "cached" || source === "pre-read") && (
               <button
                 type="button"
-                onClick={() => (lastFile ? void readFile(lastFile, { force: true }) : void readSampleAgain())}
+                onClick={() => (lastFile ? void readFile(lastFile, { force: true, sample: lastIsSample.current || source === "pre-read" }) : void readSampleAgain())}
                 disabled={reading}
                 className={BTN.link}
               >

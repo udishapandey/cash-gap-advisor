@@ -72,6 +72,14 @@ describe("the copy, as written", () => {
     // The sample bill loads the saved reading, with no AI call.
     expect(f).toContain("onClick={usePreReadSample}");
   });
+  it("Bill falls back at once when the AI is busy: saved reading for the sample, manual entry for an upload, within 35 seconds", () => {
+    const f = read("components/InvoiceFlow.tsx");
+    expect(f).toContain("const CLIENT_TIMEOUT_MS = 35_000");
+    expect(f).toContain('"AI is busy right now. Showing the reading saved earlier."');
+    expect(f).toContain('"AI is busy right now. Please check and fill the fields."');
+    expect(f).toContain("aiBusy(isSample, hadReading)");
+    expect(f).toContain('showExtraction(emptyExtraction(), "manual")');
+  });
   it("Cash gap", () => {
     has("components/GapScreen.tsx", "Expected shortfall", "How we estimated this", "Other available cash", "See cheapest plan", "ESTIMATE_LINE", '"Low sales"', '"Expected"', '"High sales"');
     has("lib/plain.ts", "To pay early, you'd be", "short for", "This estimate combines expected sales, settlements, COD cash and upcoming outflows.", "Includes ${formatINR(", "safety buffer", "needs no borrowing.", '"Forecast"', "Low confidence", "Cash available", "Cash going out", "Discount deadline", "Festive uplift", "COD share", "COD timing", "Returns", "Settlement timing", "Connected banking", "Store and courier data", "Entered by you");

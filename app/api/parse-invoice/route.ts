@@ -1,4 +1,5 @@
 import { describeFailure, extractInvoice, type ExtractInvoiceFailure } from "@/lib/ai";
+import { preReadSampleExtraction } from "@/lib/data/sample-extraction";
 import { MAX_INVOICE_BYTES, sniffMimeType } from "@/lib/invoice-upload";
 
 // Privacy: the uploaded invoice is processed in memory only. It is never written to disk,
@@ -28,8 +29,11 @@ export async function POST(request: Request) {
   }
 
   let file: FormDataEntryValue | null;
+  let isSample = false;
   try {
-    file = (await request.formData()).get("file");
+    const form = await request.formData();
+    file = form.get("file");
+    isSample = form.get("sample") === "1";
   } catch {
     return json({ ok: false, error: "Couldn't read the upload. Choose a file and try again." }, 400);
   }
@@ -50,6 +54,8 @@ export async function POST(request: Request) {
   if (!result.ok) {
     // Log why it failed (HTTP status, provider error type and message, each attempt), never the invoice.
     console.error(`[parse-invoice] ${describeFailure(result)}`);
+    // The synthetic sample bill never ends in an error: if the AI is down, send its saved reading, flagged as saved.
+    if (isSample) return json({ ok: true, saved: true, extraction: preReadSampleExtraction, reason: result.kind }, 200);
     return json(
       { ok: false, kind: result.kind, error: result.message },
       STATUS[result.kind],

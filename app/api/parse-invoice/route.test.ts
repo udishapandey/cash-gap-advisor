@@ -149,6 +149,31 @@ describe("AI failures become clear messages", () => {
   });
 });
 
+describe("the sample bill never ends in an error", () => {
+  const sampleUpload = () => {
+    const form = new FormData();
+    form.append("file", new File([bytes(PDF_HEADER) as BlobPart], "invoice-clean.pdf", { type: "application/pdf" }));
+    form.append("sample", "1");
+    return new Request("http://localhost/api/parse-invoice", { method: "POST", body: form });
+  };
+  it.each(["provider_error", "rate_limit", "not_configured", "invalid_response"] as const)("sends the saved reading, flagged, when the AI fails with %s", async (kind) => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocked.mockResolvedValue({ ok: false, kind, message: "busy" });
+    const res = await POST(sampleUpload());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ ok: true, saved: true, reason: kind });
+    expect(body.extraction.totalAmount.value).toBe(500000);
+  });
+  it("an uploaded bill (no sample flag) still gets the error, so the page can open manual entry", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocked.mockResolvedValue({ ok: false, kind: "provider_error", message: "busy" });
+    const res = await POST(upload(bytes(PDF_HEADER)));
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ ok: false, kind: "provider_error" });
+  });
+});
+
 describe("privacy: nothing from the invoice is kept or logged", () => {
   const SECRET = "SECRET-INVOICE-TEXT-98765";
   const NAME = "secret-supplier-invoice.pdf";

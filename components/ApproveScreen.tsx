@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { EngineResult } from "@/lib/engine";
-import { formatCompactINR, formatINR } from "@/lib/format";
+import { formatLakh, formatINR } from "@/lib/format";
 import { backupLine, CREDIT_NEEDS_APPROVAL, dayLabel, tidyName } from "@/lib/plain";
 import {
   approvalBlockers,
@@ -123,7 +123,7 @@ function ApproveBody({ state, result, update }: ShellContext) {
 
       <Card aria-label="Payment">
         <p className="font-heading text-4xl font-semibold tabular-nums">
-          {formatCompactINR(pay)} <span className="text-2xl text-muted">on {date(payDay)}</span>
+          {formatLakh(pay)} <span className="text-2xl text-muted">on {date(payDay)}</span>
         </p>
         <p className="mt-1 text-sm text-muted">{formatINR(pay)} in full{early ? `, ${formatINR(view.discount.discountAmount)} off` : ""}.</p>
         {backup && <p className={`mt-3 text-sm ${backup.warn ? "text-red-700" : "text-muted"}`}>{backup.text}</p>}

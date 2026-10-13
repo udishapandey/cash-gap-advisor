@@ -9,7 +9,7 @@ import type { OptionId } from "./engine/options";
 import { CONFIG } from "./engine/config";
 import { standbyFor } from "./engine/standby";
 import { expectedLostMargin } from "./engine/stock";
-import { formatCompactINR, formatDayMonth, formatINR, formatPct } from "./format";
+import { formatDayMonth, formatLakh, formatINR, formatPct } from "./format";
 import { earlyPayDay } from "./journey";
 import { SAVING_BASIS, outcomeForState } from "./results";
 
@@ -211,7 +211,6 @@ export interface CompareRow {
   label: string;
   covers: string;
   cost: string;
-  yearly: string;
 }
 
 const DASH = "-";
@@ -228,32 +227,31 @@ export function compareRows(result: EngineResult, viewId: ViewId): CompareRow[] 
 
   for (const o of view.options) {
     if (o.id === "split_order") {
-      rows.push({ id: o.id, label: OPTION_LABEL[o.id], covers: formatINR(o.maxAmount), cost: formatINR(o.stockOut?.expectedLostMargin ?? 0), yearly: DASH });
+      rows.push({ id: o.id, label: OPTION_LABEL[o.id], covers: formatINR(o.maxAmount), cost: formatINR(o.stockOut?.expectedLostMargin ?? 0) });
       continue;
     }
     if (o.id === "early_settlement" && !usedInPlan("early_settlement")) {
       const overdraftCheaper = od?.solo && o.solo ? od.solo.cost <= o.solo.cost : false;
-      rows.push({ id: o.id, label: OPTION_LABEL[o.id], covers: overdraftCheaper ? "Not needed. Your overdraft is cheaper." : "Not needed.", cost: DASH, yearly: DASH });
+      rows.push({ id: o.id, label: OPTION_LABEL[o.id], covers: overdraftCheaper ? "Not needed. Your overdraft is cheaper." : "Not needed.", cost: DASH });
       continue;
     }
     rows.push({
       id: o.id,
       label: OPTION_LABEL[o.id],
       covers: o.solo ? formatINR(o.solo.covers) : DASH,
-      cost: o.solo ? formatINR(o.solo.cost) : DASH,
-      yearly: o.annualisedPct === null ? DASH : formatPct(o.annualisedPct),
+      cost: o.solo ? formatINR(o.solo.cost) : DASH
     });
   }
 
   if (fewerPairsSameAsFull(result)) {
-    rows.push({ id: "order_fewer", label: TERMS.orderFewer, covers: "Not needed", cost: DASH, yearly: DASH });
+    rows.push({ id: "order_fewer", label: TERMS.orderFewer, covers: "Not needed", cost: DASH });
   } else {
     const lost = expectedLostMargin({
       orderUnits: result.stock.fullUnits,
       unitsNotOrdered: result.stock.unitsCut,
       demandUnits: result.stock.demandByScenario[result.stock.basis],
     }).expectedLostMargin;
-    rows.push({ id: "order_fewer", label: TERMS.orderFewer, covers: formatINR(result.stock.cashSaved), cost: formatINR(lost), yearly: DASH });
+    rows.push({ id: "order_fewer", label: TERMS.orderFewer, covers: formatINR(result.stock.cashSaved), cost: formatINR(lost) });
   }
   return rows;
 }
@@ -331,6 +329,6 @@ export function billHero(values: {
   const off = Math.round((amount * pct) / 100);
   return {
     hero: `${formatINR(off)} off`,
-    caption: `Pay ${formatCompactINR(amount - off)} by ${formatDayMonth(values.invoiceDate, days)} instead of ${formatCompactINR(amount)} by ${formatDayMonth(values.dueDate, 0)}.`,
+    caption: `Pay ${formatLakh(amount - off)} by ${formatDayMonth(values.invoiceDate, days)} instead of ${formatLakh(amount)} by ${formatDayMonth(values.dueDate, 0)}.`,
   };
 }

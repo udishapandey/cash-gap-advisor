@@ -32,6 +32,7 @@ export function standbyFor(view: ViewResult): Standby {
     lowSalesPeakBorrowed: plan.simLow.peakBorrowed,
     extraNeeded: Math.max(0, plan.simLow.peakBorrowed - plan.sim.peakBorrowed),
     lowSalesCovered: plan.simLow.feasible,
-    shortBy: plan.simLow.uncoveredPeak,
+    // Never more than the whole slow-sales gap: later days can run short only because sales stay slow for ever.
+    shortBy: Math.min(plan.simLow.uncoveredPeak, view.focusGap.gapMax),
   };
 }

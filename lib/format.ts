@@ -30,3 +30,8 @@ export function formatDayMonth(fromIso: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days);
   return `${d.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()]}`;
 }
+
+/** ₹ in lakh with two decimals, for a headline amount: 490000 -> "₹4.90L". */
+export function formatLakh(amount: number): string {
+  return `₹${(amount / 100_000).toFixed(2)}L`;
+}

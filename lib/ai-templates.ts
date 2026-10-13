@@ -25,6 +25,7 @@ export const PART_LABELS: Record<Language, Record<keyof ExplanationParts, string
 
 /** The plain Hindi name of each funding source, keyed by the English name the facts carry. */
 const HINDI_SOURCE_NAMES: Record<string, string> = {
+  "your own cash": "आपका अपना कैश",
   "your Razorpay sales money early": "Razorpay की बिक्री का पैसा जल्दी",
   "Razorpay credit line": "Razorpay क्रेडिट लाइन",
   "your bank's overdraft": "आपके बैंक का ओवरड्राफ्ट",
@@ -59,7 +60,7 @@ export function templateExplanationParts(facts: ExplainFacts, language: Language
       : `pay the supplier by day ${v.payByDay}.`;
   const steps = v.steps.map((s) => `${sourceName(s.source, language)} ${inr(s.amountRupees)}`).join(hi ? ", फिर " : ", then ");
   const funding =
-    v.steps.length === 0
+    !v.steps.some((s) => s.isLoan) && v.peakShortfallRupees === 0
       ? hi
         ? "आपको कर्ज़ लेने की ज़रूरत नहीं है: आपका कैश इनवॉइस के लिए काफ़ी है।"
         : "You do not need to borrow: your cash covers the invoice."

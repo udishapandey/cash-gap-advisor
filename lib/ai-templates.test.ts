@@ -62,7 +62,7 @@ describe("the explanation template (also the mock AI answer and the fallback)", 
     const hi = templateExplanationParts(facts, "hi").doThis;
     expect(hi).toContain(`पूरे ${facts.pairsOrdered} जोड़ी का ऑर्डर मंगवाएँ`);
     expect(hi).toContain(`दिन ${v.payByDay} तक`);
-    expect(hi).toContain(`Razorpay की बिक्री का पैसा जल्दी ${inr(v.steps[0].amountRupees)}`);
+    expect(hi).toContain(`आपका अपना कैश ${inr(v.steps[0].amountRupees)}`);
     expect(hi).toContain(`आपके बैंक का ओवरड्राफ्ट ${inr(v.steps[1].amountRupees)}`);
   });
 
@@ -117,52 +117,38 @@ describe("the explanation template (also the mock AI answer and the fallback)", 
     expect(hi.whyCheapest).toContain("जल्दी भुगतान");
   });
 
-  it("when the order is cut, watch-out figures are for the smaller order, not the invoice", () => {
-    const facts = planFacts(run(25));
-    const v = facts.rightSized;
-    expect(facts.recommendedPlan).toBe("right_sized");
-    const en = templateExplanationParts(facts, "en").watchOut;
-    expect(en).toContain(`all ${v.pairs} pairs should sell`);
-    expect(en).toContain(`about ${v.unsoldPairsAtLowSales} pairs (${v.unsoldAtLowSalesPercent}%)`);
-    expect(en).not.toContain(`${facts.pairsOrdered - v.pairs} pairs`);
-  });
-
-  it("explains early settlement by days, not yearly rates, when there is no discount to take", () => {
-    const facts = planFacts(runEngine({ merchant, invoice: { ...sampleInvoice, earlyPayDiscountPct: 0 } }));
+  it("explains the cost by the loans being repaid as sales money arrives, when there is no discount to take", () => {
+    const facts = planFacts(runEngine({ merchant, invoice: { ...sampleInvoice, earlyPayDiscountPct: 0 }, salesDropPercent: 20 }));
     const why = templateExplanationParts(facts, "en").whyCheapest;
-    expect(facts.recommendedPlan === "right_sized" ? facts.rightSized.paysEarlyForDiscount : facts.keepFull.paysEarlyForDiscount).toBe(false);
-    expect(why).toContain(`needed for only ${facts.earlySettlementDays} days`);
-    expect(why).toContain(`a loan would run ${facts.loanDays} days`);
-    expect(why).not.toContain("a year");
+    expect(facts.keepFull.paysEarlyForDiscount).toBe(false);
+    expect(why).toContain(inr(facts.keepFull.fundingCostRupees));
+    expect(why).toContain("repaid as your sales money arrives");
+    expect(why).not.toMatch(/early settlement|instant/i);
   });
 
   it("names the left-over stock risk for the recommended order", () => {
     const facts = planFacts(run(30));
-    const v = facts.rightSized;
+    const v = facts.keepFull;
     const text = templateExplanation(facts, "en");
-    expect(facts.recommendedPlan).toBe("right_sized");
+    expect(facts.recommendedPlan).toBe("keep_full");
     expect(text).toContain(`${v.unsoldPairsAtLowSales} pairs`);
     expect(text).toContain(`${v.unsoldAtLowSalesPercent}%`);
     expect(text).toContain("left over");
   });
 
-  it("describes ordering fewer pairs when the right-sized plan is recommended", () => {
-    const facts = planFacts(run(30));
-    expect(templateExplanation(facts, "en")).toContain(`Order ${facts.rightSized.pairs} of ${facts.pairsOrdered} pairs now`);
-  });
-
-  it("describes the keep-full plan when that is recommended", () => {
+  it("describes the full order, and names your own cash first", () => {
     const facts = planFacts(run(0));
     expect(facts.recommendedPlan).toBe("keep_full");
     const text = templateExplanation(facts, "en");
     expect(text).not.toContain("of 500 pairs now");
-    expect(text).toContain("Razorpay sales money early");
+    expect(text).toContain("your own cash");
+    expect(text).not.toMatch(/early money|sales money early/);
   });
 
   it("says no borrowing is needed when cash covers the invoice", () => {
     const facts = planFacts(runEngine({ merchant, invoice: sampleInvoice, cashElsewhere: 5_000_000 }));
     const text = templateExplanation(facts, "en");
-    expect(facts.keepFull.steps).toEqual([]);
+    expect(facts.keepFull.steps.some((s) => s.isLoan)).toBe(false);
     expect(text).toContain("You do not need to borrow");
     expect(text).not.toContain("credit line");
     expect(checkGrounding(text, facts).ok).toBe(true);
@@ -199,7 +185,8 @@ describe("the explanation template (also the mock AI answer and the fallback)", 
 });
 
 describe("the call script template", () => {
-  const plan = run(0).views.keepFull.duePlan;
+  // The plan that pays on the discount deadline, which is where the cash gap is in the demo.
+  const plan = run(0).views.keepFull.earlyPlan;
   const base = { extensionDays: 15, borrowingRemovedRupees: 56_634 };
   const facts = () => scriptFacts(sampleInvoice, plan, base);
 
@@ -219,16 +206,16 @@ describe("the call script template", () => {
     expect(text).toContain("value working with");
     expect(text).toContain("Sample Footwear Manufacturer");
     expect(text).toContain("₹5,00,000");
-    expect(text).toContain("due in 10 days");
+    expect(text).toContain("due in 30 days");
     expect(text).toContain("Ask first for 15 extra days");
   });
 
   it("offers part-payment now and the rest later, with both amounts", () => {
     const f = facts();
     const text = templateScript(f, "en");
-    expect(text).toContain("pay ₹2,72,379 on time and the remaining ₹2,27,621");
-    expect(f.payOnTimeRupees).toBe(272_379);
-    expect(f.payLaterRupees).toBe(227_621);
+    expect(text).toContain("pay ₹2,69,100 on time and the remaining ₹2,30,900");
+    expect(f.payOnTimeRupees).toBe(269_100);
+    expect(f.payLaterRupees).toBe(230_900);
   });
 
   it("makes no threats and does not mention the late fee or any pressure", () => {

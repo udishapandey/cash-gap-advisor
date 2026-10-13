@@ -1,4 +1,4 @@
-import { formatINR } from "@/lib/format";
+import { formatINR, inrShort } from "@/lib/format";
 import { rangeBarLayout } from "@/lib/journey";
 
 /**
@@ -10,7 +10,7 @@ export default function RangeBar({ best, expected, worst }: { best: number; expe
   const marker = (pct: number, colour: string) => (
     <span
       aria-hidden
-      className={`absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow ${colour}`}
+      className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ${colour}`}
       style={{ left: `${pct}%` }}
     />
   );
@@ -19,19 +19,15 @@ export default function RangeBar({ best, expected, worst }: { best: number; expe
       <div
         role="img"
         aria-label={`Gap range from ${formatINR(best)} with high sales to ${formatINR(worst)} with low sales. Expected ${formatINR(expected)}.`}
-        className="relative h-3 rounded-full bg-slate-100"
+        className="relative h-2 rounded-full bg-slate-100"
       >
         <div
-          className="absolute top-0 h-3 rounded-full bg-amber-200"
+          className="absolute top-0 h-2 rounded-full bg-amber-200"
           style={{ left: `${l.bestPct}%`, width: `${Math.max(0, l.worstPct - l.bestPct)}%` }}
         />
         {marker(l.bestPct, "bg-green-600")}
         {marker(l.worstPct, "bg-red-600")}
         {marker(l.expectedPct, "bg-navy")}
-      </div>
-      <div className="mt-1 flex justify-between text-[11px] text-muted">
-        <span>₹0</span>
-        <span>{formatINR(l.max)}</span>
       </div>
       <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
         {(
@@ -46,7 +42,7 @@ export default function RangeBar({ best, expected, worst }: { best: number; expe
               <span aria-hidden className={`inline-block h-2.5 w-2.5 rounded-full ${dot}`} />
               {label}
             </dt>
-            <dd className="mt-0.5 text-lg font-semibold tabular-nums">{formatINR(value)}</dd>
+            <dd className="mt-0.5 text-sm font-semibold tabular-nums">{inrShort(value)}</dd>
           </div>
         ))}
       </dl>

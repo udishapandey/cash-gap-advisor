@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { EngineResult } from "@/lib/engine";
-import { formatLakh, formatINR } from "@/lib/format";
-import { backupLine, CREDIT_NEEDS_APPROVAL, dayLabel, tidyName } from "@/lib/plain";
+import { formatINR, formatLakh, inrShort } from "@/lib/format";
+import { CREDIT_NEEDS_APPROVAL, backupLine, dayLabel, forecastSaving, tidyName } from "@/lib/plain";
 import {
   approvalBlockers,
   approvalStage,
@@ -12,7 +12,6 @@ import {
   canApprove,
   consentText,
   earlyPayDay,
-  needsCreditConsent,
   SOURCE_TAGS,
   SIMULATED_ACCOUNT,
   splitPlan,
@@ -22,7 +21,7 @@ import {
 import type { ShellContext } from "./JourneyShell";
 import JourneyShell from "./JourneyShell";
 import KeyFactStatementPanel from "./KeyFactStatement";
-import { Card, SectionTitle, SimulatedTag } from "./ui";
+import { Alert, BTN, Badge, Card, KeyValues, Metric, PageHeader, Panel, SectionLabel } from "./ui";
 
 export default function ApproveScreen() {
   return <JourneyShell step="approve">{(ctx) => <ApproveBody {...ctx} />}</JourneyShell>;
@@ -38,7 +37,6 @@ function ApproveBody({ state, result, update }: ShellContext) {
   const backup = backupLine(view);
   const kfs = sections.creditLine ? buildKfs(sections.creditLine.amount, tenureDays(view), sections.creditLine.cost) : null;
   const date = (day: number) => dayLabel(view.invoice, day);
-  const repays = (closed: number | null) => (closed === null ? "repay when cash allows" : `repay ${date(closed)}`);
   const supplier = tidyName(view.invoice.supplier);
 
   const [consent, setConsent] = useState(false);
@@ -50,6 +48,7 @@ function ApproveBody({ state, result, update }: ShellContext) {
   const early = view.recommended.timing === "pay_early_for_discount";
   const payDay = early ? earlyPayDay(view.invoice) : view.invoice.dueInDays;
   const payWhen = `on ${date(payDay)}`;
+  const savingNow = forecastSaving(result, state.chosenView ?? "keep_full", state);
 
   // Both buttons are simulations: a short pause, then the next stage.
   function approve() {
@@ -67,222 +66,178 @@ function ApproveBody({ state, result, update }: ShellContext) {
     }, 1000);
   }
 
-  if (stage === "done") return <Success view={view} pay={pay} result={result} />;
+  if (stage === "done") return <Success view={view} pay={pay} result={result} saving={savingNow} />;
 
-  if (stage === "pay") {
-    return (
-      <>
-        <h1 className="font-heading text-2xl font-semibold">You&apos;re about to pay {supplier}</h1>
-        <Card className="border-green-300">
-          <SectionTitle aside={<SimulatedTag />}>Approved ✓</SectionTitle>
-          <p className="mt-1 text-sm text-muted">Approved with Touch ID (simulated: no fingerprint was read).</p>
-          <ul className="mt-4 space-y-2 text-sm">
-            {kfs && sections.creditLine && (
-              <li>
-                <strong>{formatINR(kfs.loanAmount)}</strong> has been paid into your own bank account{" "}
-                {SIMULATED_ACCOUNT} by {kfs.lender}. It did not go to the supplier.
-              </li>
-            )}
-            {sections.overdraft && (
-              <li>
-                Draw <strong>{formatINR(sections.overdraft.amount)}</strong> from your own bank&apos;s overdraft yourself. We
-                can&apos;t do this for you.
-              </li>
-            )}
-            {sections.nonCredit.map((a) => (
-              <li key={a.id}>{a.text}.</li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card>
-          <SectionTitle>Step: pay the supplier</SectionTitle>
-          <p className="mt-1 text-sm text-muted">
-            Any loan goes to your own account first. Paying {view.invoice.supplier} is a separate step, and you confirm
-            it yourself.
-          </p>
-          <button
-            type="button"
-            onClick={payNow}
-            disabled={busy !== null}
-            className="mt-4 rounded-md bg-brand px-6 py-3 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-60"
-          >
-            {busy === "pay" ? "Paying… (simulated)" : `Pay supplier ${formatINR(pay)}`}
-          </button>
-          <p className="mt-2 text-xs text-muted">
-            <SimulatedTag /> No real money moves. Due {payWhen}.
-          </p>
-        </Card>
-      </>
-    );
-  }
+  const approved = stage !== "review";
+  const saving = savingNow;
+  const funding = [
+    ...(sections.nonCredit.some((x) => x.id === "own_cash")
+      ? [{ id: "own_cash", label: "Cash", amount: plan.ownCash, by: null as string | null, group: "Your money" }]
+      : []),
+    ...(sections.overdraft
+      ? [{ id: "od", label: "Bank overdraft", amount: sections.overdraft.amount, by: sections.overdraft.closedDay === null ? null : date(sections.overdraft.closedDay), group: "Borrowed" }]
+      : []),
+    ...(sections.creditLine
+      ? [{ id: "cl", label: "Razorpay credit", amount: sections.creditLine.amount, by: sections.creditLine.closedDay === null ? null : date(sections.creditLine.closedDay), group: "Borrowed" }]
+      : []),
+  ];
 
   return (
     <>
-      <h1 className="font-heading text-2xl font-semibold">You&apos;re about to pay {supplier}</h1>
+      <PageHeader title={`Pay ${supplier}`} crumbs={["Supplier bills", "Approve"]} />
 
-      <Card aria-label="Payment">
-        <p className="font-heading text-4xl font-semibold tabular-nums">
-          {formatLakh(pay)} <span className="text-2xl text-muted">on {date(payDay)}</span>
-        </p>
-        <p className="mt-1 text-sm text-muted">{formatINR(pay)} in full{early ? `, ${formatINR(view.discount.discountAmount)} off` : ""}.</p>
-        {backup && <p className={`mt-3 text-sm ${backup.warn ? "text-red-700" : "text-muted"}`}>{backup.text}</p>}
-        <Link href="/options" className="mt-3 inline-block text-sm text-brand hover:underline">
-          ← Change plan
-        </Link>
+      <Panel aria-label="Plan summary">
+        <div className="flex flex-wrap items-start justify-between gap-4 p-6">
+          <Metric size="lg" label="Supplier payment" value={formatLakh(pay)} caption={`on ${date(payDay)}${early ? `, ${formatINR(view.discount.discountAmount)} off` : ""}`} />
+          <Link href="/options" className={BTN.link}>
+            Change plan
+          </Link>
+        </div>
+        <div className="grid gap-6 border-t border-line px-6 py-4 sm:grid-cols-4">
+          <Metric label="Amount financed" value={inrShort(view.loan)} />
+          <Metric label="Financing cost" value={formatINR(plan.totalCost)} />
+          <Metric label="Repaid by" value={plan.closedDay === null ? "-" : date(plan.closedDay)} />
+          <Metric label="Net benefit" tone={saving > 0 ? "saved" : "plain"} value={formatINR(Math.max(0, saving))} />
+        </div>
+      </Panel>
+
+      <Card aria-label="Funding">
+        <SectionLabel>Funding</SectionLabel>
+        <table className="mt-2 w-full text-sm">
+          <thead>
+            <tr className="border-b border-line text-xs text-muted">
+              <th className="py-2 text-left font-medium">Source</th>
+              <th className="px-3 py-2 text-right font-medium">Amount</th>
+              <th className="py-2 text-right font-medium">Repaid by</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {funding.map((f) => (
+              <tr key={f.id}>
+                <td className="py-2.5">
+                  {f.label}{" "}
+                  <span className="ml-1">
+                    <Badge tone={f.group === "Borrowed" ? "notice" : "neutral"}>{f.group}</Badge>
+                  </span>
+                  {f.id === "od" && <span className="ml-2 text-xs text-muted">{SOURCE_TAGS.bank_overdraft.label}</span>}
+                  {f.id === "cl" && <span className="ml-2 text-xs text-muted">{SOURCE_TAGS.credit_line.label}</span>}
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{inrShort(f.amount)}</td>
+                <td className="py-2.5 text-right tabular-nums">{f.by ?? "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {backup && <p className={`mt-3 text-xs ${backup.warn ? "text-red-700" : "text-muted"}`}>{backup.text}</p>}
       </Card>
 
-      <Card aria-label="Your money">
-        <SectionTitle>Your money</SectionTitle>
-        {sections.nonCredit.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">None needed.</p>
-        ) : (
-          <ul className="mt-3 divide-y divide-line text-sm">
-            {sections.nonCredit
-              .filter((a) => a.id !== "pay_early")
-              .map((a) => (
-                <li key={a.id} className="py-2">
-                  <p className="font-medium">{a.text}</p>
-                  {a.detail && <p className="text-xs text-muted">{a.detail}</p>}
-                </li>
-              ))}
+      <Card aria-label="Financing approval">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SectionLabel>{kfs ? "Financing approval" : "Approval"}</SectionLabel>
+          {approved && <Badge tone="positive">Approved</Badge>}
+        </div>
+
+        {approved ? (
+          <ul className="mt-3 space-y-1.5 text-sm">
+            {kfs && sections.creditLine && (
+              <li>
+                {formatINR(kfs.loanAmount)} paid into your account {SIMULATED_ACCOUNT} by {kfs.lender}. Not to the supplier.
+              </li>
+            )}
+            {sections.overdraft && <li>Draw {formatINR(sections.overdraft.amount)} from your overdraft at your own bank.</li>}
+            <li className="text-xs text-muted">Approved with Touch ID. Simulated, no fingerprint was read.</li>
           </ul>
-        )}
-      </Card>
-
-      <Card className="border-l-4 border-l-amber-500" aria-label="Borrowed">
-        <SectionTitle aside={<span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">Needs your consent</span>}>
-          Borrowed
-        </SectionTitle>
-
-        {!sections.creditLine && !sections.overdraft && (
-          <p className="mt-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">Nothing borrowed in this plan.</p>
-        )}
-
-        {sections.overdraft && (
-          <div className="mt-4 rounded-lg border border-line p-4">
-            <h3 className="text-sm font-semibold">
-              Bank overdraft {formatINR(sections.overdraft.amount)}{" "}
-              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-800">{SOURCE_TAGS.bank_overdraft.label}</span>
-            </h3>
-            <p className="mt-1 text-sm">
-              Interest {formatINR(sections.overdraft.cost)}, {repays(sections.overdraft.closedDay)}. You draw it at your own bank. We never draw it for you.
-            </p>
-          </div>
-        )}
-
-        {kfs && sections.creditLine && (
-          <div className="mt-4 space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold">
-                Razorpay credit {formatINR(kfs.loanAmount)}{" "}
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">{SOURCE_TAGS.credit_line.label}</span>
-              </h3>
-              <p className="mt-1 text-sm">
-                Interest {formatINR(kfs.totalInterest)}, {repays(sections.creditLine.closedDay)}. No charge for repaying early.
-              </p>
+        ) : (
+          <>
+            {blockers.map((b) => (
+              <div key={b} className="mt-3">
+                <Alert tone="negative">{b}</Alert>
+              </div>
+            ))}
+            {kfs && sections.creditLine ? (
+              <div className="mt-3 space-y-4">
+                <KeyValues
+                  rows={[
+                    { label: "Lender", value: kfs.lender },
+                    { label: "Amount", value: formatINR(kfs.loanAmount) },
+                    { label: "Interest rate", value: `${kfs.annualRatePct}% a year` },
+                    { label: "Total repayable", value: formatINR(kfs.totalRepayable), strong: true },
+                  ]}
+                />
+                <details className="group rounded-md border border-line">
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 text-sm font-medium marker:content-none">
+                    Key Fact Statement
+                    <span className="text-brand-text group-open:hidden">View full statement</span>
+                    <span className="hidden text-brand-text group-open:inline">Hide</span>
+                  </summary>
+                  <div className="border-t border-line p-3">
+                    <KeyFactStatementPanel kfs={kfs} />
+                  </div>
+                </details>
+                <label className="flex items-start gap-3 text-sm">
+                  <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-[#3395ff]" />
+                  <span>{consentText(kfs)}</span>
+                </label>
+                <p className="text-xs text-muted">{CREDIT_NEEDS_APPROVAL}</p>
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-muted">{sections.overdraft ? "You draw the overdraft yourself at your bank." : "Nothing is borrowed."}</p>
+            )}
+            <div className="mt-4">
+              <button type="button" onClick={approve} disabled={!allowed || busy !== null} className={BTN.primary}>
+                {busy === "touch" ? "Verifying…" : kfs ? "Approve financing" : "Approve plan"}
+              </button>
+              <p className="mt-2 text-xs text-muted">Simulated Touch ID. Nothing is approved automatically.</p>
             </div>
-            <KeyFactStatementPanel kfs={kfs} />
-            <label className="flex items-start gap-3 rounded-lg border border-line p-3 text-sm">
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                className="mt-1 h-4 w-4 shrink-0 accent-[#3395ff]"
-              />
-              <span>{consentText(kfs)}</span>
-            </label>
-          </div>
+          </>
         )}
-
-        <p className="mt-4 border-t border-line pt-3 text-sm font-semibold">
-          Total interest and fees <span className="tabular-nums">{formatINR(plan.totalCost)}</span>
-        </p>
-        {sections.creditLine && <p className="mt-2 text-xs text-muted">{CREDIT_NEEDS_APPROVAL}</p>}
       </Card>
 
-      <Card>
-        <SectionTitle aside={<SimulatedTag />}>Approve with Touch ID</SectionTitle>
-        {blockers.map((b) => (
-          <p key={b} role="alert" className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-            {b}
-          </p>
-        ))}
-        {needsCreditConsent(sections) && !consent && blockers.length === 0 && (
-          <p className="mt-3 text-sm text-muted">Read the Key Fact Statement and tick the consent box to approve.</p>
-        )}
-        <button
-          type="button"
-          onClick={approve}
-          disabled={!allowed || busy !== null}
-          className="mt-4 rounded-md bg-brand px-6 py-3 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {busy === "touch" ? "Verifying… (simulated)" : "Approve plan"}
-        </button>
-        <p className="mt-2 text-xs text-muted">
-          Simulated: no real fingerprint is read and no real credit is drawn. Nothing is approved automatically.
-        </p>
+      <Card aria-label="Pay supplier">
+        <SectionLabel>Pay supplier</SectionLabel>
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+          <Metric label={supplier} value={formatINR(pay)} caption={`Due ${payWhen.replace("on ", "")}`} />
+          <button type="button" onClick={payNow} disabled={!approved || busy !== null} className={BTN.primary}>
+            {busy === "pay" ? "Paying…" : "Pay supplier"}
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-muted">{approved ? "Simulated. No real money moves." : "Approve the plan first."}</p>
       </Card>
     </>
   );
 }
 
-function Success({
-  view,
-  pay,
-  result,
-}: {
-  view: EngineResult["views"]["keepFull"];
-  pay: number;
-  result: EngineResult;
-}) {
-  const sections = splitPlan(view, result.stock.fullUnits);
-  const kfs = sections.creditLine ? buildKfs(sections.creditLine.amount, tenureDays(view), sections.creditLine.cost) : null;
+function Success({ view, pay, result, saving }: { view: EngineResult["views"]["keepFull"]; pay: number; result: EngineResult; saving: number }) {
+  void result;
   const plan = view.recommended.plan;
+  const early = view.recommended.timing === "pay_early_for_discount";
   return (
-    <Card className="text-center">
-      <div
-        aria-hidden
-        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-faded text-2xl text-brand-text"
-      >
-        ✓
+    <Panel className="mx-auto max-w-xl text-center" aria-label="Supplier paid">
+      <div className="p-8">
+        <div aria-hidden className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-xl text-green-700">
+          ✓
+        </div>
+        <h1 className="mt-3 font-heading text-xl font-semibold">Supplier paid</h1>
+        <p className="mt-1 font-heading text-3xl font-semibold tabular-nums">{formatINR(pay)}</p>
+        <p className="mt-1 text-xs text-muted">Simulated. No real money moved.</p>
+        <div className="mx-auto mt-5 max-w-sm text-left">
+          <KeyValues
+            rows={[
+              ...(early ? [{ label: "Discount captured", value: formatINR(view.discount.discountAmount) }] : []),
+              { label: "Financing cost", value: formatINR(plan.totalCost) },
+              { label: "Net benefit", value: formatINR(Math.max(0, saving)), strong: true },
+            ]}
+          />
+        </div>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
+          <Link href="/results" className={BTN.primary}>
+            See results
+          </Link>
+          <Link href="/" className={BTN.link}>
+            Back to home
+          </Link>
+        </div>
       </div>
-      <h1 className="mt-3 font-heading text-xl font-semibold">Supplier paid</h1>
-      <p className="mt-1 text-sm text-muted">Simulated. No real money moved.</p>
-      <dl className="mx-auto mt-5 max-w-md divide-y divide-line text-left text-sm">
-        <div className="flex justify-between py-2">
-          <dt className="text-muted">Paid to {view.invoice.supplier}</dt>
-          <dd className="font-semibold tabular-nums">{formatINR(pay)}</dd>
-        </div>
-        <div className="flex justify-between py-2">
-          <dt className="text-muted">Order</dt>
-          <dd className="tabular-nums">{view.units} pairs</dd>
-        </div>
-        <div className="flex justify-between py-2">
-          <dt className="text-muted">Loans taken</dt>
-          <dd className="tabular-nums">{formatINR(view.loan)}</dd>
-        </div>
-        <div className="flex justify-between py-2">
-          <dt className="text-muted">Total interest and fees</dt>
-          <dd className="tabular-nums">{formatINR(plan.totalCost)}</dd>
-        </div>
-        {kfs && (
-          <div className="flex justify-between py-2">
-            <dt className="text-muted">Repay {kfs.lender}</dt>
-            <dd className="tabular-nums">
-              {formatINR(kfs.totalRepayable)} in {kfs.tenureDays} days
-            </dd>
-          </div>
-        )}
-      </dl>
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-5">
-        <Link href="/results" className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover">
-          See results
-        </Link>
-        <Link href="/" className="text-sm font-medium text-brand-text hover:underline">
-          Back to home
-        </Link>
-      </div>
-    </Card>
+    </Panel>
   );
 }

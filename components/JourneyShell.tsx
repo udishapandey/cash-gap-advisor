@@ -7,6 +7,7 @@ import type { EngineInput, EngineResult } from "@/lib/engine";
 import { STEPS, stepAccess, type JourneyState, type StepId } from "@/lib/journey";
 import { useJourney, useJourneyEngine } from "./JourneyProvider";
 import Stepper from "./Stepper";
+import { BTN } from "./ui";
 
 export interface ShellContext {
   state: JourneyState;
@@ -35,17 +36,17 @@ export default function JourneyShell({
   const fix = state.invoice === null ? STEPS[0] : state.chosenView === null ? STEPS[2] : STEPS[3];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="space-y-6">
       <Stepper current={step} />
       {!ready ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : !access.reachable || !engine || !state.invoice ? (
-        <section className="rounded-xl border border-line bg-card shadow-sm p-6">
+        <section className="rounded-lg border border-line bg-card p-6">
           <h2 className="text-lg font-semibold">Not yet</h2>
           <p className="mt-1 text-sm text-muted">{access.reason}</p>
           <Link
             href={fix.href}
-            className="mt-4 inline-block rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+            className={`mt-4 ${BTN.primary}`}
           >
             Go to {fix.label.toLowerCase()}
           </Link>

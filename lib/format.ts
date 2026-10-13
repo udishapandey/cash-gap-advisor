@@ -40,3 +40,8 @@ export function formatLakh(amount: number): string {
 export function formatLakh1(amount: number): string {
   return `₹${Number((amount / 100_000).toFixed(1))}L`;
 }
+
+/** A short ₹ for a summary: lakh with two decimals from ₹1,00,000, the exact rupees below that. 230900 -> "₹2.31L", 417 -> "₹417". */
+export function inrShort(amount: number): string {
+  return Math.abs(amount) >= 100_000 ? formatLakh(amount) : `₹${Math.round(amount).toLocaleString("en-IN")}`;
+}

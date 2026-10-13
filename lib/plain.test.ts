@@ -47,17 +47,19 @@ describe("the default scenario is the pre-read sample bill", () => {
   });
   it("gives the Cash gap numbers: cash in ₹12,09,100, cash out ₹13,90,000, likely short ₹2,30,900", () => {
     const v = gapView(runDefault());
-    expect(v.headline).toBe("To pay early, you'd be ₹2.3L short for about a week.");
+    expect(v.headline).toBe("Cash shortfall: ₹2.31L for 8 days");
+    expect(v.hero).toBe("₹2.31L");
+    expect(v.duration).toBe("for 8 days");
     expect(v.dueLine).toBe("Paying on 10 Nov needs no borrowing.");
-    expect(v.hero).toBe("₹2,30,900");
     expect(v.caption).toBe("Range for paying early ₹96,500 to ₹3,65,300");
-    expect(v.summary.map((c) => c.value)).toEqual(["₹12,09,100", "₹13,90,000", "Discount ends 21 Oct"]);
+    expect(v.summary.map((c) => c.label)).toEqual(["Cash available", "Cash going out", "Discount deadline"]);
+    expect(v.summary.map((c) => c.value)).toEqual(["₹12.09L", "₹13.90L", "21 Oct"]);
     expect(v.summary[2].caption).toBe("Bill due 10 Nov");
   });
   it("labels the forecast with its confidence, and every estimate with a data source", () => {
     const v = gapView(runDefault());
     expect(v.forecastLabel).toBe("Forecast");
-    expect(v.confidence).toBe("Low confidence: wide range");
+    expect(v.confidence).toBe("Low confidence");
     expect(v.estimates.map((e) => e.label)).toEqual(["Festive uplift", "COD share", "COD timing", "Returns", "Settlement timing"]);
     for (const e of v.estimates) expect(["Connected banking", "Store and courier data", "Entered by you"]).toContain(e.source);
     expect(v.estimates.find((e) => e.label === "COD share")?.value).toBe("45%");
@@ -72,15 +74,19 @@ describe("Home alert", () => {
   const r = runDefault();
   const a = homeAlert(r, forecastSaving(r, r.recommendedView, state()));
   it("has the title, the line and the mini plan as written", () => {
-    expect(a.title).toBe("Save ₹10,000 on your supplier bill");
-    expect(a.line).toBe("Pay by 21 Oct instead of 10 Nov. You'd need ₹2.3L for about a week.");
+    expect(a.title).toBe("Save ₹10,000");
+    expect(a.line).toBe("Pay Shree Ganesh Footwear by 21 Oct");
+    expect(a.facts).toEqual([
+      { label: "Bill", value: "₹5.00L", caption: "Due 10 Nov" },
+      { label: "Cash needed", value: "₹2.31L", caption: "for 8 days" },
+      { label: "Financing cost", value: "₹417" },
+    ]);
     expect(a.mini).toEqual([
-      { label: "Your cash", value: 259_100 },
+      { label: "Cash", value: 259_100 },
       { label: "Overdraft", value: 100_000 },
       { label: "Razorpay credit", value: 130_900 },
-      { label: "Safety buffer kept", value: 50_000 },
     ]);
-    expect(a.caption).toBe("₹9,583 better off");
+    expect(a.caption).toBe("₹9,583");
   });
 });
 
@@ -88,14 +94,15 @@ describe("when paying early is not recommended", () => {
   it("Home and Cash gap say what is short on the due date, never 'to pay early'", () => {
     const r = runDefault(20);
     expect(r.recommended.recommended.timing).toBe("on_due_date");
-    expect(homeAlert(r, 0).title).toBe("Supplier bill due 10 Nov");
-    expect(homeAlert(r, 0).line).toMatch(/^You'd need ₹2L for about 3 weeks\.$/);
+    expect(homeAlert(r, 0).title).toBe("Bill due 10 Nov");
+    expect(homeAlert(r, 0).facts[1]).toEqual({ label: "Cash needed", value: "₹2.02L", caption: "for 24 days" });
     const g = gapView(r);
-    expect(g.headline).toBe("You're likely ₹2L short on 10 Nov.");
+    expect(g.headline).toBe("Cash shortfall: ₹2.02L on 10 Nov");
+    expect(g.duration).toBe("on 10 Nov");
     expect(g.dueLine).toBeNull();
   });
   it("says there is enough cash when nothing is short", () => {
-    expect(gapView(runDefault(10)).headline).toBe("You have enough cash");
+    expect(gapView(runDefault(10)).headline).toBe("No cash shortfall");
   });
 });
 
@@ -116,7 +123,7 @@ describe("at -30% sales the plan cannot cover the bill", () => {
     const o = readFileSync("components/OptionsScreen.tsx", "utf8");
     const uncoveredCard = o.slice(o.indexOf("if (!hero.covered)"), o.indexOf("aria-label=\"Recommended plan\"", o.indexOf("if (!hero.covered)") + 80));
     expect(uncoveredCard).toContain("UNCOVERED_TITLE");
-    expect(uncoveredCard).toContain("disabled");
+    expect(uncoveredCard).toContain("actions(true)");
     expect(uncoveredCard).not.toMatch(/Total cost|hero\.backup|hero\.rows/);
     expect(o).toContain("recView.gap.gapExpected > 0 && (");
   });
@@ -219,8 +226,8 @@ describe("the recommended plan card", () => {
   const hero = buildHeroPlan(r, r.recommendedView, forecastSaving(r, r.recommendedView, state()));
 
   it("has the title and caption as written, bound to the engine", () => {
-    expect(hero.title).toBe("Pay by 21 Oct and get ₹10,000 off");
-    expect(hero.caption).toBe("₹9,583 better off than paying on the due date");
+    expect(hero.title).toBe("Pay by 21 Oct, save ₹10,000");
+    expect(hero.caption).toBe("Net benefit ₹9,583");
     expect(hero.saving).toBe(9_583);
   });
   it("has the funding table as written: source, amount, days, cost, then the total", () => {

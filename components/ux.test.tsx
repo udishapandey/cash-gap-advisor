@@ -28,7 +28,7 @@ describe("the shell", () => {
     expect(layout).toContain("Concept prototype. All merchant data is simulated.");
     expect(layout.split("All merchant data is simulated")).toHaveLength(2);
     expect(layout).toContain("bg-navy");
-    expect(layout).toContain(">Cash Gap Advisor</header>");
+    expect(layout).toContain(">Cash Gap Advisor</span>");
     expect(layout).toContain("Concept prototype for the Razorpay x ISB challenge");
     expect(layout).not.toMatch(/<img|next\/image|<Image/); // no Razorpay logo or wordmark
   });
@@ -56,21 +56,22 @@ describe("the copy, as written", () => {
     for (const t of texts) expect(src, `${file}: ${t}`).toContain(t);
   };
   it("Home", () => {
-    has("app/page.tsx", "Supplier bills", "Part of Vendor Payments", "Review plan");
-    has("lib/plain.ts", "Supplier bill due", "Your cash", "Overdraft", "Razorpay credit", "Safety buffer kept", "better off");
+    has("app/page.tsx", "Supplier bills", "Opportunity", "Net benefit", "Review plan");
+    has("lib/plain.ts", "Save ${formatINR(", "Cash needed", "Financing cost", "Bill due", "Overdraft", "Razorpay credit");
   });
   it("Bill", () => {
-    has("components/InvoiceFlow.tsx", "We found an early-payment opportunity", "Upload the bill. Check what we read.", "View bill details", "Confirm bill");
-    expect(read("components/InvoiceFlow.tsx")).not.toContain("Evidence:"); // the quote is a hover icon now
+    has("components/InvoiceFlow.tsx", "Upload supplier bill", "Review bill", "Early-payment opportunity", "Payment terms", "View bill details", "Confirm bill", "Extracted automatically", "Needs review", "Missing");
+    expect(read("components/InvoiceFlow.tsx")).not.toContain("Evidence:");
+    expect(read("components/InvoiceFlow.tsx")).not.toMatch(/Check what the AI read|The AI reads it/);
     has("lib/plain.ts", "We don't save your bill. It is sent to our AI provider only to read it.", "the law sets late interest at 3x the RBI bank rate, compounded monthly.");
   });
   it("Cash gap", () => {
-    has("components/GapScreen.tsx", "Expected gap", "How we estimated this", "Other cash you can use", "Your bank's overdraft rate", "See cheapest plan", '"Low sales"', '"Expected"', '"High sales"');
-    has("lib/plain.ts", "You're likely", "Likely range", '"Forecast"', "Low confidence: wide range", "Cash coming in", "Cash going out", "Timing", "Discount ends", "Festive uplift", "COD share", "COD timing", "Returns", "Settlement timing", "Connected banking", "Store and courier data", "Entered by you");
+    has("components/GapScreen.tsx", "Can you take the discount safely?", "Expected shortfall", "How we estimated this", "Other cash you can use", "See funding plan", '"Low sales"', '"Expected"', '"High sales"');
+    has("lib/plain.ts", "Cash shortfall:", "Range for paying early", '"Forecast"', "Low confidence", "Cash available", "Cash going out", "Discount deadline", "Festive uplift", "COD share", "COD timing", "Returns", "Settlement timing", "Connected banking", "Store and courier data", "Entered by you");
   });
   it("Plan", () => {
-    has("components/OptionsScreen.tsx", "Review &amp; approve", "Why this plan", "Ask for more days", "Get call script", '"Compare options"', '"What if sales change"', "Source", "Amount", "Days", "Total cost");
-    has("lib/plain.ts", "No cost unless used.", "better off than paying on the due date", "Your cash", "Your bank overdraft", "Razorpay credit line", "Each loan is closed the day your sales money arrives.", "Rates are illustrative. Your actual terms come from your Key Fact Statement.", "Not needed. Your overdraft is cheaper.");
+    has("components/OptionsScreen.tsx", "Recommended plan", "Net benefit", "Financing cost", "Review &amp; approve", "Why this plan?", "Ask for more days", "Get call script", '"Compare options"', '"What if sales change"', "Source", "Amount", "Repaid by");
+    has("lib/plain.ts", "No cost unless used.", "Net benefit ${formatINR(saving)}", "Your cash", "Your bank overdraft", "Razorpay credit line", "Each loan is closed the day your sales money arrives.", "Rates are illustrative. Your actual terms come from your Key Fact Statement.", "Not needed. Your overdraft is cheaper.");
     expect(read("lib/plain.ts")).not.toMatch(/54\.75|annualis/i);
   });
   it("Plan shows the explanation only when asked, and has no extra links", () => {
@@ -84,12 +85,12 @@ describe("the copy, as written", () => {
     expect(o.indexOf("recView.gap.gapExpected > 0")).toBeLessThan(o.indexOf("<AskCard"));
   });
   it("Approve", () => {
-    has("components/ApproveScreen.tsx", "You&apos;re about to pay", "Your money", "Borrowed", "Total interest and fees", "Approve plan", "Supplier paid", "Simulated. No real money moved.", "See results");
+    has("components/ApproveScreen.tsx", "Plan summary", "Amount financed", "Financing cost", "Repaid by", "Net benefit", "Funding", "Financing approval", "Key Fact Statement", "View full statement", "Approve financing", "Pay supplier", "Supplier paid", "Simulated. No real money moved.", "See results");
     has("lib/plain.ts", "Razorpay credit needs lender approval and a final Key Fact Statement. Values shown are illustrative.");
     expect(read("components/ApproveScreen.tsx")).not.toContain("Start another invoice");
   });
   it("Results", () => {
-    has("components/ResultsScreen.tsx", "Mid-season check", "Approve updated plan", "As forecast", "15% lower", "15% higher", "Forecast gap", "Actual gap", "Difference", "Next time", "Details", "Done");
+    has("components/ResultsScreen.tsx", "Supplier paid", "Discount captured", "Financing cost", "Repayment", "Mid-season check", "Approve updated plan", "As forecast", "15% lower", "15% higher", "Forecast gap", "Actual gap", "Difference", "Next time", "Details", "Done");
     has("lib/results.ts", "This plan saved you", "Day ${m.day} check: sales are", "Nothing changes.");
     expect(read("components/ResultsScreen.tsx")).not.toMatch(/sold out/i);
   });

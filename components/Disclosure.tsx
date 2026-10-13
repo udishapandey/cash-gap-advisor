@@ -40,9 +40,9 @@ export default function Disclosure({
         if (next) setEverOpened(true);
         onOpenChange?.(next);
       }}
-      className={`group rounded-xl border border-line bg-card shadow-sm ${className}`}
+      className={`group rounded-lg border border-line bg-card ${className}`}
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-semibold marker:content-none">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3.5 text-sm font-medium marker:content-none">
         <span>
           {title}
           {hint && <span className="ml-2 font-normal text-muted">{hint}</span>}

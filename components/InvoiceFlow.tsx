@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import type { Invoice } from "@/lib/data/invoice";
 import { preReadSampleExtraction } from "@/lib/data/sample-extraction";
 import { hashBytes, readCached, writeCached } from "@/lib/extraction-cache";
-import { formatINR } from "@/lib/format";
 import {
   FIELDS,
   emptyExtraction,
@@ -20,6 +19,7 @@ import {
 } from "@/lib/invoice-extraction";
 import { ACCEPTED_EXTENSIONS, MAX_INVOICE_BYTES } from "@/lib/invoice-upload";
 import { BILL_PRIVACY, billHero, LATE_FEE_LAW } from "@/lib/plain";
+import { Alert, BTN, Badge, Card, Metric, PageHeader, Panel, SectionLabel } from "./ui";
 import Disclosure from "./Disclosure";
 import Stepper from "./Stepper";
 import { useJourney } from "./JourneyProvider";
@@ -51,7 +51,7 @@ const SOURCE_NOTICE: Record<Exclude<Source, "live">, { title: string; text: stri
     text: "Development mode: these are saved sample values, returned without calling the AI.",
   },
   "pre-read": {
-    title: "Pre-read — AI unavailable",
+    title: "Pre-read sample",
     text: "These values were saved from an earlier reading of the synthetic sample invoice. The AI did not read a file just now.",
   },
   manual: {
@@ -69,17 +69,7 @@ function Spinner() {
   );
 }
 
-/** The fields the founder cares about first. The rest sit under "More details". */
-const MAIN_FIELDS = [
-  "totalAmount",
-  "dueDate",
-  "earlyPaymentDiscountPercent",
-  "earlyPaymentDiscountDays",
-  "lateFeePercentPerMonth",
-] as const;
-
 export default function InvoiceFlow() {
-  const [moreOpen, setMoreOpen] = useState(false);
   const journey = useJourney();
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -329,317 +319,245 @@ export default function InvoiceFlow() {
     return () => clearInterval(id);
   }, [reading]);
 
-  return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <Stepper current="invoice" />
-      <header>
-        <h1 className="font-heading text-2xl font-semibold">{phase === "review" && billHeroView ? "We found an early-payment opportunity" : "Supplier bill"}</h1>
-        <p className="mt-1 text-sm text-muted">Upload the bill. Check what we read.</p>
-      </header>
-      <section className="rounded-xl border border-line bg-card shadow-sm p-5">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">Forward a supplier invoice</h2>
-          {mockAi && (
-            <span
-              title="AI_MOCK is on: saved sample values are returned and no AI is called."
-              className="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800"
-            >
-              Mock AI
+  const FIELD_LABEL: Record<FieldKey, string> = {
+    supplierName: "Supplier",
+    invoiceNumber: "Invoice number",
+    invoiceDate: "Invoice date",
+    quantity: "Pairs",
+    unitPrice: "Price per pair (₹)",
+    totalAmount: "Amount (₹)",
+    dueDate: "Due date",
+    lateFeePercentPerMonth: "Late fee (% a month)",
+    earlyPaymentDiscountPercent: "Discount (%)",
+    earlyPaymentDiscountDays: "Pay within (days)",
+  };
+  const GROUPS: { title: string; keys: FieldKey[] }[] = [
+    { title: "Invoice", keys: ["supplierName", "invoiceNumber", "invoiceDate", "quantity", "unitPrice"] },
+    { title: "Payment terms", keys: ["totalAmount", "dueDate", "lateFeePercentPerMonth"] },
+    { title: "Early-payment opportunity", keys: ["earlyPaymentDiscountPercent", "earlyPaymentDiscountDays"] },
+  ];
+
+  /** One field: its label, the input and a small status. Confident reads get a quiet tick; unclear or missing ones are flagged. */
+  const renderField = (key: FieldKey) => {
+    if (!extraction || !values) return null;
+    const meta = FIELDS.find((m) => m.key === key)!;
+    const f = extraction[key];
+    const id = `field-${key}`;
+    const err = formErrors[key];
+    const isEdited = edited[key];
+    const missing = source !== "manual" && f.value === null && !isEdited;
+    const unclear = source !== "manual" && !isEdited && f.value !== null && f.confidence !== "high";
+    return (
+      <div key={key}>
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor={id} className="text-xs font-medium text-subtle">
+            {FIELD_LABEL[key]}
+            {meta.required && <span className="text-red-600"> *</span>}
+          </label>
+          {missing ? (
+            <Badge tone="negative">Missing</Badge>
+          ) : unclear ? (
+            <Badge tone="notice">Needs review</Badge>
+          ) : isEdited ? (
+            <Badge tone="neutral">Edited</Badge>
+          ) : source !== "manual" ? (
+            <span aria-label="Extracted" title="Extracted automatically" className="text-xs text-green-700">
+              ✓
             </span>
-          )}
+          ) : null}
         </div>
-        <p className="mt-1 text-sm text-muted">
-          Upload a PDF, PNG or JPG (up to 5 MB). The AI reads it and you check every field before anything is
-          planned.
-        </p>
-        <p className="mt-1 text-xs text-muted">{BILL_PRIVACY}</p>
-
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragging(false);
-            const file = e.dataTransfer.files[0];
-            if (file && !reading) void readFile(file);
-          }}
-          className={`mt-4 flex flex-col items-center gap-3 rounded-lg border-2 border-dashed px-4 py-8 text-center ${
-            dragging ? "border-brand bg-blue-50" : "border-line"
+        <input
+          id={id}
+          type={meta.input === "date" ? "date" : "text"}
+          inputMode={meta.input === "number" ? "decimal" : undefined}
+          value={values[key]}
+          onChange={(e) => setValue(key, e.target.value)}
+          aria-invalid={err ? true : undefined}
+          className={`mt-1 h-10 w-full rounded-md border bg-white px-3 text-sm outline-none focus:border-brand ${
+            err ? "border-red-300" : missing || unclear ? "border-amber-300" : "border-line-strong"
           }`}
-        >
-          <p className="text-sm text-muted">Drag an invoice here, or</p>
-          <div className="flex flex-wrap justify-center gap-3">
-            <label
-              className={`cursor-pointer rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white ${
-                reading ? "pointer-events-none opacity-50" : "hover:bg-brand-hover"
-              }`}
-            >
-              Choose file
-              <input
-                ref={fileInput}
-                type="file"
-                accept={ACCEPTED_EXTENSIONS}
-                disabled={reading}
-                className="sr-only"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void readFile(file);
-                }}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={useSample}
-              disabled={reading}
-              className="rounded-md border border-brand-border text-brand-text bg-card px-4 py-2 text-sm font-medium hover:bg-background disabled:opacity-50"
-            >
-              Use sample invoice
-            </button>
-          </div>
-          <p className="text-xs text-muted">The sample is a synthetic invoice, not a real one.</p>
-        </div>
+        />
+        {err && <p className="mt-1 text-xs text-red-700">{err}</p>}
+      </div>
+    );
+  };
 
-        <div aria-live="polite" className="mt-4">
-          {reading && (
-            <div className="space-y-1">
-              <p className="flex items-center gap-2 text-sm text-muted">
-                <Spinner /> Reading your invoice… this can take up to 45 seconds. ({elapsed}s)
-              </p>
-              {elapsed >= SLOW_AFTER_S && (
-                <p className="text-sm text-amber-700">Still working. The AI is slower than usual right now.</p>
-              )}
+  const anyToCheck =
+    !!extraction && source !== "manual" && FIELDS.some((m) => !edited[m.key] && (extraction[m.key].value === null || extraction[m.key].confidence !== "high"));
+
+  return (
+    <div className="space-y-6">
+      <Stepper current="invoice" />
+      <PageHeader
+        title={phase === "review" ? "Review bill" : "Upload supplier bill"}
+        crumbs={["Supplier bills"]}
+        subtitle={phase === "review" ? undefined : "PDF, PNG or JPG, up to 5 MB"}
+        actions={
+          <>
+            {mockAi && (
+              <span title="AI_MOCK is on: saved sample values are returned and no AI is called.">
+                <Badge tone="neutral">Mock AI</Badge>
+              </span>
+            )}
+            {phase === "review" && (
+              <button type="button" onClick={startOver} className={BTN.secondary}>
+                Upload another bill
+              </button>
+            )}
+          </>
+        }
+      />
+
+      {phase !== "review" && (
+        <Card>
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              const file = e.dataTransfer.files[0];
+              if (file && !reading) void readFile(file);
+            }}
+            className={`flex flex-col items-center gap-3 rounded-md border-2 border-dashed px-4 py-10 text-center ${dragging ? "border-brand bg-blue-50" : "border-line-strong"}`}
+          >
+            <p className="text-sm text-subtle">Drag a bill here, or</p>
+            <div className="flex flex-wrap justify-center gap-3">
+              <label className={`${BTN.primary} cursor-pointer ${reading ? "pointer-events-none opacity-50" : ""}`}>
+                Choose file
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept={ACCEPTED_EXTENSIONS}
+                  disabled={reading}
+                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void readFile(file);
+                  }}
+                />
+              </label>
+              <button type="button" onClick={useSample} disabled={reading} className={BTN.secondary}>
+                Use sample bill
+              </button>
             </div>
-          )}
-          {error && (
-            <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-          {aiFailed && !reading && (
-            <div className="mt-3 rounded-md border border-line px-3 py-3">
-              <p className="text-sm font-medium">The AI couldn&apos;t read this invoice. You can still continue:</p>
-              <div className="mt-3 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={usePreReadSample}
-                  className="rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-blue-50"
-                >
-                  Continue with pre-read sample
-                </button>
-                <button
-                  type="button"
-                  onClick={enterManually}
-                  className="rounded-md border border-brand-border text-brand-text px-4 py-2 text-sm font-medium hover:bg-background"
-                >
-                  Enter invoice manually
-                </button>
-              </div>
-              <ul className="mt-3 space-y-1 text-xs text-muted">
-                <li>
-                  <strong>Pre-read — AI unavailable:</strong> values saved from an earlier reading of the synthetic
-                  sample invoice. The AI will not read a file this time.
-                </li>
-                <li>
-                  <strong>Manual:</strong> an empty form to type the values from your invoice.
-                </li>
-              </ul>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {phase === "review" && extraction && values && (
-        <section className="rounded-xl border border-line bg-card shadow-sm p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">
-                {source === "manual"
-                  ? "Enter the invoice manually"
-                  : source === "pre-read"
-                    ? "Check the pre-read sample"
-                    : "Check what the AI read"}
-              </h2>
-              {source !== "manual" && (
-                <p className="mt-1 text-sm text-muted">
-                  Edit anything that is wrong. Fields marked in amber were unclear or missing.
-                </p>
-              )}
-              {source !== "live" && (
-                <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  <strong>{SOURCE_NOTICE[source].title}:</strong> {SOURCE_NOTICE[source].text}
-                  {source === "cached" && lastFile && (
-                    <>
-                      {" "}
-                      <button
-                        type="button"
-                        onClick={() => void readFile(lastFile, { force: true })}
-                        disabled={reading}
-                        className="font-medium text-brand underline disabled:opacity-50"
-                      >
-                        Read again with the AI
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-            <button type="button" onClick={startOver} className="shrink-0 text-sm text-brand hover:underline">
-              Start over
-            </button>
+            <p className="text-xs text-muted">The sample is synthetic. {BILL_PRIVACY}</p>
           </div>
-
-          {(() => {
-            const checkNeeded = (key: FieldKey) =>
-              source !== "manual" && !edited[key] && (extraction[key].confidence !== "high" || extraction[key].value === null);
-
-            /** One field: its label, the input, and a one-line status. The AI's quote is a small icon with a tooltip. */
-            const renderField = (meta: (typeof FIELDS)[number], big: boolean) => {
-              const f = extraction[meta.key];
-              const isEdited = edited[meta.key];
-              const needsCheck = checkNeeded(meta.key);
-              const id = `field-${meta.key}`;
-              const err = formErrors[meta.key];
-              const unclear = f.confidence !== "high";
-              return (
-                <div
-                  key={meta.key}
-                  className={`rounded-lg border p-3 ${
-                    err ? "border-red-300 bg-red-50" : needsCheck ? "border-amber-300 bg-amber-50" : "border-line"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <label htmlFor={id} className={big ? "text-sm font-semibold" : "text-sm font-medium"}>
-                      {meta.label}
-                      {meta.required && <span className="text-red-600"> *</span>}
-                    </label>
-                    {needsCheck && (
-                      <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-medium text-amber-900">Please check</span>
-                    )}
-                  </div>
-                  <input
-                    id={id}
-                    type={meta.input === "date" ? "date" : "text"}
-                    inputMode={meta.input === "number" ? "decimal" : undefined}
-                    value={values[meta.key]}
-                    onChange={(e) => setValue(meta.key, e.target.value)}
-                    aria-invalid={err ? true : undefined}
-                    className={`mt-2 w-full rounded-md border border-line bg-white px-3 py-2 outline-none focus:border-brand ${big ? "text-base font-semibold" : "text-sm"}`}
-                  />
-                  {err && <p className="mt-1 text-xs text-red-700">{err}</p>}
-                  <p className={`mt-2 flex items-center gap-1.5 text-xs text-muted ${big ? "empty:hidden" : ""}`}>
-                    {isEdited ? (
-                      "Edited by you."
-                    ) : source === "manual" ? (
-                      <>Type this from your invoice. {meta.hint}</>
-                    ) : f.value === null ? (
-                      <>Not found on the invoice. {meta.hint}</>
-                    ) : big ? null : f.evidence ? (
-                      <span
-                        tabIndex={0}
-                        title={`${unclear ? "Unclear, please check. " : ""}The AI read this from your invoice: “${f.evidence}”`}
-                        aria-label={`${unclear ? "Unclear, please check. " : ""}The AI read this from your invoice: ${f.evidence}`}
-                        className={`inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full text-[11px] font-bold ${
-                          unclear ? "bg-amber-200 text-amber-900" : "bg-green-100 text-green-800"
-                        }`}
-                      >
-                        {unclear ? "!" : "✓"}
-                      </span>
-                    ) : (
-                      "The AI quoted nothing for this value."
-                    )}
-                  </p>
-                </div>
-              );
-            };
-
-            const main = MAIN_FIELDS.map((key) => FIELDS.find((m) => m.key === key)!);
-            const more = FIELDS.filter((m) => !(MAIN_FIELDS as readonly FieldKey[]).includes(m.key));
-            const moreNeedsLook = more.some((m) => formErrors[m.key] || checkNeeded(m.key));
-            return (
-              <>
-                {billHeroView && (
-                  <div className="mt-4 rounded-lg bg-green-50 p-4">
-                    <p className="font-heading text-3xl font-semibold text-green-700">{billHeroView.hero}</p>
-                    <p className="mt-1 text-sm text-subtle">{billHeroView.caption}</p>
-                  </div>
-                )}
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">{main.map((m) => renderField(m, true))}</div>
-                <p className="mt-2 text-xs text-muted">{LATE_FEE_LAW}</p>
-                <Disclosure
-                  title="View bill details"
-                  open={moreOpen || moreNeedsLook}
-                  onOpenChange={setMoreOpen}
-                  className="mt-4"
-                >
-                  <div className="grid gap-4 sm:grid-cols-2">{more.map((m) => renderField(m, false))}</div>
-                  {source !== "manual" && (
-                    <div className="mt-5 overflow-x-auto">
-                      <table className="w-full min-w-[26rem] text-sm">
-                        <thead>
-                          <tr className="border-b border-line text-xs text-muted">
-                            <th className="py-2 text-left font-medium">Field</th>
-                            <th className="px-3 py-2 text-left font-medium">Read from the bill</th>
-                            <th className="py-2 text-left font-medium">Confidence</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-line">
-                          {FIELDS.map((m) => (
-                            <tr key={m.key}>
-                              <td className="py-2 font-medium">{m.label}</td>
-                              <td className="px-3 py-2 text-muted">{extraction[m.key].evidence ?? "Not found"}</td>
-                              <td className="py-2 capitalize">{extraction[m.key].confidence}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </Disclosure>
-              </>
-            );
-          })()}
-
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={confirm}
-              disabled={reading}
-              className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
-            >
-              Confirm bill
-            </button>
-            {confirmed && <span className="text-sm text-green-700">Confirmed. Saved in this browser tab only.</span>}
-          </div>
-        </section>
+        </Card>
       )}
 
-      {confirmed && (
-        <section className="rounded-xl border border-green-300 bg-card p-5">
-          <h2 className="text-lg font-semibold">Invoice confirmed ✓</h2>
-          <p className="mt-1 text-sm text-muted">
-            {confirmed.invoice.supplier}: {formatINR(confirmed.invoice.amount)} for {confirmed.invoice.units} pairs,
-            due in {confirmed.invoice.dueInDays} days.
-          </p>
-          {source !== "live" && (
-            <p className="mt-1 text-xs text-muted">Values from: {SOURCE_NOTICE[source].title.toLowerCase()}.</p>
+      <div aria-live="polite" className="space-y-3">
+        {reading && (
+          <Alert tone="information">
+            <span className="flex items-center gap-2">
+              <Spinner /> Reading your bill… up to 45 seconds ({elapsed}s)
+              {elapsed >= SLOW_AFTER_S && <span className="text-amber-800">Slower than usual.</span>}
+            </span>
+          </Alert>
+        )}
+        {error && <Alert tone="negative">{error}</Alert>}
+        {aiFailed && !reading && (
+          <Card>
+            <p className="text-sm font-medium">Couldn&apos;t read this bill. Continue with:</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <button type="button" onClick={usePreReadSample} className={BTN.secondary}>
+                Pre-read sample
+              </button>
+              <button type="button" onClick={enterManually} className={BTN.secondary}>
+                Enter manually
+              </button>
+            </div>
+          </Card>
+        )}
+      </div>
+
+      {phase === "review" && extraction && values && (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            {source === "live" ? (
+              <Badge tone="neutral">Extracted automatically</Badge>
+            ) : (
+              <span title={SOURCE_NOTICE[source].text}>
+                <Badge tone="notice">{SOURCE_NOTICE[source].title}</Badge>
+              </span>
+            )}
+            {source === "cached" && lastFile && (
+              <button type="button" onClick={() => void readFile(lastFile, { force: true })} disabled={reading} className={BTN.link}>
+                Read again
+              </button>
+            )}
+            {anyToCheck && <span className="text-xs text-muted">Check the flagged fields.</span>}
+          </div>
+
+          {billHeroView && (
+            <Panel aria-label="Early-payment opportunity">
+              <div className="flex flex-wrap items-center justify-between gap-4 p-6">
+                <Metric size="lg" tone="saved" label="Early-payment discount" value={billHeroView.hero} />
+                <p className="max-w-sm text-sm text-subtle">{billHeroView.caption}</p>
+              </div>
+            </Panel>
           )}
-          {confirmed.notes.length > 0 && (
-            <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted">
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {GROUPS.map((g) => (
+              <Card key={g.title} aria-label={g.title}>
+                <SectionLabel>{g.title}</SectionLabel>
+                <div className="mt-3 space-y-4">{g.keys.map((k) => renderField(k))}</div>
+                {g.title === "Payment terms" && <p className="mt-3 text-xs text-muted">{LATE_FEE_LAW}</p>}
+              </Card>
+            ))}
+          </div>
+
+          {source !== "manual" && (
+            <Disclosure title="View bill details">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[26rem] text-sm">
+                  <thead>
+                    <tr className="border-b border-line text-xs text-muted">
+                      <th className="py-2 text-left font-medium">Field</th>
+                      <th className="px-3 py-2 text-left font-medium">Read from the bill</th>
+                      <th className="py-2 text-left font-medium">Confidence</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {FIELDS.map((m) => (
+                      <tr key={m.key}>
+                        <td className="py-2 font-medium">{FIELD_LABEL[m.key]}</td>
+                        <td className="px-3 py-2 text-muted">{extraction[m.key].evidence ?? "Not found"}</td>
+                        <td className="py-2 capitalize">{extraction[m.key].confidence}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Disclosure>
+          )}
+
+          <div className="flex flex-wrap items-center gap-4">
+            {confirmed ? (
+              <>
+                <Link href="/gap" className={BTN.primary}>
+                  See cash gap
+                </Link>
+                <Badge tone="positive">Bill confirmed</Badge>
+              </>
+            ) : (
+              <button type="button" onClick={confirm} disabled={reading} className={BTN.primary}>
+                Confirm bill
+              </button>
+            )}
+          </div>
+          {confirmed && confirmed.notes.length > 0 && (
+            <ul className="list-disc space-y-1 pl-5 text-xs text-muted">
               {confirmed.notes.map((n) => (
                 <li key={n}>{n}</li>
               ))}
             </ul>
           )}
-          <Link
-            href="/gap"
-            className="mt-4 inline-block rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
-          >
-            See cash gap
-          </Link>
-        </section>
+        </>
       )}
     </div>
   );

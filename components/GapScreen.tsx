@@ -9,7 +9,7 @@ import JourneyShell from "./JourneyShell";
 import NumberField from "./NumberField";
 import RangeBar from "./RangeBar";
 import Tabs from "./Tabs";
-import { Card, StatCard } from "./ui";
+import { Alert, BTN, Badge, Card, Metric, PageHeader, Panel, SectionLabel } from "./ui";
 
 type Row = { label: string; value: (s: ScenarioResult) => number; strong?: boolean; short?: boolean };
 
@@ -76,29 +76,36 @@ export default function GapScreen() {
         const gap = result.recommended.focusGap;
         return (
           <>
-            <h1 className="font-heading text-2xl font-semibold">{view.headline}</h1>
+            <PageHeader title="Cash gap" crumbs={["Supplier bills"]} subtitle="Can you take the discount safely?" />
 
-            <StatCard big tone="short" label="Expected gap" value={view.hero} caption={view.caption}>
+            <Panel aria-label={view.headline}>
+              <div className="flex flex-wrap items-start justify-between gap-6 p-6">
+                <Metric
+                  size="lg"
+                  tone={gap.gapExpected > 0 ? "short" : "plain"}
+                  label="Expected shortfall"
+                  value={view.hero}
+                  caption={view.duration ?? undefined}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone="neutral">Forecast</Badge>
+                  <Badge tone={view.lowConfidence ? "notice" : "neutral"}>{view.confidence}</Badge>
+                </div>
+              </div>
               {gap.gapMax > 0 && (
-                <div className="mt-5">
+                <div className="border-t border-line px-6 py-4">
                   <RangeBar best={gap.gapMin} expected={gap.gapExpected} worst={gap.gapMax} />
+                  <p className="mt-2 text-xs text-muted">{view.caption}</p>
                 </div>
               )}
-              <p className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-                <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">{view.forecastLabel}</span>
-                <span className={`rounded-full px-3 py-1 font-medium ${view.lowConfidence ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
-                  {view.confidence}
-                </span>
-              </p>
-            </StatCard>
+              <div className="grid gap-6 border-t border-line px-6 py-4 sm:grid-cols-3">
+                {view.summary.map((c) => (
+                  <Metric key={c.label} label={c.label} value={c.value} caption={c.caption} />
+                ))}
+              </div>
+            </Panel>
 
-            {view.dueLine && <p className="text-sm font-medium text-green-700">{view.dueLine}</p>}
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              {view.summary.map((c) => (
-                <StatCard key={c.label} label={c.label} value={c.value} caption={c.caption} />
-              ))}
-            </div>
+            {view.dueLine && <Alert tone="positive">{view.dueLine}</Alert>}
 
             <Disclosure title="How we estimated this">
               <div className="overflow-x-auto">
@@ -136,8 +143,8 @@ export default function GapScreen() {
             </Disclosure>
 
             <Card>
-              <h2 className="text-sm font-semibold">Your inputs</h2>
-              <div className="mt-4 grid gap-5 sm:grid-cols-2">
+              <SectionLabel>Your inputs</SectionLabel>
+              <div className="mt-3 grid gap-5 sm:grid-cols-2">
                 <NumberField
                   id="cash-elsewhere"
                   label="Other cash you can use"
@@ -148,7 +155,7 @@ export default function GapScreen() {
                 />
                 <NumberField
                   id="overdraft-rate"
-                  label="Your bank's overdraft rate"
+                  label="Overdraft rate"
                   suffix="%"
                   value={state.overdraftRatePct}
                   onCommit={(v) => update({ overdraftRatePct: v })}
@@ -158,8 +165,8 @@ export default function GapScreen() {
             </Card>
 
             <div>
-              <Link href="/options" className="inline-block rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover">
-                See cheapest plan
+              <Link href="/options" className={BTN.primary}>
+                See funding plan
               </Link>
             </div>
           </>

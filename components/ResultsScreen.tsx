@@ -3,9 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { OUTCOME_IDS, type OutcomeId, type OutcomeResult } from "@/lib/engine/outcome";
-import { formatINR } from "@/lib/format";
+import { formatINR, formatLakh, inrShort } from "@/lib/format";
 import type { Language } from "@/lib/language";
-import { dayLabel } from "@/lib/plain";
+import { dayLabel, forecastSaving } from "@/lib/plain";
 import {
   gapRow,
   MID_SEASON_CAPTION,
@@ -20,7 +20,7 @@ import {
 import Disclosure from "./Disclosure";
 import JourneyShell, { type ShellContext } from "./JourneyShell";
 import ResultsSummary from "./ResultsSummary";
-import { Card, StatCard } from "./ui";
+import { BTN, Badge, Card, Metric, PageHeader, Panel, SectionLabel, StatCard } from "./ui";
 
 /** The chips for the three made-up seasons. */
 const SEASON_CHIP: Record<OutcomeId, string> = { as_forecast: "As forecast", lower_15: "15% lower", higher_15: "15% higher" };
@@ -41,13 +41,64 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
   const view = midSeasonView(mid, (day) => dayLabel(result.recommended.invoice, day));
   const row = gapRow(o);
   const saved = o.cost.moneySaved;
+  const chosen = state.chosenView === "right_sized" ? result.views.rightSized : result.views.keepFull;
+  const chosenPlan = chosen.recommended.plan;
+  const early = chosen.recommended.timing === "pay_early_for_discount";
+  const done = {
+    pay: chosenPlan.payAmount,
+    discount: early ? chosen.discount.discountAmount : 0,
+    cost: chosenPlan.totalCost,
+    saving: forecastSaving(result, state.chosenView, state),
+    repayments: chosenPlan.steps
+      .filter((x) => x.isBorrowing)
+      .map((x) => ({ label: x.optionId === "bank_overdraft" ? "Bank overdraft" : "Razorpay credit", amount: inrShort(x.amount), due: x.closedDay === null ? "-" : dayLabel(chosen.invoice, x.closedDay) })),
+  };
 
   return (
     <>
-      <h1 className="font-heading text-2xl font-semibold">Results</h1>
+      <PageHeader title="Results" crumbs={["Supplier bills"]} />
+
+      <Panel aria-label="Supplier paid">
+        <div className="flex flex-wrap items-start justify-between gap-4 p-6">
+          <div>
+            <Badge tone="positive">Paid, simulated</Badge>
+            <div className="mt-3">
+              <Metric size="lg" label="Supplier paid" value={formatLakh(done.pay)} />
+            </div>
+          </div>
+          <Metric size="lg" tone={done.saving > 0 ? "saved" : "plain"} label="Net benefit" value={formatINR(Math.max(0, done.saving))} />
+        </div>
+        <div className="grid gap-6 border-t border-line px-6 py-4 sm:grid-cols-3">
+          <Metric label="Discount captured" value={formatINR(done.discount)} />
+          <Metric label="Financing cost" value={formatINR(done.cost)} />
+          <Metric label="Status" value="Repayments scheduled" />
+        </div>
+        {done.repayments.length > 0 && (
+          <div className="overflow-x-auto border-t border-line px-6 py-3">
+            <table className="w-full min-w-[22rem] text-sm">
+              <thead>
+                <tr className="border-b border-line text-xs text-muted">
+                  <th className="py-2 text-left font-medium">Repayment</th>
+                  <th className="px-3 py-2 text-right font-medium">Amount</th>
+                  <th className="py-2 text-right font-medium">Due</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {done.repayments.map((r) => (
+                  <tr key={r.label}>
+                    <td className="py-2.5">{r.label}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{r.amount}</td>
+                    <td className="py-2.5 text-right tabular-nums">{r.due}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
 
       <Card aria-label="Mid-season check">
-        <h2 className="text-base font-semibold">Mid-season check</h2>
+        <SectionLabel>Mid-season check</SectionLabel>
         <p className="mt-1 font-heading text-xl font-semibold">{view.headline}</p>
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
           {view.rows.map((r) => (
@@ -95,7 +146,7 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
               <button
                 type="button"
                 onClick={() => setReplanApproved(true)}
-                className="mt-4 rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
+                className={`mt-4 ${BTN.primary}`}
               >
                 Approve updated plan
               </button>
@@ -109,7 +160,7 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
         {OUTCOME_IDS.map((id) => (
           <label
             key={id}
-            className={`cursor-pointer rounded-full border px-3.5 py-1 text-sm ${
+            className={`cursor-pointer rounded-md border px-3.5 py-1.5 text-sm ${
               outcomeId === id ? "border-brand bg-brand-faded font-semibold text-brand-text" : "border-line bg-card hover:bg-background"
             }`}
           >
@@ -119,7 +170,7 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
         ))}
       </div>
 
-      <StatCard big label="Result" value={savedHeadline(o)} tone={saved > 0 ? "saved" : "plain"}>
+      <StatCard label="Season outcome" value={savedHeadline(o)} tone={saved > 0 ? "saved" : "plain"}>
         <dl className="mt-4 divide-y divide-line text-sm">
           {savedBreakdown(o).map((r) => (
             <div key={r.label} className="flex justify-between py-2">
@@ -150,7 +201,7 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
       </Card>
 
       <Card aria-label="Next time">
-        <h2 className="text-base font-semibold">Next time</h2>
+        <SectionLabel>Next time</SectionLabel>
         <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm">
           {nextTimeBullets(o, state.salesDropPercent).map((line) => (
             <li key={line}>{line}</li>
@@ -180,7 +231,7 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
             reset();
             router.push("/");
           }}
-          className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
+          className={BTN.primary}
         >
           Done
         </button>

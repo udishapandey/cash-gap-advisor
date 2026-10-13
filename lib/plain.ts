@@ -12,9 +12,9 @@ import { expectedLostMargin } from "./engine/stock";
 import {
   formatDayMonth,
   formatLakh,
-  formatLakh1,
   formatINR,
   formatPct,
+  inrShort,
 } from "./format";
 import { earlyPayDay } from "./journey";
 import { SAVING_BASIS, outcomeForState } from "./results";
@@ -205,7 +205,7 @@ export function buildHeroPlan(
   return {
     viewId,
     title: early
-      ? `Pay by ${dayLabel(view.invoice, plan.payDay)} and get ${formatINR(view.discount.discountAmount)} off`
+      ? `Pay by ${dayLabel(view.invoice, plan.payDay)}, save ${formatINR(view.discount.discountAmount)}`
       : `Pay on ${dayLabel(view.invoice, plan.payDay)}`,
     covered: plan.fullyCovered,
     reason: payEarlyReason(view),
@@ -213,7 +213,7 @@ export function buildHeroPlan(
     caption: !plan.fullyCovered
       ? "Your limits do not cover this bill."
       : saving > 0
-        ? `${formatINR(saving)} better off than paying on the due date`
+        ? `Net benefit ${formatINR(saving)}`
         : saving === 0
           ? "Same cost as paying on the due date"
           : `${formatINR(-saving)} more than paying on the due date`,
@@ -245,6 +245,8 @@ export function buildHeroPlan(
 export interface HomeAlert {
   title: string;
   line: string;
+  /** The facts under the title: the bill, the cash needed and the cost of financing. */
+  facts: { label: string; value: string; caption?: string }[];
   /** "Your cash ₹A · Overdraft ₹B · Razorpay credit ₹C · Safety buffer kept ₹D", as separate parts. */
   mini: { label: string; value: number }[];
   saving: number;
@@ -264,38 +266,42 @@ export function aboutHowLong(view: ViewResult): string {
   return `about ${Math.round(days / 7)} weeks`;
 }
 
+/** The days the money is out: from the first draw to the day everything is repaid. Null if nothing is borrowed. */
+export function daysOut(view: ViewResult): number | null {
+  const plan = view.recommended.plan;
+  const firsts = Object.values(plan.sim.stats)
+    .map((s) => s.firstDay)
+    .filter((d): d is number => d !== null);
+  if (firsts.length === 0 || plan.closedDay === null) return null;
+  return Math.max(1, plan.closedDay - Math.min(...firsts));
+}
+
 export function homeAlert(result: EngineResult, saving: number): HomeAlert {
   const view = result.recommended;
   const plan = view.recommended.plan;
   const early = view.recommended.timing === "pay_early_for_discount";
   const hero = buildHeroPlan(result, result.recommendedView, saving);
   const gap = view.focusGap.gapExpected;
-  const mini: HomeAlert["mini"] = [{ label: "Your cash", value: hero.ownCash }];
-  if (hero.overdraft > 0)
-    mini.push({ label: "Overdraft", value: hero.overdraft });
-  if (hero.credit > 0)
-    mini.push({ label: "Razorpay credit", value: hero.credit });
-  if (hero.instant > 0)
-    mini.push({ label: "Instant settlement", value: hero.instant });
-  mini.push({ label: "Safety buffer kept", value: plan.buffer });
+  const days = daysOut(view);
+  const mini: HomeAlert["mini"] = [{ label: "Cash", value: hero.ownCash }];
+  if (hero.overdraft > 0) mini.push({ label: "Overdraft", value: hero.overdraft });
+  if (hero.credit > 0) mini.push({ label: "Razorpay credit", value: hero.credit });
+  if (hero.instant > 0) mini.push({ label: "Instant settlement", value: hero.instant });
   const due = dayLabel(view.invoice, view.invoice.dueInDays);
+  const supplier = tidyName(view.invoice.supplier);
   return {
-    title: early
-      ? `Save ${formatINR(view.discount.discountAmount)} on your supplier bill`
-      : `Supplier bill due ${due}`,
-    line: early
-      ? `Pay by ${dayLabel(view.invoice, earlyPayDay(view.invoice))} instead of ${due}. ${gap > 0 ? `You'd need ${formatLakh1(gap)} for ${aboutHowLong(view)}.` : "You have the cash for it."}`
-      : gap > 0
-        ? `You'd need ${formatLakh1(gap)} for ${aboutHowLong(view)}.`
-        : "You have enough cash to pay on the due date.",
+    title: early ? `Save ${formatINR(view.discount.discountAmount)}` : `Bill due ${due}`,
+    line: early ? `Pay ${supplier} by ${dayLabel(view.invoice, earlyPayDay(view.invoice))}` : supplier,
+    facts: [
+      { label: "Bill", value: inrShort(view.invoice.amount), caption: `Due ${due}` },
+      gap > 0
+        ? { label: "Cash needed", value: inrShort(gap), caption: days ? `for ${days} days` : undefined }
+        : { label: "Cash needed", value: "None" },
+      { label: "Financing cost", value: formatINR(plan.totalCost) },
+    ],
     mini,
     saving,
-    caption:
-      saving > 0
-        ? `${formatINR(saving)} better off`
-        : saving === 0
-          ? "Same cost as paying on the due date"
-          : `${formatINR(-saving)} more than paying on the due date`,
+    caption: saving > 0 ? `${formatINR(saving)}` : saving === 0 ? "Same cost as paying on the due date" : `${formatINR(-saving)} more than paying on the due date`,
   };
 }
 
@@ -394,6 +400,8 @@ export interface GapView {
   /** "Paying on 10 Nov needs no borrowing." Null if the due date needs borrowing too. */
   dueLine: string | null;
   summary: { label: string; value: string; caption?: string }[];
+  /** "for 8 days" or "on 10 Nov": what goes under the shortfall figure. */
+  duration: string | null;
   /** "How we estimated this": each estimate with where its data comes from. All simulated. */
   estimates: { label: string; value: string; source: SourceLabel }[];
 }
@@ -408,11 +416,12 @@ export function gapView(result: EngineResult): GapView {
   return {
     headline:
       gap.gapExpected <= 0
-        ? "You have enough cash"
+        ? "No cash shortfall"
         : early
-          ? `To pay early, you'd be ${formatLakh1(gap.gapExpected)} short for ${aboutHowLong(view)}.`
-          : `You're likely ${formatLakh1(gap.gapExpected)} short on ${dayLabel(view.invoice, view.invoice.dueInDays)}.`,
-    hero: formatINR(gap.gapExpected),
+          ? `Cash shortfall: ${inrShort(gap.gapExpected)} for ${daysOut(view) ?? "a few"} days`
+          : `Cash shortfall: ${inrShort(gap.gapExpected)} on ${dayLabel(view.invoice, view.invoice.dueInDays)}`,
+    hero: inrShort(gap.gapExpected),
+    duration: gap.gapExpected <= 0 ? null : early ? `for ${daysOut(view) ?? "a few"} days` : `on ${dayLabel(view.invoice, view.invoice.dueInDays)}`,
     caption:
       gap.gapMax === 0
         ? "Enough cash in every case"
@@ -422,21 +431,15 @@ export function gapView(result: EngineResult): GapView {
         ? `Paying on ${dayLabel(view.invoice, view.invoice.dueInDays)} needs no borrowing.`
         : null,
     forecastLabel: "Forecast",
-    confidence: gap.lowConfidence
-      ? "Low confidence: wide range"
-      : "Medium confidence: narrow range",
+    confidence: gap.lowConfidence ? "Low confidence" : "Medium confidence",
     lowConfidence: gap.lowConfidence,
     summary: [
-      { label: "Cash coming in", value: formatINR(e.cash.totalIn) },
-      { label: "Cash going out", value: formatINR(e.cashOut) },
+      { label: "Cash available", value: inrShort(e.cash.totalIn) },
+      { label: "Cash going out", value: inrShort(e.cashOut) },
       {
-        label: "Timing",
-        value: early
-          ? `Discount ends ${dayLabel(view.invoice, lastDay)}`
-          : `Bill due ${dayLabel(view.invoice, view.invoice.dueInDays)}`,
-        caption: early
-          ? `Bill due ${dayLabel(view.invoice, view.invoice.dueInDays)}`
-          : undefined,
+        label: early ? "Discount deadline" : "Due date",
+        value: dayLabel(view.invoice, lastDay),
+        caption: early ? `Bill due ${dayLabel(view.invoice, view.invoice.dueInDays)}` : undefined,
       },
     ],
     estimates: [

@@ -4,41 +4,45 @@ import Link from "next/link";
 import { STEPS, stepAccess, stepStatus, type StepId } from "@/lib/journey";
 import { useJourney } from "./JourneyProvider";
 
-/** Invoice → Cash gap → Options → Approve → Results. Steps you can't open yet are greyed out. */
+/** Bill, Cash gap, Plan, Approve, Results: a small line that says where you are, not a form to fill in. */
 export default function Stepper({ current }: { current: StepId }) {
   const { state } = useJourney();
   return (
-    <ol className="flex items-center gap-2 overflow-x-auto pb-1" aria-label="Decision journey">
+    <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs" aria-label="Decision journey">
       {STEPS.map((step, i) => {
         const status = stepStatus(state, step.id, current);
         const reason = stepAccess(state, step.id).reason;
-        const circle =
+        const tone =
           status === "current"
-            ? "bg-brand text-white"
+            ? "font-semibold text-brand-text"
             : status === "done"
-              ? "bg-green-600 text-white"
-              : status === "locked"
-                ? "bg-line text-muted"
-                : "border border-brand text-brand";
+              ? "text-subtle"
+              : "text-muted";
         const label = (
-          <span className="flex items-center gap-2 whitespace-nowrap">
-            <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${circle}`}>
-              {status === "done" ? "✓" : i + 1}
-            </span>
-            <span className={`text-sm ${status === "current" ? "font-semibold" : status === "locked" ? "text-muted" : ""}`}>
-              {step.label}
-            </span>
+          <span className={`flex items-center gap-1 whitespace-nowrap ${tone}`}>
+            {status === "done" ? (
+              <span aria-hidden className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-green-600 text-[9px] text-white">
+                ✓
+              </span>
+            ) : status === "current" ? (
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-brand" />
+            ) : null}
+            {step.label}
           </span>
         );
         return (
-          <li key={step.id} className="flex items-center gap-2">
-            {i > 0 && <span aria-hidden className="h-px w-6 bg-line sm:w-10" />}
+          <li key={step.id} className="flex items-center gap-1.5">
+            {i > 0 && (
+              <span aria-hidden className="text-line-strong">
+                ›
+              </span>
+            )}
             {status === "locked" ? (
               <span title={reason} aria-disabled="true" className="cursor-not-allowed">
                 {label}
               </span>
             ) : (
-              <Link href={step.href} aria-current={status === "current" ? "step" : undefined} className="hover:opacity-80">
+              <Link href={step.href} aria-current={status === "current" ? "step" : undefined} className="hover:underline">
                 {label}
               </Link>
             )}

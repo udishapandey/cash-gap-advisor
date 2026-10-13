@@ -261,11 +261,11 @@ function Details({ o }: { o: OutcomeResult }) {
     </div>
   );
 
-  const costRows: [string, string][] = [["Your interest and fees", formatINR(plan.fundsCost)]];
+  const costRows: [string, string][] = [["Interest and fees", formatINR(plan.fundsCost)]];
   if (plan.discountCaptured > 0) costRows.push(["Discount", formatINR(plan.discountCaptured)]);
-  costRows.push(["Usual way", formatINR(def.netCost)]);
-  if (!def.coversWholeGap) costRows.push(["Usual way unfunded", formatINR(def.uncovered)]);
-  costRows.push([moneySaved >= 0 ? "You saved" : "You paid extra", formatINR(Math.abs(moneySaved))]);
+  costRows.push(["Paying on the due date", formatINR(def.netCost)]);
+  if (!def.coversWholeGap) costRows.push(["Unfunded on the due date", formatINR(def.uncovered)]);
+  costRows.push([moneySaved >= 0 ? "Saved" : "Extra cost", formatINR(Math.abs(moneySaved))]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">

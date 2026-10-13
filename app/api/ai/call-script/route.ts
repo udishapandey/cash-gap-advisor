@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
   const parsed = scriptRequestSchema.safeParse(body.body);
-  if (!parsed.success) return jsonResponse({ ok: false, error: "That request wasn't valid." }, 400);
+  if (!parsed.success) return jsonResponse({ ok: false, error: "Invalid request." }, 400);
 
   const { state, language, view: wanted } = parsed.data;
   const extensionDays = state.extensionDays ?? CONFIG.extensionDays;

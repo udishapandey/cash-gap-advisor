@@ -12,8 +12,8 @@ import { isVerifiedTextOutcome } from "./AiExplanation";
 import LanguageToggle from "./LanguageToggle";
 import { useAiResource } from "./useAiResource";
 
-export const SCRIPT_VERIFIED_LABEL = "Numbers verified against your invoice and plan";
-export const SCRIPT_UNAVAILABLE_NOTE = "AI script unavailable: showing a plain script";
+export const SCRIPT_VERIFIED_LABEL = "Figures checked against your plan";
+export const SCRIPT_UNAVAILABLE_NOTE = "Standard script. AI unavailable.";
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -65,12 +65,12 @@ export function CallScriptView({
         <LanguageToggle value={language} onChange={onLanguage} label="Call script language" />
       </div>
       <p className="mt-1 text-xs text-muted">
-        Talking points for your phone call. Nothing is sent to the supplier.
+        Talking points for your call. Nothing is sent to the supplier.
       </p>
 
       {status === "loading" ? (
         <p className="mt-3 text-sm text-muted" aria-live="polite">
-          Writing talking points…
+          Preparing…
         </p>
       ) : (
         <>
@@ -146,7 +146,7 @@ export default function CallScriptPanel({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-semibold">Call script for the supplier</h3>
-            <p className="mt-1 text-xs text-muted">Talking points for your phone call. Nothing is sent to the supplier.</p>
+            <p className="mt-1 text-xs text-muted">Talking points for your call. Nothing is sent to the supplier.</p>
           </div>
           <LanguageToggle value={language} onChange={onLanguage} label="Call script language" />
         </div>
@@ -155,7 +155,7 @@ export default function CallScriptPanel({
           onClick={() => setRequested(true)}
           className="mt-3 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
         >
-          Write a call script
+          Get call script
         </button>
       </div>
     );

@@ -24,26 +24,26 @@ export async function POST(request: Request) {
   // Refuse oversized uploads before reading the body.
   const declared = Number(request.headers.get("content-length"));
   if (declared > MAX_INVOICE_BYTES + MULTIPART_OVERHEAD) {
-    return json({ ok: false, error: "That file is too large. Please upload an invoice under 5 MB." }, 413);
+    return json({ ok: false, error: "File too large. Maximum 5 MB." }, 413);
   }
 
   let file: FormDataEntryValue | null;
   try {
     file = (await request.formData()).get("file");
   } catch {
-    return json({ ok: false, error: "Couldn't read the upload. Please choose a file and try again." }, 400);
+    return json({ ok: false, error: "Couldn't read the upload. Choose a file and try again." }, 400);
   }
   if (!(file instanceof File) || file.size === 0) {
-    return json({ ok: false, error: "No file received. Please choose a PDF, PNG or JPG invoice." }, 400);
+    return json({ ok: false, error: "No file received. Choose a PDF, PNG or JPG." }, 400);
   }
   if (file.size > MAX_INVOICE_BYTES) {
-    return json({ ok: false, error: "That file is too large. Please upload an invoice under 5 MB." }, 413);
+    return json({ ok: false, error: "File too large. Maximum 5 MB." }, 413);
   }
 
   const data = new Uint8Array(await file.arrayBuffer());
   const mimeType = sniffMimeType(data);
   if (!mimeType) {
-    return json({ ok: false, error: "Unsupported file type. Please upload a PDF, PNG or JPG." }, 415);
+    return json({ ok: false, error: "Unsupported file type. Upload a PDF, PNG or JPG." }, 415);
   }
 
   const result = await extractInvoice({ data, mimeType });

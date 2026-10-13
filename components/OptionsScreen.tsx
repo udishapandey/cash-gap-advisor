@@ -233,7 +233,7 @@ function AskCard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Ask for more days</h2>
-          <p className="mt-0.5 text-xs text-muted">{removed > 0 ? `${days} days could remove ${formatINR(removed)} of borrowing` : "Would not reduce borrowing"}</p>
+          <p className="mt-0.5 text-xs text-muted">{removed > 0 ? `${days} extra days cut borrowing by ${formatINR(removed)}` : "No reduction in borrowing"}</p>
         </div>
         <button type="button" onClick={() => setShowScript(true)} className={BTN.secondary}>
           Get call script
@@ -248,7 +248,7 @@ function AskCard({
 
 function DayTable({ result, viewId }: { result: EngineResult; viewId: ViewId }) {
   const { rows, total } = dayByDay(result, viewId);
-  if (rows.length === 0) return <p className="text-sm text-muted">Nothing is borrowed, so there is no interest.</p>;
+  if (rows.length === 0) return <p className="text-sm text-muted">No borrowing, no interest.</p>;
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[26rem] text-sm">

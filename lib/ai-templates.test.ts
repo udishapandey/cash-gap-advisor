@@ -93,7 +93,7 @@ describe("the explanation template (also the mock AI answer and the fallback)", 
     expect(v.unsoldPairsAtExpectedSales).toBe(0);
     expect(v.unsoldPairsAtLowSales).toBeGreaterThan(0);
     const en = templateExplanationParts(facts, "en").watchOut;
-    expect(en).toContain(`At expected sales all ${v.pairs} pairs should sell; at lower sales about ${v.unsoldPairsAtLowSales} pairs (${v.unsoldAtLowSalesPercent}%) could be left over`);
+    expect(en).toContain(`At expected sales all ${v.pairs} pairs should sell; at lower sales about ${v.unsoldPairsAtLowSales} pairs (${v.unsoldAtLowSalesPercent}%) may be left over`);
     expect(en).not.toMatch(/\b0 pairs|\(0%\)/);
     const hi = templateExplanationParts(facts, "hi").watchOut;
     expect(hi).toContain(`अनुमानित बिक्री पर सभी ${v.pairs} जोड़ी बिक जानी चाहिए`);
@@ -122,7 +122,7 @@ describe("the explanation template (also the mock AI answer and the fallback)", 
     const why = templateExplanationParts(facts, "en").whyCheapest;
     expect(facts.keepFull.paysEarlyForDiscount).toBe(false);
     expect(why).toContain(inr(facts.keepFull.fundingCostRupees));
-    expect(why).toContain("repaid as your sales money arrives");
+    expect(why).toContain("repaid as sales money arrives");
     expect(why).not.toMatch(/early settlement|instant/i);
   });
 
@@ -149,7 +149,7 @@ describe("the explanation template (also the mock AI answer and the fallback)", 
     const facts = planFacts(runEngine({ merchant, invoice: sampleInvoice, cashElsewhere: 5_000_000 }));
     const text = templateExplanation(facts, "en");
     expect(facts.keepFull.steps.some((s) => s.isLoan)).toBe(false);
-    expect(text).toContain("You do not need to borrow");
+    expect(text).toContain("No borrowing needed");
     expect(text).not.toContain("credit line");
     expect(checkGrounding(text, facts).ok).toBe(true);
     expect(templateExplanation(facts, "hi")).toContain("कर्ज़ लेने की ज़रूरत नहीं");
@@ -169,7 +169,7 @@ describe("the explanation template (also the mock AI answer and the fallback)", 
   it("flags an uncertain forecast", () => {
     const facts = planFacts(run(0));
     expect(facts.lowConfidenceForecast).toBe(true);
-    expect(templateExplanation(facts, "en")).toContain("uncertain");
+    expect(templateExplanation(facts, "en")).toContain("Forecast confidence is low");
   });
 
   it("Hindi is in Devanagari, but numbers stay as 0-9 digits so they can be checked", () => {
@@ -203,17 +203,17 @@ describe("the call script template", () => {
 
   it("is polite, names the invoice, and asks for extra days first", () => {
     const text = templateScript(facts(), "en");
-    expect(text).toContain("value working with");
+    expect(text).toContain("thanking");
     expect(text).toContain("Sample Footwear Manufacturer");
     expect(text).toContain("₹5,00,000");
     expect(text).toContain("due in 30 days");
-    expect(text).toContain("Ask first for 15 extra days");
+    expect(text).toContain("Ask for 15 extra days");
   });
 
   it("offers part-payment now and the rest later, with both amounts", () => {
     const f = facts();
     const text = templateScript(f, "en");
-    expect(text).toContain("pay ₹2,69,100 on time and the remaining ₹2,30,900");
+    expect(text).toContain("offer ₹2,69,100 on time and ₹2,30,900 afterwards");
     expect(f.payOnTimeRupees).toBe(269_100);
     expect(f.payLaterRupees).toBe(230_900);
   });
@@ -230,7 +230,7 @@ describe("the call script template", () => {
   it("when nothing is left to pay later, only confirms the date", () => {
     const none = runEngine({ merchant, invoice: sampleInvoice, cashElsewhere: 5_000_000 }).views.keepFull.duePlan;
     const text = templateScript(scriptFacts(sampleInvoice, none, base), "en");
-    expect(text).toContain("pay in full on time");
+    expect(text).toContain("pay in full on the due date");
     expect(text).not.toContain("extra days");
   });
 
@@ -273,7 +273,7 @@ describe("the results summary template (also the mock AI answer and the fallback
   it("leads with the money, then sales against forecast, then pairs left over", () => {
     const f = factsAt("lower_15");
     const text = templateSummary(f, "en");
-    expect(text).toContain(`You saved ${inr(f.moneySavedRupees)} compared with the usual way of borrowing`);
+    expect(text).toContain(`Saved ${inr(f.moneySavedRupees)} against paying on the due date`);
     expect(text).toContain("sales came in 15% below forecast");
     expect(text).toContain(`${f.pairsLeftOver} of ${f.pairsOrdered} pairs were left over`);
     expect(text.indexOf("saved")).toBeLessThan(text.indexOf("sales came in"));
@@ -290,7 +290,7 @@ describe("the results summary template (also the mock AI answer and the fallback
     const short = factsAt("lower_15");
     expect(short.drawnFromStandbyRupees).toBeGreaterThan(0);
     const text = templateSummary(short, "en");
-    expect(text).toContain(`${inr(short.drawnFromStandbyRupees)} of the extra cash needed would have been drawn from your backup`);
+    expect(text).toContain(`${inr(short.drawnFromStandbyRupees)} of extra cash would have come from backup credit`);
     expect(text).not.toContain("uncovered");
     const fine = factsAt("as_forecast");
     expect(fine.drawnFromStandbyRupees).toBe(0);
@@ -299,7 +299,7 @@ describe("the results summary template (also the mock AI answer and the fallback
 
   it("also says how much was beyond what standby could cover", () => {
     const f = { ...factsAt("lower_15"), beyondStandbyRupees: 12_345 };
-    expect(templateSummary(f, "en")).toContain(`A further ${inr(12_345)} was more than your backup could cover`);
+    expect(templateSummary(f, "en")).toContain(`A further ${inr(12_345)} was more than backup credit could cover`);
     expect(templateSummary(f, "hi")).toContain(inr(12_345));
     expect(checkGrounding(templateSummary(f, "en"), f).ok).toBe(true);
     expect(checkGrounding(templateSummary(f, "hi"), f).ok).toBe(true);
@@ -307,7 +307,7 @@ describe("the results summary template (also the mock AI answer and the fallback
 
   it("is honest when the plan cost more", () => {
     const f = { ...factsAt("as_forecast"), moneyDirection: "cost more" as const, moneySavedRupees: 450 };
-    expect(templateSummary(f, "en")).toContain("The plan cost ₹450 more than the usual way of borrowing");
+    expect(templateSummary(f, "en")).toContain("Cost ₹450 more than paying on the due date");
     expect(checkGrounding(templateSummary(f, "en"), f).ok).toBe(true);
   });
 

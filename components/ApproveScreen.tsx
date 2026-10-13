@@ -141,11 +141,11 @@ function ApproveBody({ state, result, update }: ShellContext) {
           <ul className="mt-3 space-y-1.5 text-sm">
             {kfs && sections.creditLine && (
               <li>
-                {formatINR(kfs.loanAmount)} paid into your account {SIMULATED_ACCOUNT} by {kfs.lender}. Not to the supplier.
+                {formatINR(kfs.loanAmount)} credited to account {SIMULATED_ACCOUNT} by {kfs.lender}. Not paid to the supplier.
               </li>
             )}
-            {sections.overdraft && <li>Draw {formatINR(sections.overdraft.amount)} from your overdraft at your own bank.</li>}
-            <li className="text-xs text-muted">Approved with Touch ID. Simulated, no fingerprint was read.</li>
+            {sections.overdraft && <li>Draw {formatINR(sections.overdraft.amount)} from your overdraft at your bank.</li>}
+            <li className="text-xs text-muted">Touch ID approval is simulated.</li>
           </ul>
         ) : (
           <>
@@ -181,13 +181,13 @@ function ApproveBody({ state, result, update }: ShellContext) {
                 <p className="text-xs text-muted">{CREDIT_NEEDS_APPROVAL}</p>
               </div>
             ) : (
-              <p className="mt-3 text-sm text-muted">{sections.overdraft ? "You draw the overdraft yourself at your bank." : "Nothing is borrowed."}</p>
+              <p className="mt-3 text-sm text-muted">{sections.overdraft ? "Draw the overdraft at your bank. It is not part of this approval." : "Nothing is borrowed."}</p>
             )}
             <div className="mt-4">
               <button type="button" onClick={approve} disabled={!allowed || busy !== null} className={BTN.primary}>
                 {busy === "touch" ? "Verifying…" : kfs ? "Approve financing" : "Approve plan"}
               </button>
-              <p className="mt-2 text-xs text-muted">Simulated Touch ID. Nothing is approved automatically.</p>
+              <p className="mt-2 text-xs text-muted">Touch ID is simulated. Nothing is approved automatically.</p>
             </div>
           </>
         )}
@@ -201,7 +201,7 @@ function ApproveBody({ state, result, update }: ShellContext) {
             {busy === "pay" ? "Paying…" : "Pay supplier"}
           </button>
         </div>
-        <p className="mt-2 text-xs text-muted">{approved ? "Simulated. No real money moves." : "Approve the plan first."}</p>
+        <p className="mt-2 text-xs text-muted">{approved ? "Simulated. No real money moves." : "Approve financing first."}</p>
       </Card>
     </>
   );

@@ -309,7 +309,7 @@ describe("rate limits are retried on the other model; bad requests are not", () 
     expect(fetchMock).toHaveBeenCalledTimes(2); // never a third
     expect(r).toMatchObject({ ok: false, kind: "rate_limit", retryAfterSeconds: 17 });
     if (!r.ok) {
-      expect(r.message).toBe("AI usage limit reached. Please try again in a minute.");
+      expect(r.message).toBe("Usage limit reached. Try again in a minute.");
       expect(r.message).not.toContain("SECRET-BODY"); // the provider's text is logged, never shown to the founder
       expect(r.detail).toMatchObject({ status: 429, providerStatus: "RESOURCE_EXHAUSTED" });
       expect(r.detail?.attempts).toHaveLength(2);
@@ -355,7 +355,7 @@ describe("rate limits are retried on the other model; bad requests are not", () 
     };
     mockFetch(() => new Response(JSON.stringify(body), { status: 429 }));
     const r = await extractInvoice(pdf);
-    if (!r.ok) expect(r.message).toBe("AI usage limit reached. Please try again in a minute.");
+    if (!r.ok) expect(r.message).toBe("Usage limit reached. Try again in a minute.");
     expect(r).toMatchObject({ ok: false, retryAfterSeconds: 20 });
   });
 
@@ -430,7 +430,7 @@ describe("the 45 second budget", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(r).toMatchObject({ ok: false, kind: "provider_error" });
     if (!r.ok) {
-      expect(r.message).toContain("too long");
+      expect(r.message).toContain("Timed out");
       expect(r.detail?.attempts.map((a) => a.providerStatus)).toEqual(["TIMEOUT", "TIMEOUT"]);
     }
   });

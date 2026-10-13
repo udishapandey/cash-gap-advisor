@@ -50,9 +50,9 @@ export const SAVING_BASIS = "Compared with paying on the due date, with no disco
 /** The headline: what the plan saved against the usual way. A cost is never shown as a negative number. */
 export function savedHeadline(o: OutcomeResult): string {
   const total = o.cost.moneySaved;
-  if (total > 0) return `This plan saved you ${formatINR(total)}`;
-  if (total === 0) return "This plan cost the same as the usual way";
-  return `This plan cost you ${formatINR(-total)} more`;
+  if (total > 0) return `Saved ${formatINR(total)}`;
+  if (total === 0) return "Same cost as paying on the due date";
+  return `Cost ${formatINR(-total)} more`;
 }
 
 /** The three figures behind the headline: the discount, the plan's interest and fees, and the usual way's. */
@@ -81,19 +81,19 @@ export function nextTimeBullets(o: OutcomeResult, salesDropPercent: number): str
   const against = salesDropPercent > 0 ? "normal" : "forecast";
   const sales =
     miss === 0
-      ? `Sales matched forecast. Keep starting at ${uplift.before}x.`
-      : `Sales ran ${miss}% ${uplift.vsEstimatePercent < 0 ? "under" : "over"} ${against}. Next time, start at ${uplift.after}x.`;
+      ? `Sales matched forecast. Keep ${uplift.before}x.`
+      : `Sales ${miss}% ${uplift.vsEstimatePercent < 0 ? "under" : "over"} ${against}. Start at ${uplift.after}x next time.`;
   const returns =
     cod.observedPercent === cod.assumedPercent
       ? `COD returns matched the ${cod.assumedPercent}% assumed.`
-      : `COD returns were ${cod.observedPercent}%, not ${cod.assumedPercent}%. Next time, expect ${cod.updatedPercent}%.`;
+      : `COD returns ${cod.observedPercent}% against ${cod.assumedPercent}% assumed. Expect ${cod.updatedPercent}%.`;
   return [sales, returns];
 }
 
 // ---------- the mid-season check ----------
 
-export const NEXT_TIME_CAPTION = "Prototype uses a simple update rule. Production would learn from your history.";
-export const MID_SEASON_CAPTION = "The plan updates as real sales arrive. Sales are simulated in this prototype.";
+export const NEXT_TIME_CAPTION = "Simple update rule in this prototype. The live product would learn from your history.";
+export const MID_SEASON_CAPTION = "Plan updates as sales arrive. Sales are simulated.";
 
 /** Each change the re-plan makes, in a short line. `date` turns a day count into a date. */
 export function changeLine(c: MidSeasonChange, date: (day: number) => string): string {
@@ -103,7 +103,7 @@ export function changeLine(c: MidSeasonChange, date: (day: number) => string): s
     case "draw_overdraft":
       return `Draw ${formatINR(c.amount ?? 0)} more overdraft`;
     case "backup_used":
-      return `Backup used: ${formatINR(c.amount ?? 0)} of your unused credit`;
+      return `Backup credit used: ${formatINR(c.amount ?? 0)}`;
     case "repay_later":
       return `Repayment moves from ${date(c.from ?? 0)} to ${date(c.to ?? 0)}`;
     case "repay_earlier":
@@ -115,7 +115,7 @@ export function changeLine(c: MidSeasonChange, date: (day: number) => string): s
   }
 }
 
-export const STILL_SAVES = "It still saves money, but if sales fall further you could run out of credit.";
+export const STILL_SAVES = "It still saves money, but a further drop in sales could leave you short.";
 
 /** The mid-season check as the screen shows it. */
 export function midSeasonView(m: MidSeason, date: (day: number) => string) {
@@ -125,8 +125,8 @@ export function midSeasonView(m: MidSeason, date: (day: number) => string) {
   return {
     headline:
       miss === 0
-        ? `Day ${m.day} check: sales are on forecast.`
-        : `Day ${m.day} check: sales are ${miss}% ${m.vsForecastPercent < 0 ? "below" : "above"} forecast.`,
+        ? `Day ${m.day}: sales on forecast`
+        : `Day ${m.day}: sales ${miss}% ${m.vsForecastPercent < 0 ? "below" : "above"} forecast`,
     rows: [
       { label: "Cash in so far, forecast", value: formatINR(m.cashInForecast) },
       { label: "Cash in so far, actual", value: formatINR(m.cashInActual) },
@@ -140,9 +140,9 @@ export function midSeasonView(m: MidSeason, date: (day: number) => string) {
       { label: `Pay on ${dueDate}`, cost: formatINR(m.due.cost), saving: "-" },
     ],
     verdict: m.stillWorthIt
-      ? `Paying early on ${earlyDate} is still worth it.`
-      : `Paying early is no longer worth it. Pay on ${dueDate} instead.`,
-    verdictWhy: m.stillWorthIt ? null : m.early.feasible ? STILL_SAVES : "The credit limits no longer cover it.",
+      ? `Paying early on ${earlyDate} is still worth it`
+      : `Pay on ${dueDate} instead. Paying early is no longer worth it.`,
+    verdictWhy: m.stillWorthIt ? null : m.early.feasible ? STILL_SAVES : "Credit limits no longer cover paying early.",
     changes: m.changes.map((c) => changeLine(c, date)),
     nothingChanges: m.nothingChanges ? "Nothing changes." : null,
   };

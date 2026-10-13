@@ -40,7 +40,6 @@ export function templateExplanationParts(facts: ExplainFacts, language: Language
   const hi = language === "hi";
   const rightSized = facts.recommendedPlan === "right_sized";
   const v = rightSized ? facts.rightSized : facts.keepFull;
-  const r = facts.ratesPercent;
     const partOrder = rightSized && v.pairs < facts.pairsOrdered;
 
   // 1. Do this: the order, the date, the funding sources with amounts.
@@ -54,7 +53,7 @@ export function templateExplanationParts(facts: ExplainFacts, language: Language
   const pay = v.paysEarlyForDiscount
     ? hi
       ? `${v.earlyPaymentDiscountPercent}% छूट पाने के लिए दिन ${v.payByDay} तक सप्लायर को भुगतान करें।`
-      : `pay the supplier by day ${v.payByDay} to get the ${v.earlyPaymentDiscountPercent}% discount.`
+      : `pay the supplier by day ${v.payByDay} for the ${v.earlyPaymentDiscountPercent}% discount.`
     : hi
       ? `दिन ${v.payByDay} तक सप्लायर को भुगतान करें।`
       : `pay the supplier by day ${v.payByDay}.`;
@@ -63,10 +62,10 @@ export function templateExplanationParts(facts: ExplainFacts, language: Language
     !v.steps.some((s) => s.isLoan) && v.peakShortfallRupees === 0
       ? hi
         ? "आपको कर्ज़ लेने की ज़रूरत नहीं है: आपका कैश इनवॉइस के लिए काफ़ी है।"
-        : "You do not need to borrow: your cash covers the invoice."
+        : "No borrowing needed. Your cash covers the invoice."
       : hi
         ? `नकदी की कमी इस तरह पूरी करें: ${steps}।`
-        : `Cover the cash gap with ${steps}.`;
+        : `Fund it with ${steps}.`;
   const doThis = hi ? `${order} और ${pay} ${funding}` : `${order} and ${pay} ${funding}`;
 
   // 2. Why it is the cheapest: total cost against what the discount saves.
@@ -74,17 +73,17 @@ export function templateExplanationParts(facts: ExplainFacts, language: Language
   if (v.paysEarlyForDiscount && v.netSavingFromEarlyPaymentRupees > 0) {
     whyCheapest = hi
       ? v.extraCostOfPayingEarlyRupees > 0
-        ? `कुल ब्याज और फीस ${inr(v.fundingCostRupees)} है, जो दिन ${facts.dueInDays} पर भुगतान से सिर्फ़ ${inr(v.extraCostOfPayingEarlyRupees)} ज़्यादा है, और ${v.earlyPaymentDiscountPercent}% छूट से ${inr(v.earlyPaymentDiscountRupees)} बचते हैं, इसलिए जल्दी भुगतान करने से आपको ${inr(v.netSavingFromEarlyPaymentRupees)} का फ़ायदा होता है, दिन ${facts.dueInDays} पर भुगतान की तुलना में।`
-        : `कुल ब्याज और फीस ${inr(v.fundingCostRupees)} है और ${v.earlyPaymentDiscountPercent}% छूट से ${inr(v.earlyPaymentDiscountRupees)} बचते हैं, इसलिए जल्दी भुगतान करने से आपको ${inr(v.netSavingFromEarlyPaymentRupees)} का फ़ायदा होता है, दिन ${facts.dueInDays} पर भुगतान की तुलना में।`
+        ? `कुल ब्याज और फीस ${inr(v.fundingCostRupees)} है, जो दिन ${facts.dueInDays} पर भुगतान से सिर्फ़ ${inr(v.extraCostOfPayingEarlyRupees)} ज़्यादा है, और ${v.earlyPaymentDiscountPercent}% छूट से ${inr(v.earlyPaymentDiscountRupees)} बचते हैं, इसलिए जल्दी भुगतान करने से आपको ${inr(v.netSavingFromEarlyPaymentRupees)} का फ़ायदा होता है।`
+        : `कुल ब्याज और फीस ${inr(v.fundingCostRupees)} है और ${v.earlyPaymentDiscountPercent}% छूट से ${inr(v.earlyPaymentDiscountRupees)} बचते हैं, इसलिए जल्दी भुगतान करने से आपको ${inr(v.netSavingFromEarlyPaymentRupees)} का फ़ायदा होता है।`
       : v.extraCostOfPayingEarlyRupees > 0
-        ? `Interest and fees come to ${inr(v.fundingCostRupees)} in all, only ${inr(v.extraCostOfPayingEarlyRupees)} more than paying on day ${facts.dueInDays}, and the ${v.earlyPaymentDiscountPercent}% discount saves ${inr(v.earlyPaymentDiscountRupees)}, so you come out ${inr(v.netSavingFromEarlyPaymentRupees)} better off than paying on day ${facts.dueInDays}.`
-        : `Interest and fees come to ${inr(v.fundingCostRupees)} in all and the ${v.earlyPaymentDiscountPercent}% discount saves ${inr(v.earlyPaymentDiscountRupees)}, so you come out ${inr(v.netSavingFromEarlyPaymentRupees)} better off than paying on day ${facts.dueInDays}.`;
+        ? `Interest and fees of ${inr(v.fundingCostRupees)} are ${inr(v.extraCostOfPayingEarlyRupees)} more than paying on day ${facts.dueInDays}, but the ${v.earlyPaymentDiscountPercent}% discount saves ${inr(v.earlyPaymentDiscountRupees)}, leaving you ${inr(v.netSavingFromEarlyPaymentRupees)} better off.`
+        : `Interest and fees of ${inr(v.fundingCostRupees)} are covered by the ${v.earlyPaymentDiscountPercent}% discount of ${inr(v.earlyPaymentDiscountRupees)}, leaving you ${inr(v.netSavingFromEarlyPaymentRupees)} better off.`;
   } else if (v.peakShortfallRupees > 0) {
     whyCheapest = hi
-      ? `कुल ब्याज और फीस ${inr(v.fundingCostRupees)} है, जो आपके विकल्पों में सबसे कम है: ओवरड्राफ्ट ${r.overdraftAnnualPercent}% सालाना और क्रेडिट लाइन ${r.creditLineAnnualPercent}% सालाना है, और बिक्री का पैसा आते ही दोनों चुका दिए जाते हैं।`
-      : `Interest and fees come to ${inr(v.fundingCostRupees)} in all, the lowest of your options: your overdraft costs ${r.overdraftAnnualPercent}% a year and your credit line ${r.creditLineAnnualPercent}%, both repaid as your sales money arrives.`;
+      ? `कुल ब्याज और फीस ${inr(v.fundingCostRupees)} है, जो विकल्पों में सबसे कम है; बिक्री का पैसा आते ही कर्ज़ चुका दिए जाते हैं।`
+      : `Interest and fees total ${inr(v.fundingCostRupees)}, the lowest of the options, with loans repaid as sales money arrives.`;
   } else {
-    whyCheapest = hi ? "आपको उधार नहीं लेना है, इसलिए फंडिंग का कोई खर्च नहीं है।" : "You do not need to borrow, so there is no funding cost.";
+    whyCheapest = hi ? "आपको उधार नहीं लेना है, इसलिए फंडिंग का कोई खर्च नहीं है।" : "No borrowing, so no financing cost.";
   }
 
   // 3. Watch out: the main risk. Every figure is for the pairs of THIS plan's order, at expected and at lower sales.
@@ -93,18 +92,18 @@ export function templateExplanationParts(facts: ExplainFacts, language: Language
   const lu = v.unsoldPairsAtLowSales;
   const lowPart = hi
     ? `कम बिक्री पर लगभग ${lu} जोड़ी (${v.unsoldAtLowSalesPercent}%) बच सकती हैं`
-    : `at lower sales about ${lu} pairs (${v.unsoldAtLowSalesPercent}%) could be left over`;
+    : `at lower sales about ${lu} pairs (${v.unsoldAtLowSalesPercent}%) may be left over`;
   let sales: string;
   if (u > 0) {
     sales = hi
       ? `अनुमानित बिक्री पर लगभग ${u} जोड़ी (${v.unsoldAtExpectedSalesPercent}%) बच सकती हैं, और ${lowPart}।`
-      : `At expected sales about ${u} pairs (${v.unsoldAtExpectedSalesPercent}%) could be left over, and ${lowPart}.`;
+      : `At expected sales about ${u} pairs (${v.unsoldAtExpectedSalesPercent}%) may be left over, and ${lowPart}.`;
   } else if (lu > 0) {
     sales = hi ? `अनुमानित बिक्री पर सभी ${n} जोड़ी बिक जानी चाहिए; ${lowPart}।` : `At expected sales all ${n} pairs should sell; ${lowPart}.`;
   } else {
     sales = hi
       ? `अनुमानित बिक्री पर और कम बिक्री पर भी सभी ${n} जोड़ी बिक जानी चाहिए; जोखिम यह है कि बिक्री और गिर जाए और आपको ज़्यादा उधार लेना पड़े।`
-      : `At expected sales, and at lower sales too, all ${n} pairs should sell; the risk is that sales fall even further and you need to borrow more.`;
+      : `All ${n} pairs should sell, even at lower sales. The risk is that sales fall further and you need to borrow more.`;
   }
   let watchOut = partOrder
     ? hi
@@ -112,10 +111,10 @@ export function templateExplanationParts(facts: ExplainFacts, language: Language
       : `Ordering fewer pairs could leave you short of stock if sales beat the forecast. ${sales}`
     : sales;
   if (!v.fullyCovered) {
-    watchOut = (hi ? `चेतावनी: यह प्लान कमी का ${inr(v.uncoveredRupees)} पूरा नहीं करता। ` : `Warning: this plan leaves ${inr(v.uncoveredRupees)} of the cash gap uncovered. `) + watchOut;
+    watchOut = (hi ? `चेतावनी: यह प्लान कमी का ${inr(v.uncoveredRupees)} पूरा नहीं करता। ` : `Warning: ${inr(v.uncoveredRupees)} of the cash gap is not covered. `) + watchOut;
   }
   if (facts.lowConfidenceForecast) {
-    watchOut += hi ? " बिक्री का अनुमान अनिश्चित है, इसलिए मंज़ूरी से पहले संख्याएँ दोबारा देख लें।" : " The forecast is uncertain, so check the numbers again before you approve.";
+    watchOut += hi ? " बिक्री का अनुमान अनिश्चित है, इसलिए मंज़ूरी से पहले संख्याएँ दोबारा देख लें।" : " Forecast confidence is low. Check the figures before approving.";
   }
   return { doThis, whyCheapest, watchOut };
 }
@@ -135,12 +134,12 @@ export function templateScript(f: ScriptFacts, language: Language): string {
   lines.push(
     hi
       ? `- शुरुआत विनम्रता से करें: कहें कि आप ${f.supplierName} के साथ काम करने की क़द्र करते हैं और आगे भी ऑर्डर देना चाहते हैं।`
-      : `- Start politely: say you value working with ${f.supplierName} and want to keep ordering.`,
+      : `- Open by thanking ${f.supplierName} for the partnership.`,
   );
   lines.push(
     hi
       ? `- बताएँ कि आप ${invoice} के बारे में बात कर रहे हैं: ${inr(f.invoiceRupees)} (${f.pairsOrdered} जोड़े), जो ${f.dueInDays} दिन में देय है।`
-      : `- Say you are calling about ${invoice} for ${inr(f.invoiceRupees)} (${f.pairsOrdered} pairs), which is due in ${f.dueInDays} days.`,
+      : `- Refer to ${invoice}: ${inr(f.invoiceRupees)} for ${f.pairsOrdered} pairs, due in ${f.dueInDays} days.`,
   );
 
   if (f.payLaterRupees > 0) {
@@ -148,27 +147,27 @@ export function templateScript(f: ScriptFacts, language: Language): string {
       f.extraDaysRequested > 0
         ? hi
           ? `- पहले पूरी रकम चुकाने के लिए ${f.extraDaysRequested} दिन और माँगें।`
-          : `- Ask first for ${f.extraDaysRequested} extra days to pay the full amount.`
+          : `- Ask for ${f.extraDaysRequested} extra days to pay in full.`
         : hi
           ? "- पूरी रकम चुकाने के लिए थोड़ा और समय माँगें।"
-          : "- Ask first for a little more time to pay the full amount.",
+          : "- Ask for a little more time to pay in full.",
     );
     lines.push(
       hi
         ? `- अगर यह मुश्किल हो, तो ${inr(f.payOnTimeRupees)} समय पर देने और बाक़ी ${inr(f.payLaterRupees)} बाद में देने का प्रस्ताव रखें।`
-        : `- If extra days are hard, offer to pay ${inr(f.payOnTimeRupees)} on time and the remaining ${inr(f.payLaterRupees)} afterwards.`,
+        : `- If that is not possible, offer ${inr(f.payOnTimeRupees)} on time and ${inr(f.payLaterRupees)} afterwards.`,
     );
   } else {
     lines.push(
       hi
         ? "- कहें कि आप पूरी रकम समय पर चुका देंगे और बस तारीख़ की पुष्टि करना चाहते हैं।"
-        : "- Say you expect to pay in full on time and just want to confirm the due date.",
+        : "- Confirm you will pay in full on the due date.",
     );
   }
   lines.push(
     hi
       ? "- धन्यवाद दें, साफ़ तारीख़ तय करें, और बातचीत के बाद उसे संदेश या ईमेल में लिखकर पक्का करें।"
-      : "- Thank them, agree on a clear date, and confirm it in writing (message or email) after the call.",
+      : "- Agree a date and confirm it in writing after the call.",
   );
   return lines.join("\n");
 }
@@ -183,10 +182,10 @@ export function templateSummary(f: ResultsFacts, language: Language): string {
         ? `आम तरीके से उधार लेने के मुक़ाबले प्लान पर ${inr(f.moneySavedRupees)} ज़्यादा खर्च आया`
         : "प्लान का खर्च आम तरीके से उधार लेने जितना ही रहा"
     : f.moneyDirection === "saved"
-      ? `You saved ${inr(f.moneySavedRupees)} compared with the usual way of borrowing`
+      ? `Saved ${inr(f.moneySavedRupees)} against paying on the due date`
       : f.moneyDirection === "cost more"
-        ? `The plan cost ${inr(f.moneySavedRupees)} more than the usual way of borrowing`
-        : "The plan cost the same as the usual way of borrowing";
+        ? `Cost ${inr(f.moneySavedRupees)} more than paying on the due date`
+        : "Same cost as paying on the due date";
   const sales = hi
     ? f.salesDirection === "in line"
       ? "बिक्री अनुमान के मुताबिक रही"
@@ -207,12 +206,12 @@ export function templateSummary(f: ResultsFacts, language: Language): string {
   if (f.drawnFromStandbyRupees > 0) {
     warn += hi
       ? ` प्लान के बाद ज़रूरी बची नकदी में से ${inr(f.drawnFromStandbyRupees)} बैकअप (न निकाली गई क्रेडिट लिमिट) से निकालने पड़ते।`
-      : ` ${inr(f.drawnFromStandbyRupees)} of the extra cash needed would have been drawn from your backup (your unused credit limit).`;
+      : ` ${inr(f.drawnFromStandbyRupees)} of extra cash would have come from backup credit.`;
   }
   if (f.beyondStandbyRupees > 0) {
     warn += hi
       ? ` ${inr(f.beyondStandbyRupees)} बैकअप से भी ज़्यादा था।`
-      : ` A further ${inr(f.beyondStandbyRupees)} was more than your backup could cover.`;
+      : ` A further ${inr(f.beyondStandbyRupees)} was more than backup credit could cover.`;
   }
   return main + warn;
 }

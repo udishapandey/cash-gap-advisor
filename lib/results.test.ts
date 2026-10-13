@@ -31,8 +31,8 @@ describe("outcomeForState", () => {
 });
 
 describe("the saved headline and breakdown", () => {
-  it("has the headline as written: This plan saved you ₹9,583", () => {
-    expect(savedHeadline(at("as_forecast"))).toBe("This plan saved you ₹9,583");
+  it("has the headline as written: Saved ₹9,583", () => {
+    expect(savedHeadline(at("as_forecast"))).toBe("Saved ₹9,583");
   });
   it("the breakdown is the discount, the plan's interest and fees, and the usual way's cost", () => {
     expect(savedBreakdown(at("as_forecast"))).toEqual([
@@ -45,14 +45,14 @@ describe("the saved headline and breakdown", () => {
     for (const id of OUTCOME_IDS) {
       const o = at(id);
       expect(o.cost.moneySaved).toBe(o.cost.plan.discountCaptured - o.cost.plan.fundsCost + o.cost.default.fundsCost);
-      expect(savedHeadline(o)).toBe(`This plan saved you ${formatINR(o.cost.moneySaved)}`);
+      expect(savedHeadline(o)).toBe(`Saved ${formatINR(o.cost.moneySaved)}`);
     }
   });
   it("never shows a negative amount: it says what the plan cost extra", () => {
     const o = at("as_forecast");
     const worse = { ...o, cost: { ...o.cost, moneySaved: -450 } };
-    expect(savedHeadline(worse)).toBe("This plan cost you ₹450 more");
-    expect(savedHeadline({ ...o, cost: { ...o.cost, moneySaved: 0 } })).toBe("This plan cost the same as the usual way");
+    expect(savedHeadline(worse)).toBe("Cost ₹450 more");
+    expect(savedHeadline({ ...o, cost: { ...o.cost, moneySaved: 0 } })).toBe("Same cost as paying on the due date");
   });
   it("follows the copy rules at every season and slider value", () => {
     for (const id of OUTCOME_IDS) {
@@ -88,7 +88,7 @@ describe("the mid-season check", () => {
     expect(midSeasonForState(run(), state(0, null))).toBeNull();
   });
   it("has the headline as written, on day 5 before the payment", () => {
-    expect(view.headline).toBe("Day 5 check: sales are 15% below forecast.");
+    expect(view.headline).toBe("Day 5: sales 15% below forecast");
     expect(date(5)).toBe("16 Oct");
   });
   it("shows the forecast against actual cash in, and the updated gap for paying on 21 Oct", () => {
@@ -101,16 +101,16 @@ describe("the mid-season check", () => {
       { label: "Pay on 21 Oct", cost: "₹2,253", saving: "₹8,119" },
       { label: "Pay on 10 Nov", cost: "₹237", saving: "-" },
     ]);
-    expect(view.verdict).toBe("Paying early is no longer worth it. Pay on 10 Nov instead.");
-    expect(view.verdictWhy).toBe("It still saves money, but if sales fall further you could run out of credit.");
+    expect(view.verdict).toBe("Pay on 10 Nov instead. Paying early is no longer worth it.");
+    expect(view.verdictWhy).toBe("It still saves money, but a further drop in sales could leave you short.");
   });
   it("says exactly what changes", () => {
     expect(view.changes).toEqual(["Pay on 10 Nov instead of 21 Oct"]);
     expect(view.nothingChanges).toBeNull();
   });
   it("has the captions as written", () => {
-    expect(MID_SEASON_CAPTION).toBe("The plan updates as real sales arrive. Sales are simulated in this prototype.");
-    expect(NEXT_TIME_CAPTION).toBe("Prototype uses a simple update rule. Production would learn from your history.");
+    expect(MID_SEASON_CAPTION).toBe("Plan updates as sales arrive. Sales are simulated.");
+    expect(NEXT_TIME_CAPTION).toBe("Simple update rule in this prototype. The live product would learn from your history.");
   });
 });
 
@@ -128,18 +128,18 @@ describe("Next time", () => {
     }
   });
   it("says what to change: 15% under forecast, start at 1.3x", () => {
-    expect(nextTimeBullets(at("lower_15"), 0)[0]).toBe("Sales ran 15% under forecast. Next time, start at 1.3x.");
+    expect(nextTimeBullets(at("lower_15"), 0)[0]).toBe("Sales 15% under forecast. Start at 1.3x next time.");
     expect(nextTimeBullets(at("higher_15"), 0)[0]).toContain("15% over forecast");
   });
   it("keeps the estimate when sales matched", () => {
-    expect(nextTimeBullets(at("as_forecast"), 0)[0]).toBe("Sales matched forecast. Keep starting at 1.4x.");
+    expect(nextTimeBullets(at("as_forecast"), 0)[0]).toBe("Sales matched forecast. Keep 1.4x.");
   });
   it("after a what-if, compares with normal, not the lowered forecast", () => {
-    expect(nextTimeBullets(at("as_forecast", 25), 25)[0]).toBe("Sales ran 25% under normal. Next time, start at 1.22x.");
+    expect(nextTimeBullets(at("as_forecast", 25), 25)[0]).toBe("Sales 25% under normal. Start at 1.22x next time.");
   });
   it("says what the COD return rate was against the one assumed, and what to expect", () => {
-    expect(nextTimeBullets(at("lower_15"), 0)[1]).toBe("COD returns were 35%, not 30%. Next time, expect 32.5%.");
-    expect(nextTimeBullets(at("higher_15"), 0)[1]).toBe("COD returns were 27%, not 30%. Next time, expect 28.5%.");
+    expect(nextTimeBullets(at("lower_15"), 0)[1]).toBe("COD returns 35% against 30% assumed. Expect 32.5%.");
+    expect(nextTimeBullets(at("higher_15"), 0)[1]).toBe("COD returns 27% against 30% assumed. Expect 28.5%.");
     expect(nextTimeBullets(at("as_forecast"), 0)[1]).toBe("COD returns matched the 30% assumed.");
   });
 });

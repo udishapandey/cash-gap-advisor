@@ -101,12 +101,12 @@ export function parseJourney(raw: unknown): JourneyState {
 
 export function stepAccess(state: JourneyState, step: StepId): { reachable: boolean; reason?: string } {
   if (step === "invoice") return { reachable: true };
-  if (state.invoice === null) return { reachable: false, reason: "Upload and confirm an invoice first." };
+  if (state.invoice === null) return { reachable: false, reason: "Confirm a bill first." };
   if (step === "approve" && state.chosenView === null) {
-    return { reachable: false, reason: "Choose a plan on the Options screen first." };
+    return { reachable: false, reason: "Review a plan first." };
   }
   if (step === "results" && !state.paid) {
-    return { reachable: false, reason: "Approve the plan and pay the supplier first." };
+    return { reachable: false, reason: "Approve and pay the supplier first." };
   }
   return { reachable: true };
 }
@@ -188,7 +188,7 @@ export function splitPlan(view: ViewResult, fullUnits: number): PlanSections {
   if (view.recommended.timing === "pay_early_for_discount") {
     nonCredit.push({
       id: "pay_early",
-      text: `Pay the supplier by day ${earlyPayDay(invoice)} to get the ${invoice.earlyPayDiscountPct}% discount`,
+      text: `Pay by day ${earlyPayDay(invoice)} for ${invoice.earlyPayDiscountPct}% off`,
       detail: `Saves ${formatINR(view.discount.discountAmount)}.`,
       amount: view.discount.discountAmount,
     });
@@ -198,8 +198,8 @@ export function splitPlan(view: ViewResult, fullUnits: number): PlanSections {
     if (step.optionId === "own_cash") {
       nonCredit.push({
         id: step.optionId,
-        text: `Use ${formatINR(step.amount)} of your own cash`,
-        detail: `Your safety buffer of ${formatINR(view.recommended.plan.buffer)} stays in the account.`,
+        text: `Use ${formatINR(step.amount)} cash`,
+        detail: `${formatINR(view.recommended.plan.buffer)} stays as a safety buffer.`,
         amount: step.amount,
         cost: 0,
       });
@@ -207,7 +207,7 @@ export function splitPlan(view: ViewResult, fullUnits: number): PlanSections {
       const pairs = Math.round(step.amount / invoice.unitPrice);
       nonCredit.push({
         id: step.optionId,
-        text: `Have ${pairs} pairs delivered later`,
+        text: `Deliver ${pairs} pairs later`,
         detail: `Frees ${formatINR(step.amount)} now. Expected lost profit ${formatINR(step.cost)}.`,
         amount: step.amount,
         cost: step.cost,
@@ -215,8 +215,8 @@ export function splitPlan(view: ViewResult, fullUnits: number): PlanSections {
     } else {
       nonCredit.push({
         id: step.optionId,
-        text: `Settle ${formatINR(step.amount)} of your sales early`,
-        detail: `Fee ${formatINR(step.cost)}. This is your own money, not a loan.`,
+        text: `Settle ${formatINR(step.amount)} of sales early`,
+        detail: `Fee ${formatINR(step.cost)}. Not a loan.`,
         amount: step.amount,
         cost: step.cost,
       });
@@ -253,7 +253,7 @@ export const SIMULATED_ACCOUNT = "•••• 4321";
 /** Shown on the Key Fact Statement: its lender, fees, contacts and cooling-off are placeholders, not a real offer. */
 export const KFS_LABEL = "Illustrative values";
 export const KFS_DISCLAIMER =
-  "Illustrative values: the lender, fees, cooling-off period, grievance contact and account below are placeholders for this concept prototype. They are not a real offer.";
+  "Illustrative values. The lender, fees, cooling-off period, grievance contact and account are placeholders in this prototype. This is not a real offer.";
 
 export interface KeyFactStatement {
   lender: string;
@@ -292,7 +292,7 @@ export function buildKfs(loanAmount: number, tenure: number, interest: number): 
         total: loanAmount + totalInterest + fees,
       },
     ],
-    disbursedTo: `Your own bank account ${SIMULATED_ACCOUNT} (simulated). Never to the supplier.`,
+    disbursedTo: `Your bank account ${SIMULATED_ACCOUNT}, simulated. Never to the supplier.`,
     grievance: {
       officer: "Grievance Redressal Officer, Partner NBFC (simulated)",
       email: "grievance@partner-nbfc.example",
@@ -303,7 +303,7 @@ export function buildKfs(loanAmount: number, tenure: number, interest: number): 
 }
 
 export function consentText(kfs: KeyFactStatement): string {
-  return `I have read the Key Fact Statement. I agree to borrow ${formatINR(kfs.loanAmount)} from ${kfs.lender} at ${kfs.annualRatePct}% a year, and I understand I expect to repay ${formatINR(kfs.totalRepayable)} about ${kfs.tenureDays} days after the money reaches my bank account, and I can repay sooner with no pre-closure charge.`;
+  return `I have read the Key Fact Statement. I agree to borrow ${formatINR(kfs.loanAmount)} from ${kfs.lender} at ${kfs.annualRatePct}% a year. I expect to repay ${formatINR(kfs.totalRepayable)} about ${kfs.tenureDays} days after disbursal. I can repay earlier with no pre-closure charge.`;
 }
 
 // ---------- Approval rules ----------
@@ -321,7 +321,7 @@ export function approvalBlockers(view: ViewResult): string[] {
   return plan.fullyCovered
     ? []
     : [
-        `This plan covers only ${formatINR(plan.covered)} of the ${formatINR(plan.gap)} gap, so ${formatINR(plan.uncovered)} is not covered. Go back and add cash available elsewhere.`,
+        `Covers ${formatINR(plan.covered)} of ${formatINR(plan.gap)}. ${formatINR(plan.uncovered)} is not covered. Add other available cash to proceed.`,
       ];
 }
 

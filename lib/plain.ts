@@ -47,11 +47,11 @@ export const TERMS = {
 
 /** Fixed lines on the Plan screen. */
 export const CLOSING_LINE =
-  "Each loan is closed the day your sales money arrives.";
+  "Loans are repaid as sales money arrives.";
 export const RATES_FOOTER =
-  "Rates are illustrative. Your actual terms come from your Key Fact Statement.";
+  "Rates are illustrative. Final terms are in your Key Fact Statement.";
 export const CREDIT_NEEDS_APPROVAL =
-  "Razorpay credit needs lender approval and a final Key Fact Statement. Values shown are illustrative.";
+  "Razorpay credit needs lender approval and a final Key Fact Statement. Values are illustrative.";
 
 /** "Shree Ganesh Footwear Pvt Ltd" -> "Shree Ganesh Footwear": the company form is noise in a caption. */
 export function tidyName(name: string): string {
@@ -111,12 +111,12 @@ export function backupLine(
   const sb = standbyFor(view);
   if (!sb.lowSalesCovered)
     return {
-      text: `Backup: ${formatINR(sb.shortBy)} short if sales are slow.`,
+      text: `Backup credit is ${formatINR(sb.shortBy)} short if sales are slow.`,
       warn: true,
     };
   if (sb.unusedCredit <= 0) return null;
   return {
-    text: `Backup: ${formatINR(sb.unusedCredit)} unused credit if sales are slow. No cost unless used.`,
+    text: `Backup credit ${formatINR(sb.unusedCredit)} unused. No cost unless used.`,
     warn: false,
   };
 }
@@ -174,9 +174,9 @@ const UNCOVERED_OPTIONS = ["Ask the supplier for more days", "Pay part now, the 
 export function payEarlyReason(view: ViewResult): string | null {
   if (view.recommended.timing === "pay_early_for_discount" || view.discount.discountAmount <= 0) return null;
   const early = view.earlyPlan;
-  if (!early.fullyCovered) return "Your limits cannot cover paying early.";
-  if (!early.simLow.feasible) return "Paying early would leave you short if sales come in low.";
-  return "The discount is smaller than the extra interest.";
+  if (!early.fullyCovered) return "Limits can't cover paying early.";
+  if (!early.simLow.feasible) return "Paying early would leave you short if sales are low.";
+  return "Interest would exceed the discount.";
 }
 
 export function buildHeroPlan(
@@ -211,7 +211,7 @@ export function buildHeroPlan(
     reason: payEarlyReason(view),
     uncoveredOptions: UNCOVERED_OPTIONS.map((o) => o.replace("{due}", dayLabel(view.invoice, view.invoice.dueInDays))),
     caption: !plan.fullyCovered
-      ? "Your limits do not cover this bill."
+      ? "Limits don't cover this bill."
       : saving > 0
         ? `Net benefit ${formatINR(saving)}`
         : saving === 0
@@ -347,7 +347,7 @@ export function compareRows(
         id: o.id,
         label: OPTION_LABEL[o.id],
         covers: overdraftCheaper
-          ? "Not needed. Your overdraft is cheaper."
+          ? "Not needed. Overdraft costs less."
           : "Not needed.",
         cost: DASH,
       });
@@ -425,7 +425,7 @@ export function gapView(result: EngineResult): GapView {
     caption:
       gap.gapMax === 0
         ? "Enough cash in every case"
-        : `${early ? "Range for paying early" : "Likely range"} ${formatINR(gap.gapMin)} to ${formatINR(gap.gapMax)}`,
+        : `Range ${formatINR(gap.gapMin)} to ${formatINR(gap.gapMax)}`,
     dueLine:
       early && view.gap.gapExpected === 0
         ? `Paying on ${dayLabel(view.invoice, view.invoice.dueInDays)} needs no borrowing.`
@@ -475,9 +475,9 @@ export function gapView(result: EngineResult): GapView {
 // ---------- Bill ----------
 
 export const LATE_FEE_LAW =
-  "If your supplier is a registered micro/small enterprise, the law sets late interest at 3x the RBI bank rate, compounded monthly.";
+  "Registered micro and small suppliers can charge late interest of 3x the RBI bank rate, compounded monthly.";
 export const BILL_PRIVACY =
-  "We don't save your bill. It is sent to our AI provider only to read it.";
+  "We don't store your bill. It is shared with our AI provider only to read it.";
 
 const num = (s: string) => Number(s.replace(/[,₹\s]/g, ""));
 

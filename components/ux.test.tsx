@@ -63,15 +63,15 @@ describe("the copy, as written", () => {
     has("components/InvoiceFlow.tsx", "Upload supplier bill", "Review bill", "Early-payment opportunity", "Payment terms", "View bill details", "Confirm bill", "Extracted automatically", "Needs review", "Missing");
     expect(read("components/InvoiceFlow.tsx")).not.toContain("Evidence:");
     expect(read("components/InvoiceFlow.tsx")).not.toMatch(/Check what the AI read|The AI reads it/);
-    has("lib/plain.ts", "We don't save your bill. It is sent to our AI provider only to read it.", "the law sets late interest at 3x the RBI bank rate, compounded monthly.");
+    has("lib/plain.ts", "We don't store your bill. It is shared with our AI provider only to read it.", "can charge late interest of 3x the RBI bank rate, compounded monthly.");
   });
   it("Cash gap", () => {
-    has("components/GapScreen.tsx", "Can you take the discount safely?", "Expected shortfall", "How we estimated this", "Other cash you can use", "See funding plan", '"Low sales"', '"Expected"', '"High sales"');
-    has("lib/plain.ts", "Cash shortfall:", "Range for paying early", '"Forecast"', "Low confidence", "Cash available", "Cash going out", "Discount deadline", "Festive uplift", "COD share", "COD timing", "Returns", "Settlement timing", "Connected banking", "Store and courier data", "Entered by you");
+    has("components/GapScreen.tsx", "Cash needed to take the early-payment discount", "Expected shortfall", "How we estimated this", "Other available cash", "See funding plan", '"Low sales"', '"Expected"', '"High sales"');
+    has("lib/plain.ts", "Cash shortfall:", '"Forecast"', "Low confidence", "Cash available", "Cash going out", "Discount deadline", "Festive uplift", "COD share", "COD timing", "Returns", "Settlement timing", "Connected banking", "Store and courier data", "Entered by you");
   });
   it("Plan", () => {
     has("components/OptionsScreen.tsx", "Recommended plan", "Net benefit", "Financing cost", "Review &amp; approve", "Why this plan?", "Ask for more days", "Get call script", '"Compare options"', '"What if sales change"', "Source", "Amount", "Repaid by");
-    has("lib/plain.ts", "No cost unless used.", "Net benefit ${formatINR(saving)}", "Your cash", "Your bank overdraft", "Razorpay credit line", "Each loan is closed the day your sales money arrives.", "Rates are illustrative. Your actual terms come from your Key Fact Statement.", "Not needed. Your overdraft is cheaper.");
+    has("lib/plain.ts", "No cost unless used.", "Net benefit ${formatINR(saving)}", "Your cash", "Your bank overdraft", "Razorpay credit line", "Loans are repaid as sales money arrives.", "Rates are illustrative. Final terms are in your Key Fact Statement.", "Not needed. Overdraft costs less.");
     expect(read("lib/plain.ts")).not.toMatch(/54\.75|annualis/i);
   });
   it("Plan shows the explanation only when asked, and has no extra links", () => {
@@ -86,12 +86,12 @@ describe("the copy, as written", () => {
   });
   it("Approve", () => {
     has("components/ApproveScreen.tsx", "Plan summary", "Amount financed", "Financing cost", "Repaid by", "Net benefit", "Funding", "Financing approval", "Key Fact Statement", "View full statement", "Approve financing", "Pay supplier", "Supplier paid", "Simulated. No real money moved.", "See results");
-    has("lib/plain.ts", "Razorpay credit needs lender approval and a final Key Fact Statement. Values shown are illustrative.");
+    has("lib/plain.ts", "Razorpay credit needs lender approval and a final Key Fact Statement. Values are illustrative.");
     expect(read("components/ApproveScreen.tsx")).not.toContain("Start another invoice");
   });
   it("Results", () => {
     has("components/ResultsScreen.tsx", "Supplier paid", "Discount captured", "Financing cost", "Repayment", "Mid-season check", "Approve updated plan", "As forecast", "15% lower", "15% higher", "Forecast gap", "Actual gap", "Difference", "Next time", "Details", "Done");
-    has("lib/results.ts", "This plan saved you", "Day ${m.day} check: sales are", "Nothing changes.");
+    has("lib/results.ts", "Saved", "Day ${m.day}: sales", "Nothing changes.");
     expect(read("components/ResultsScreen.tsx")).not.toMatch(/sold out/i);
   });
 });

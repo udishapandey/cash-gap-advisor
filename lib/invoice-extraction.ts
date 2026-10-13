@@ -136,7 +136,7 @@ export function parseExtraction(raw: unknown): ParseExtractionResult {
   const fields = [...new Set(result.error.issues.map((i) => String(i.path[0] ?? "response")))];
   return {
     ok: false,
-    message: `The AI's answer wasn't in the expected format (check: ${fields.join(", ")}). Please try again, or upload a clearer copy.`,
+    message: `Couldn't read these fields: ${fields.join(", ")}. Try again or upload a clearer copy.`,
   };
 }
 
@@ -262,7 +262,7 @@ export function toEngineInvoice(
   const today = opts.today ?? c.invoiceDate;
   const dueInDays = daysBetween(today, c.dueDate);
   if (dueInDays < 1) {
-    return { ok: false, error: `The due date (${c.dueDate}) is not after today (${today}), so there is no cash gap left to plan.` };
+    return { ok: false, error: `The due date (${c.dueDate}) is not after today (${today}). There is nothing left to plan.` };
   }
   const notes: string[] = [];
 

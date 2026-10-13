@@ -8,13 +8,13 @@ export default function KeyFactStatementPanel({ kfs }: { kfs: KeyFactStatement }
     ["Lender", kfs.lender],
     ["Loan amount", formatINR(kfs.loanAmount)],
     ["Interest rate", `${kfs.annualRatePct}% a year`],
-    ["Annual percentage rate (APR, with fees)", `${kfs.apr}% a year`],
+    ["APR, including fees", `${kfs.apr}% a year`],
     ["Total interest", formatINR(kfs.totalInterest)],
     ["Fees", kfs.fees === 0 ? "₹0 (none in this simulation)" : formatINR(kfs.fees)],
     ["Tenure", `${kfs.tenureDays} days`],
-    ["Total you repay", <strong key="t">{formatINR(kfs.totalRepayable)}</strong>],
-    ["Cooling-off period", `${kfs.coolingOffDays} days: you can cancel by repaying the principal and interest so far`],
-    ["Money is paid to", kfs.disbursedTo],
+    ["Total repayable", <strong key="t">{formatINR(kfs.totalRepayable)}</strong>],
+    ["Cooling-off period", `${kfs.coolingOffDays} days. Cancel by repaying principal and interest to date.`],
+    ["Disbursed to", kfs.disbursedTo],
     [
       "Grievance contact",
       <>

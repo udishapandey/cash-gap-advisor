@@ -53,7 +53,7 @@ describe("checking what the AI returned", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.reason).toBe("out_of_range");
-      expect(r.message).toContain("outside what I can model");
+      expect(r.message).toContain("Out of range");
       expect(r.message).toContain(WHAT_IF_RANGES[field].label);
     }
   });
@@ -136,16 +136,16 @@ describe("applying settings", () => {
 
 describe("the trace and the fallback message", () => {
   it("shows what the question was understood as", () => {
-    expect(describeSettings({ salesDropPercent: 25 })).toBe("Understood as: sales −25% → recalculated");
-    expect(describeSettings({ supplierExtensionDays: 15 })).toBe("Understood as: supplier +15 days → recalculated");
+    expect(describeSettings({ salesDropPercent: 25 })).toBe("Applied: sales −25%");
+    expect(describeSettings({ supplierExtensionDays: 15 })).toBe("Applied: supplier +15 days");
     expect(describeSettings({ salesDropPercent: 25, supplierExtensionDays: 15, cashElsewhere: 50_000, bankRatePercent: 12 })).toBe(
-      "Understood as: sales −25%, supplier +15 days, extra cash ₹50,000, bank rate 12% → recalculated",
+      "Applied: sales −25%, supplier +15 days, extra cash ₹50,000, bank rate 12%",
     );
     expect(describeSettings({ supplierExtensionDays: 0 })).toContain("no supplier extension");
     expect(describeSettings({ salesDropPercent: 0 })).toContain("sales unchanged");
   });
   it("the message for a question we can't map is exactly as specified", () => {
-    expect(UNMAPPABLE_MESSAGE).toBe("I can answer what-ifs about sales, supplier days, extra cash or your bank rate.");
+    expect(UNMAPPABLE_MESSAGE).toBe("Try a what-if about sales, supplier days, extra cash or the bank rate.");
   });
   it("treats questions that differ only in case and spacing as the same", () => {
     expect(normaliseQuestion("  What if   SALES drop 25%? ")).toBe(normaliseQuestion("what if sales drop 25%?"));

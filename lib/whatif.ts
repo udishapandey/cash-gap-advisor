@@ -6,7 +6,7 @@ import { z } from "zod";
 import { formatINR } from "./format";
 
 export const UNMAPPABLE_MESSAGE =
-  "I can answer what-ifs about sales, supplier days, extra cash or your bank rate.";
+  "Try a what-if about sales, supplier days, extra cash or the bank rate.";
 
 /** The ranges the engine is willing to be asked about. */
 export const WHAT_IF_RANGES = {
@@ -47,7 +47,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
  */
 export function parseWhatIf(raw: unknown): ParseWhatIfResult {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-    return { ok: false, reason: "invalid", message: "The AI's answer wasn't in the expected format." };
+    return { ok: false, reason: "invalid", message: "Couldn't read that question. Rephrase and try again." };
   }
   const r = whatIfSchema.safeParse(raw);
   if (!r.success) {
@@ -57,10 +57,10 @@ export function parseWhatIf(raw: unknown): ParseWhatIfResult {
       return {
         ok: false,
         reason: "out_of_range",
-        message: `That's outside what I can model. I can try ${WHAT_IF_RANGES[f]?.label ?? "values in range"}.`,
+        message: `Out of range. Try ${WHAT_IF_RANGES[f]?.label ?? "values in range"}.`,
       };
     }
-    return { ok: false, reason: "invalid", message: "The AI's answer wasn't in the expected format." };
+    return { ok: false, reason: "invalid", message: "Couldn't read that question. Rephrase and try again." };
   }
   const settings: WhatIfSettings = {};
   const v = r.data;
@@ -85,7 +85,7 @@ export function clampWhatIf(settings: WhatIfSettings): WhatIfSettings {
 
 export const isEmptyWhatIf = (s: WhatIfSettings) => Object.keys(s).length === 0;
 
-/** The small trace shown under the box: "Understood as: sales −25% → recalculated". */
+/** The small trace shown under the box: "Applied: sales −25%". */
 export function describeSettings(settings: WhatIfSettings): string {
   const parts: string[] = [];
   if (settings.salesDropPercent !== undefined) {
@@ -96,7 +96,7 @@ export function describeSettings(settings: WhatIfSettings): string {
   }
   if (settings.cashElsewhere !== undefined) parts.push(`extra cash ${formatINR(settings.cashElsewhere)}`);
   if (settings.bankRatePercent !== undefined) parts.push(`bank rate ${settings.bankRatePercent}%`);
-  return `Understood as: ${parts.join(", ")} → recalculated`;
+  return `Applied: ${parts.join(", ")}`;
 }
 
 export interface AppliedWhatIf {

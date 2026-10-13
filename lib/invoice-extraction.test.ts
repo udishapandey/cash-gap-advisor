@@ -36,7 +36,7 @@ describe("validating the AI's answer (zod)", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.message).toContain("totalAmount");
-      expect(r.message).toContain("try again");
+      expect(r.message).toContain("Try again");
     }
   });
 
@@ -283,7 +283,7 @@ describe("mapping the confirmed invoice into the engine", () => {
   it("refuses a due date that is not after today", () => {
     const r = map({}, "2026-11-10");
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toContain("no cash gap left to plan");
+    if (!r.ok) expect(r.error).toContain("nothing left to plan");
   });
 });
 

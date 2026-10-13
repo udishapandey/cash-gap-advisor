@@ -42,7 +42,7 @@ export default function JourneyShell({
         <p className="text-sm text-muted">Loading…</p>
       ) : !access.reachable || !engine || !state.invoice ? (
         <section className="rounded-lg border border-line bg-card p-6">
-          <h2 className="text-lg font-semibold">Not yet</h2>
+          <h2 className="text-lg font-semibold">Not available yet</h2>
           <p className="mt-1 text-sm text-muted">{access.reason}</p>
           <Link
             href={fix.href}

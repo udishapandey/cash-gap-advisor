@@ -58,7 +58,7 @@ export default function WhatIfAsk({ onApply }: { onApply: (applied: AppliedWhatI
         setReply({ kind: "message", text: outcome.message, mock: "mock" in outcome ? outcome.mock : false });
       }
     } catch {
-      setReply({ kind: "message", text: "Couldn't reach the AI service. Please try again.", mock: false });
+      setReply({ kind: "message", text: "Couldn't process that. Try again.", mock: false });
     } finally {
       setBusy(false);
     }
@@ -67,7 +67,7 @@ export default function WhatIfAsk({ onApply }: { onApply: (applied: AppliedWhatI
   return (
     <div className="mt-5">
       <label htmlFor="what-if-question" className="text-sm font-medium">
-        Ask a what-if
+        Try a what-if
       </label>
       <form
         className="mt-1 flex flex-col gap-2 sm:flex-row"
@@ -90,7 +90,7 @@ export default function WhatIfAsk({ onApply }: { onApply: (applied: AppliedWhatI
           disabled={busy || !question.trim()}
           className="shrink-0 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
         >
-          {busy ? "Working it out…" : "Ask"}
+          {busy ? "Calculating…" : "Ask"}
         </button>
       </form>
       <div className="mt-2 flex flex-wrap gap-2 text-xs">

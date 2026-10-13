@@ -80,7 +80,7 @@ describe("which steps can be opened", () => {
     for (const step of ["gap", "options", "approve"] as const) {
       const a = stepAccess(DEFAULT_JOURNEY, step);
       expect(a.reachable).toBe(false);
-      expect(a.reason).toContain("invoice");
+      expect(a.reason).toContain("bill");
     }
   });
 
@@ -89,7 +89,7 @@ describe("which steps can be opened", () => {
     expect(stepAccess(withInvoice(), "options").reachable).toBe(true);
     const locked = stepAccess(withInvoice(), "approve");
     expect(locked.reachable).toBe(false);
-    expect(locked.reason).toContain("Choose a plan");
+    expect(locked.reason).toContain("Review a plan");
     expect(stepAccess(withInvoice({ chosenView: "keep_full" }), "approve").reachable).toBe(true);
   });
 
@@ -208,7 +208,7 @@ describe("Key Fact Statement (simulated)", () => {
     expect(kfs.tenureDays).toBe(30);
     expect(kfs.totalRepayable).toBe(101_479);
     expect(kfs.schedule).toEqual([{ dayAfterDisbursement: 30, principal: 100_000, interest: 1_479, total: 101_479 }]);
-    expect(kfs.disbursedTo).toContain("own bank account");
+    expect(kfs.disbursedTo).toContain("bank account");
     expect(kfs.disbursedTo).toContain("Never to the supplier");
     expect(kfs.grievance.officer).toContain("Grievance");
     expect(kfs.grievance.email).toContain("@");

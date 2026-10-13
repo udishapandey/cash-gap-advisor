@@ -76,7 +76,7 @@ export default function GapScreen() {
         const gap = result.recommended.focusGap;
         return (
           <>
-            <PageHeader title="Cash gap" crumbs={["Supplier bills"]} subtitle="Can you take the discount safely?" />
+            <PageHeader title="Cash gap" crumbs={["Supplier bills"]} subtitle="Cash needed to take the early-payment discount" />
 
             <Panel aria-label={view.headline}>
               <div className="flex flex-wrap items-start justify-between gap-6 p-6">
@@ -143,11 +143,11 @@ export default function GapScreen() {
             </Disclosure>
 
             <Card>
-              <SectionLabel>Your inputs</SectionLabel>
+              <SectionLabel>Assumptions</SectionLabel>
               <div className="mt-3 grid gap-5 sm:grid-cols-2">
                 <NumberField
                   id="cash-elsewhere"
-                  label="Other cash you can use"
+                  label="Other available cash"
                   prefix="₹"
                   value={state.cashElsewhere}
                   onCommit={(v) => update({ cashElsewhere: v })}

@@ -51,7 +51,7 @@ describe("the default scenario is the pre-read sample bill", () => {
     expect(v.hero).toBe("₹2.31L");
     expect(v.duration).toBe("for 8 days");
     expect(v.dueLine).toBe("Paying on 10 Nov needs no borrowing.");
-    expect(v.caption).toBe("Range for paying early ₹96,500 to ₹3,65,300");
+    expect(v.caption).toBe("Range ₹96,500 to ₹3,65,300");
     expect(v.summary.map((c) => c.label)).toEqual(["Cash available", "Cash going out", "Discount deadline"]);
     expect(v.summary.map((c) => c.value)).toEqual(["₹12.09L", "₹13.90L", "21 Oct"]);
     expect(v.summary[2].caption).toBe("Bill due 10 Nov");
@@ -131,9 +131,9 @@ describe("at -30% sales the plan cannot cover the bill", () => {
 
 describe("why the plan pays on the due date", () => {
   it("gives one plain reason when a discount was on offer but is not taken", () => {
-    expect(payEarlyReason(runDefault(8).recommended)).toBe("Paying early would leave you short if sales come in low.");
-    expect(payEarlyReason(runDefault(30).recommended)).toBe("Your limits cannot cover paying early.");
-    expect(buildHeroPlan(runDefault(10), "keep_full", 0).reason).toBe("Paying early would leave you short if sales come in low.");
+    expect(payEarlyReason(runDefault(8).recommended)).toBe("Paying early would leave you short if sales are low.");
+    expect(payEarlyReason(runDefault(30).recommended)).toBe("Limits can't cover paying early.");
+    expect(buildHeroPlan(runDefault(10), "keep_full", 0).reason).toBe("Paying early would leave you short if sales are low.");
   });
   it("gives none when the plan pays early or there is no discount", () => {
     expect(payEarlyReason(runDefault(0).recommended)).toBeNull();
@@ -184,8 +184,8 @@ describe("Bill", () => {
     expect(billHero({ totalAmount: "", invoiceDate: "2026-10-11", dueDate: "2026-11-10", earlyPaymentDiscountPercent: "2", earlyPaymentDiscountDays: "10" })).toBeNull();
   });
   it("carries the late-interest law line and the privacy line as written", () => {
-    expect(LATE_FEE_LAW).toBe("If your supplier is a registered micro/small enterprise, the law sets late interest at 3x the RBI bank rate, compounded monthly.");
-    expect(BILL_PRIVACY).toBe("We don't save your bill. It is sent to our AI provider only to read it.");
+    expect(LATE_FEE_LAW).toBe("Registered micro and small suppliers can charge late interest of 3x the RBI bank rate, compounded monthly.");
+    expect(BILL_PRIVACY).toBe("We don't store your bill. It is shared with our AI provider only to read it.");
   });
 });
 
@@ -241,9 +241,9 @@ describe("the recommended plan card", () => {
     expect(hero.rows.reduce((t, x) => t + x.share, 0)).toBeCloseTo(1, 9);
   });
   it("has the closing line, the backup line and the footer as written", () => {
-    expect(hero.closingLine).toBe("Each loan is closed the day your sales money arrives.");
-    expect(hero.backup).toEqual({ text: "Backup: ₹1,69,100 unused credit if sales are slow. No cost unless used.", warn: false });
-    expect(hero.footer).toBe("Rates are illustrative. Your actual terms come from your Key Fact Statement.");
+    expect(hero.closingLine).toBe("Loans are repaid as sales money arrives.");
+    expect(hero.backup).toEqual({ text: "Backup credit ₹1,69,100 unused. No cost unless used.", warn: false });
+    expect(hero.footer).toBe("Rates are illustrative. Final terms are in your Key Fact Statement.");
   });
   it("has no old insight chip and no yearly rate anywhere", () => {
     expect(JSON.stringify(hero)).not.toMatch(/54\.75|a year|insight/);
@@ -260,7 +260,7 @@ describe("the recommended plan card", () => {
     const rr = runDefault(30);
     const line = backupLine(rr.views.keepFull)!;
     expect(line.warn).toBe(true);
-    expect(line.text).toMatch(/^Backup: ₹[\d,]+ short if sales are slow\.$/);
+    expect(line.text).toMatch(/^Backup credit is ₹[\d,]+ short if sales are slow\.$/);
   });
   it("has no backup line when there is no credit line left to mention", () => {
     expect(backupLine(runDefault(0, { cashElsewhere: 5_000_000 }).views.keepFull)?.warn).toBe(false);
@@ -293,7 +293,7 @@ describe("the Compare options table", () => {
     expect(rows.map((x) => x.label)).toEqual(["Bank overdraft", "Razorpay credit line", "Instant settlement", "Split the order", "Order fewer pairs"]);
   });
   it("says instant settlement is not needed, and why, when the plan does not use it", () => {
-    expect(rows.find((x) => x.id === "early_settlement")).toMatchObject({ covers: "Not needed. Your overdraft is cheaper.", cost: "-" });
+    expect(rows.find((x) => x.id === "early_settlement")).toMatchObject({ covers: "Not needed. Overdraft costs less.", cost: "-" });
   });
   it("shows 'Not needed' for ordering fewer pairs when it equals the full order", () => {
     expect(fewerPairsSameAsFull(r)).toBe(true);

@@ -44,19 +44,19 @@ interface Confirmed {
 const SOURCE_NOTICE: Record<Exclude<Source, "live">, { title: string; text: string }> = {
   cached: {
     title: "Read earlier",
-    text: "This file was already read in this browser tab, so the saved result is shown and the AI was not called.",
+    text: "Saved result. The bill was not read again.",
   },
   mock: {
     title: "Mock AI",
-    text: "Development mode: these are saved sample values, returned without calling the AI.",
+    text: "Sample values. No AI call was made.",
   },
   "pre-read": {
     title: "Pre-read sample",
-    text: "These values were saved from an earlier reading of the synthetic sample invoice. The AI did not read a file just now.",
+    text: "Saved from an earlier read of the sample bill.",
   },
   manual: {
     title: "Manual entry",
-    text: "The AI did not read this invoice. Type the values from your invoice. Fields marked * are needed to plan the cash gap.",
+    text: "Enter the values from your bill. Fields marked * are required.",
   },
 };
 
@@ -164,11 +164,11 @@ export default function InvoiceFlow() {
     setAiFailed(false);
     const name = file.name.toLowerCase();
     if (!/\.(pdf|png|jpe?g)$/.test(name)) {
-      setError("Please upload a PDF, PNG or JPG invoice.");
+      setError("Upload a PDF, PNG or JPG.");
       return;
     }
     if (file.size > MAX_INVOICE_BYTES) {
-      setError("That file is too large. Please upload an invoice under 5 MB.");
+      setError("File too large. Maximum 5 MB.");
       return;
     }
     setLastFile(file);
@@ -204,7 +204,7 @@ export default function InvoiceFlow() {
       if (!res.ok || !data?.ok) {
         const wait = res.headers.get("Retry-After");
         setError(
-          (data?.error ?? "Something went wrong reading the invoice. Please try again.") +
+          (data?.error ?? "Couldn't read this bill. Try again.") +
             (res.status === 429 && wait && Number(wait) <= 120 ? ` (Try again in about ${wait} seconds.)` : ""),
         );
         // Only an AI failure (the server says which kind) offers the fallbacks. A wrong file type or size does not.
@@ -226,8 +226,8 @@ export default function InvoiceFlow() {
       if (controller.signal.aborted) return; // the founder started something else
       setError(
         e instanceof Error && e.name === "TimeoutError"
-          ? "The AI took too long to respond."
-          : "Couldn't reach the server. Please check your connection and try again.",
+          ? "Reading timed out. Try again."
+          : "Connection failed. Try again.",
       );
       setAiFailed(true);
       setPhase(extraction ? "review" : "idle");
@@ -257,7 +257,7 @@ export default function InvoiceFlow() {
       const blob = await res.blob();
       await readFile(new File([blob], "invoice-clean.pdf", { type: "application/pdf" }));
     } catch {
-      setError("Couldn't load the sample invoice.");
+      setError("Couldn't load the sample bill.");
     }
   }
 
@@ -273,7 +273,7 @@ export default function InvoiceFlow() {
     const form = parseConfirmed(values);
     if (!form.ok) {
       setFormErrors(form.errors);
-      setError("Some fields need fixing before this invoice can be confirmed.");
+      setError("Fix the highlighted fields to confirm.");
       return;
     }
     const mapped = toEngineInvoice(form.data);
@@ -395,7 +395,7 @@ export default function InvoiceFlow() {
         actions={
           <>
             {mockAi && (
-              <span title="AI_MOCK is on: saved sample values are returned and no AI is called.">
+              <span title="Sample values. No AI call is made.">
                 <Badge tone="neutral">Mock AI</Badge>
               </span>
             )}
@@ -424,7 +424,7 @@ export default function InvoiceFlow() {
             }}
             className={`flex flex-col items-center gap-3 rounded-md border-2 border-dashed px-4 py-10 text-center ${dragging ? "border-brand bg-blue-50" : "border-line-strong"}`}
           >
-            <p className="text-sm text-subtle">Drag a bill here, or</p>
+            <p className="text-sm text-subtle">Drag and drop a bill, or</p>
             <div className="flex flex-wrap justify-center gap-3">
               <label className={`${BTN.primary} cursor-pointer ${reading ? "pointer-events-none opacity-50" : ""}`}>
                 Choose file
@@ -453,18 +453,18 @@ export default function InvoiceFlow() {
         {reading && (
           <Alert tone="information">
             <span className="flex items-center gap-2">
-              <Spinner /> Reading your bill… up to 45 seconds ({elapsed}s)
-              {elapsed >= SLOW_AFTER_S && <span className="text-amber-800">Slower than usual.</span>}
+              <Spinner /> Reading bill… {elapsed}s
+              {elapsed >= SLOW_AFTER_S && <span className="text-amber-800">Taking longer than usual.</span>}
             </span>
           </Alert>
         )}
         {error && <Alert tone="negative">{error}</Alert>}
         {aiFailed && !reading && (
           <Card>
-            <p className="text-sm font-medium">Couldn&apos;t read this bill. Continue with:</p>
+            <p className="text-sm font-medium">Couldn&apos;t read this bill</p>
             <div className="mt-3 flex flex-wrap gap-3">
               <button type="button" onClick={usePreReadSample} className={BTN.secondary}>
-                Pre-read sample
+                Use pre-read sample
               </button>
               <button type="button" onClick={enterManually} className={BTN.secondary}>
                 Enter manually
@@ -489,7 +489,7 @@ export default function InvoiceFlow() {
                 Read again
               </button>
             )}
-            {anyToCheck && <span className="text-xs text-muted">Check the flagged fields.</span>}
+            {anyToCheck && <span className="text-xs text-muted">Review highlighted fields.</span>}
           </div>
 
           {billHeroView && (
@@ -518,7 +518,7 @@ export default function InvoiceFlow() {
                   <thead>
                     <tr className="border-b border-line text-xs text-muted">
                       <th className="py-2 text-left font-medium">Field</th>
-                      <th className="px-3 py-2 text-left font-medium">Read from the bill</th>
+                      <th className="px-3 py-2 text-left font-medium">On the bill</th>
                       <th className="py-2 text-left font-medium">Confidence</th>
                     </tr>
                   </thead>

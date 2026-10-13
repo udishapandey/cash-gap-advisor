@@ -271,7 +271,7 @@ describe("explainPlan: three labelled parts", () => {
     const o = await explainPlan(result, "en");
     expect(o).toMatchObject({ status: "unavailable", reason: "ai_error", text: templateExplanation(facts, "en") });
     expect(o.parts).toEqual(templateExplanationParts(facts, "en"));
-    expect(o.message).toContain("usage limit");
+    expect(o.message).toContain("limit reached");
   });
 
   it("falls back to the template when there is no API key, and calls nothing", async () => {
@@ -435,8 +435,8 @@ describe("callScript: talking points for the founder's phone call", () => {
     const fetchMock = mockFetch(() => geminiReply(good));
     await callScript(view.invoice, view.duePlan, "hi", extra);
     const system = systemText(fetchMock);
-    expect(system).toContain("greet the supplier politely");
-    expect(system).toContain("relationship");
+    expect(system).toContain("open by thanking the supplier");
+    expect(system).toContain("partnership");
     expect(system).toContain("extra days");
     expect(system).toContain("later");
     expect(system).toContain("Hindi");
@@ -510,7 +510,7 @@ describe("interpretWhatIf: the typed what-if", () => {
   it("turns a question into settings when the AI returns valid numbers", async () => {
     const fetchMock = mockFetch(() => answer({ salesDropPercent: 25 }));
     const o = await interpretWhatIf("What if sales drop 25%?");
-    expect(o).toEqual({ status: "mapped", settings: { salesDropPercent: 25 }, trace: "Understood as: sales −25% → recalculated", mock: false, cached: false });
+    expect(o).toEqual({ status: "mapped", settings: { salesDropPercent: 25 }, trace: "Applied: sales −25%", mock: false, cached: false });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -543,7 +543,7 @@ describe("interpretWhatIf: the typed what-if", () => {
     expect(o.status).toBe("rejected");
     if (o.status === "rejected") {
       expect(o.reason).toBe("out_of_range");
-      expect(o.message).toContain("outside what I can model");
+      expect(o.message).toContain("Out of range");
       expect(o.message).toContain("0% to 50%");
     }
   });
@@ -579,7 +579,7 @@ describe("interpretWhatIf: the typed what-if", () => {
   it("gives the fallback message for a question that can't be mapped (the AI returns {})", async () => {
     mockFetch(() => answer({}));
     const o = await interpretWhatIf("What's the capital of France?");
-    expect(o).toEqual({ status: "unmappable", message: "I can answer what-ifs about sales, supplier days, extra cash or your bank rate.", mock: false });
+    expect(o).toEqual({ status: "unmappable", message: "Try a what-if about sales, supplier days, extra cash or the bank rate.", mock: false });
     expect(o).toMatchObject({ message: UNMAPPABLE_MESSAGE });
   });
 
@@ -632,13 +632,13 @@ describe("interpretWhatIf: the typed what-if", () => {
       expect(await ask("What if sales drop 25%?")).toMatchObject({
         status: "mapped",
         settings: { salesDropPercent: 25 },
-        trace: "Understood as: sales −25% → recalculated",
+        trace: "Applied: sales −25%",
         mock: true,
       });
       expect(await ask("What if the supplier gives 15 more days?")).toMatchObject({
         status: "mapped",
         settings: { supplierExtensionDays: 15 },
-        trace: "Understood as: supplier +15 days → recalculated",
+        trace: "Applied: supplier +15 days",
       });
       expect(fetchMock).not.toHaveBeenCalled();
     });

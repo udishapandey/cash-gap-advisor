@@ -12,8 +12,8 @@ import type { Language } from "@/lib/language";
 import LanguageToggle from "./LanguageToggle";
 import { useAiResource } from "./useAiResource";
 
-export const VERIFIED_LABEL = "AI explanation — numbers verified against the calculation";
-export const UNAVAILABLE_NOTE = "AI explanation unavailable";
+export const VERIFIED_LABEL = "AI-generated. Figures checked against the plan.";
+export const UNAVAILABLE_NOTE = "Standard explanation. AI unavailable.";
 
 export function isVerifiedTextOutcome(v: unknown): v is VerifiedTextOutcome {
   return (
@@ -65,7 +65,7 @@ export function AiExplanationView({
               {VERIFIED_LABEL}
             </h3>
           )}
-          {status === "unavailable" && <h3 className="text-sm font-semibold">Plain explanation</h3>}
+          {status === "unavailable" && <h3 className="text-sm font-semibold">Explanation</h3>}
           {(status === "loading" || status === "stale") && <h3 className="text-sm font-semibold">Why this plan</h3>}
           {mock && (
             <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">Mock AI</span>
@@ -76,7 +76,7 @@ export function AiExplanationView({
 
       {status === "loading" ? (
         <p className="mt-3 text-sm text-muted" aria-live="polite">
-          Writing a plain-language explanation…
+          Preparing explanation…
         </p>
       ) : parts ? (
         <dl lang={language === "hi" ? "hi" : "en"} className="mt-3 space-y-3 text-sm leading-relaxed" aria-live="polite">
@@ -100,7 +100,7 @@ export function AiExplanationView({
             onClick={onExplain}
             className="rounded-md border border-brand-border text-brand-text bg-white px-3 py-1.5 text-sm font-medium hover:bg-background"
           >
-            Explain this plan
+            Show explanation
           </button>
           <span className="text-xs text-muted">The numbers changed. This is the plain explanation; ask the AI to rewrite it.</span>
         </div>

@@ -29,9 +29,9 @@ describe("Key Fact Statement panel", () => {
       "Total interest",
       "Fees",
       "Tenure",
-      "Total you repay",
+      "Total repayable",
       "Repayment schedule",
-      "own bank account",
+      "bank account",
       "Grievance contact",
     ]) {
       expect(html, label).toContain(label);

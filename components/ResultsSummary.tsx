@@ -41,7 +41,7 @@ export function ResultsSummaryView({
       </div>
       {status === "loading" ? (
         <p className="mt-3 text-sm text-muted" aria-live="polite">
-          Writing a one-line summary…
+          Summarising…
         </p>
       ) : (
         <p lang={language === "hi" ? "hi" : "en"} className="mt-3 text-sm leading-relaxed" aria-live="polite">

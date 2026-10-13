@@ -20,18 +20,18 @@ const view = result.views.keepFull;
 const script = templateScript(scriptFacts(view.invoice, view.duePlan, { extensionDays: 15, borrowingRemovedRupees: 0 }), "en");
 
 describe("the AI explanation on the Options screen", () => {
-  it("is labelled 'AI explanation — numbers verified against the calculation' when the numbers checked out", () => {
-    expect(VERIFIED_LABEL).toBe("AI explanation — numbers verified against the calculation");
+  it("is labelled 'AI-generated. Figures checked against the plan.' when the numbers checked out", () => {
+    expect(VERIFIED_LABEL).toBe("AI-generated. Figures checked against the plan.");
     const html = renderToStaticMarkup(<AiExplanationView status="verified" text={explanation} mock={false} language="en" onLanguage={noop} />);
-    expect(html).toContain("AI explanation — numbers verified against the calculation");
+    expect(html).toContain("AI-generated. Figures checked against the plan.");
     expect(html).toContain(explanation.slice(0, 40));
     expect(html).not.toContain(UNAVAILABLE_NOTE);
   });
 
-  it("shows the plain template with a small 'AI explanation unavailable' note when it didn't", () => {
-    expect(UNAVAILABLE_NOTE).toBe("AI explanation unavailable");
+  it("shows the plain template with a small 'Standard explanation. AI unavailable.' note when it didn't", () => {
+    expect(UNAVAILABLE_NOTE).toBe("Standard explanation. AI unavailable.");
     const html = renderToStaticMarkup(<AiExplanationView status="unavailable" text={explanation} mock={false} language="en" onLanguage={noop} />);
-    expect(html).toContain("AI explanation unavailable");
+    expect(html).toContain("Standard explanation. AI unavailable.");
     expect(html).toContain(explanation.slice(0, 40));
     // and it must NOT claim the numbers were verified
     expect(html).not.toContain("numbers verified");
@@ -40,7 +40,7 @@ describe("the AI explanation on the Options screen", () => {
 
   it("says it is working while the answer is on its way, and shows no old text", () => {
     const html = renderToStaticMarkup(<AiExplanationView status="loading" text="" mock={false} language="en" onLanguage={noop} />);
-    expect(html).toContain("Writing a plain-language explanation");
+    expect(html).toContain("Preparing explanation");
     expect(html).not.toContain("numbers verified");
     expect(html).not.toContain(UNAVAILABLE_NOTE);
   });
@@ -55,11 +55,11 @@ describe("the AI explanation on the Options screen", () => {
     expect(hi).toContain('lang="hi"');
   });
 
-  it("after the numbers change, shows the plain text and an Explain this plan button, not the verified label", () => {
+  it("after the numbers change, shows the plain text and an Show explanation button, not the verified label", () => {
     const html = renderToStaticMarkup(
       <AiExplanationView status="stale" text={explanation} mock={false} language="en" onLanguage={noop} onExplain={noop} />,
     );
-    expect(html).toContain("Explain this plan");
+    expect(html).toContain("Show explanation");
     expect(html).toContain(esc(explanation));
     expect(html).not.toContain(VERIFIED_LABEL);
   });
@@ -110,15 +110,15 @@ describe("the call script on the 'Ask first' card", () => {
     expect(html).toContain("Copy");
     expect(html).toContain("English");
     expect(html).toContain("हिन्दी");
-    expect(html).toContain("Ask first for 15 extra days");
+    expect(html).toContain("Ask for 15 extra days");
   });
 
   it("says it is for a phone call and that nothing is sent to the supplier", () => {
-    expect(render()).toContain("Talking points for your phone call. Nothing is sent to the supplier.");
+    expect(render()).toContain("Talking points for your call. Nothing is sent to the supplier.");
   });
 
   it("says the numbers were verified, or that the AI script was unavailable", () => {
-    expect(SCRIPT_VERIFIED_LABEL).toBe("Numbers verified against your invoice and plan");
+    expect(SCRIPT_VERIFIED_LABEL).toBe("Figures checked against your plan");
     expect(render()).toContain(SCRIPT_VERIFIED_LABEL);
     expect(render({ status: "unavailable" })).toContain(SCRIPT_UNAVAILABLE_NOTE);
     expect(render({ status: "unavailable" })).not.toContain("verified");
@@ -130,7 +130,7 @@ describe("the call script on the 'Ask first' card", () => {
 
   it("shows only a short message while it is being written", () => {
     const html = render({ status: "loading", text: "" });
-    expect(html).toContain("Writing talking points");
+    expect(html).toContain("Preparing");
     expect(html).not.toContain("<li>");
     expect(html).not.toContain("Copy");
   });
@@ -139,7 +139,7 @@ describe("the call script on the 'Ask first' card", () => {
 describe("the typed what-if box", () => {
   const html = renderToStaticMarkup(<WhatIfAsk onApply={noop} />);
   it("invites a question, with the two examples", () => {
-    expect(html).toContain("Ask a what-if");
+    expect(html).toContain("Try a what-if");
     expect(html).toContain("What if sales drop 25%?");
     expect(html).toContain("What if the supplier gives 15 more days?");
   });
@@ -182,7 +182,7 @@ describe("the results summary view", () => {
   it("shows a Mock AI badge in mock mode, a loading line, and an English/Hindi toggle", () => {
     expect(renderToStaticMarkup(<ResultsSummaryView status="verified" text={text} mock language="en" onLanguage={noop} />)).toContain("Mock AI");
     const loading = renderToStaticMarkup(<ResultsSummaryView status="loading" text="" mock={false} language="hi" onLanguage={noop} />);
-    expect(loading).toContain("Writing a one-line summary");
+    expect(loading).toContain("Summarising");
     expect(loading).toContain("हिन्दी");
     expect(loading).toContain('aria-pressed="true"');
   });

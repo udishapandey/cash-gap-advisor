@@ -35,3 +35,8 @@ export function formatDayMonth(fromIso: string, days: number): string {
 export function formatLakh(amount: number): string {
   return `₹${(amount / 100_000).toFixed(2)}L`;
 }
+
+/** ₹ in lakh with one decimal, for a sentence: 230900 -> "₹2.3L", 500000 -> "₹5L". */
+export function formatLakh1(amount: number): string {
+  return `₹${Number((amount / 100_000).toFixed(1))}L`;
+}

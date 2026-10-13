@@ -16,7 +16,7 @@ type Row = { label: string; value: (s: ScenarioResult) => number; strong?: boole
 const SUMMARY: Row[] = [
   { label: "Cash coming in", value: (s) => s.cash.totalIn },
   { label: "Cash going out", value: (s) => s.cashOut },
-  { label: "Likely short", value: (s) => s.gap, strong: true, short: true },
+  { label: "Cash short", value: (s) => s.gap, strong: true, short: true },
 ];
 
 const CASH_IN: Row[] = [
@@ -91,6 +91,8 @@ export default function GapScreen() {
                 </span>
               </p>
             </StatCard>
+
+            {view.dueLine && <p className="text-sm font-medium text-green-700">{view.dueLine}</p>}
 
             <div className="grid gap-4 sm:grid-cols-3">
               {view.summary.map((c) => (

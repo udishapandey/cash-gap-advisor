@@ -78,6 +78,11 @@ describe("the copy, as written", () => {
     expect(o).toContain("{whyOpen && (");
     expect(o).not.toContain("Back to cash gap");
   });
+  it("Plan hides 'Ask for more days' and the call script when the due date needs no borrowing", () => {
+    const o = read("components/OptionsScreen.tsx");
+    expect(o).toContain("recView.gap.gapExpected > 0 && (");
+    expect(o.indexOf("recView.gap.gapExpected > 0")).toBeLessThan(o.indexOf("<AskCard"));
+  });
   it("Approve", () => {
     has("components/ApproveScreen.tsx", "You&apos;re about to pay", "Your money", "Borrowed", "Total interest and fees", "Approve plan", "Supplier paid", "Simulated. No real money moved.", "See results");
     has("lib/plain.ts", "Razorpay credit needs lender approval and a final Key Fact Statement. Values shown are illustrative.");
@@ -85,7 +90,7 @@ describe("the copy, as written", () => {
   });
   it("Results", () => {
     has("components/ResultsScreen.tsx", "Mid-season check", "Approve updated plan", "As forecast", "15% lower", "15% higher", "Forecast gap", "Actual gap", "Difference", "Next time", "Details", "Done");
-    has("lib/results.ts", "This plan saved you", "Day ${m.day}: sales are", "Nothing changes.");
+    has("lib/results.ts", "This plan saved you", "Day ${m.day} check: sales are", "Nothing changes.");
     expect(read("components/ResultsScreen.tsx")).not.toMatch(/sold out/i);
   });
 });

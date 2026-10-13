@@ -224,7 +224,7 @@ export function computeOutcome(input: OutcomeInput): OutcomeResult {
 // ---------- The mid-season re-plan ----------
 
 export interface MidSeasonChange {
-  kind: "withdraw_credit" | "draw_overdraft" | "repay_later" | "repay_earlier" | "backup_used" | "uncovered";
+  kind: "withdraw_credit" | "draw_overdraft" | "repay_later" | "repay_earlier" | "backup_used" | "uncovered" | "pay_on_due_date";
   /** The day it happens (a day count from the invoice date), where that applies. */
   day?: number;
   amount?: number;
@@ -233,15 +233,26 @@ export interface MidSeasonChange {
 }
 
 export interface MidSeason {
+  /** The day of the check: before the payment day, so the founder can still choose when to pay. */
   day: number;
   /** Sales so far against the forecast, as a signed %: -15 means 15% below. */
   vsForecastPercent: number;
   /** Cash from sales (prepaid and COD) that came in by this day: the forecast, and what it turned out to be. */
   cashInForecast: number;
   cashInActual: number;
-  /** The cash to find: the forecast, and now that real sales are known. */
+  /** The cash to find for paying early: the forecast, and now that real sales are known. */
   forecastGap: number;
   updatedGap: number;
+  /** Paying early, run again on the new cash path. */
+  early: { payDay: number; cost: number; saving: number; feasible: boolean; lowSalesCovered: boolean };
+  /** Paying on the due date, run again on the new cash path. */
+  due: { payDay: number; cost: number; saving: number };
+  /** Is paying early still worth it: the discount is bigger than the extra interest and the slow-sales case is still covered. */
+  stillWorthIt: boolean;
+  /** What the updated plan says to do. */
+  recommended: "pay_early" | "pay_on_due_date";
+  /** The saving of the recommended updated plan, on the usual basis. */
+  updatedSaving: number;
   changes: MidSeasonChange[];
   nothingChanges: boolean;
 }
@@ -252,42 +263,78 @@ const firstDayAbove = (debtByDay: number[], threshold: number): number | undefin
 };
 
 /**
- * Halfway through, real sales are in. Run the plan again on the cash path they imply (the shortfall in sales carries on)
- * and say exactly what changes: more credit drawn, on which day, repayments moved, the backup used.
+ * Early in the season, before the payment day, real sales are in. Run the plan again on the cash path they imply (the
+ * shortfall in sales carries on) and say whether paying early is still worth it, and exactly what changes: more credit
+ * drawn, on which day (never before today), repayments moved, the backup used.
  */
-export function midSeasonCheck(input: OutcomeInput, day = 15): MidSeason {
+export function midSeasonCheck(input: OutcomeInput, day = 5): MidSeason {
   const { approved, merchant, actual } = input;
+  const invoice = approved.invoice;
   const plan = approved.recommended.plan;
   const horizon = horizonFor(approved);
   const forecastSeries = cashSeries({ merchant, scenario: "expected", salesDropPercent: input.salesDropPercent, cashElsewhere: input.cashElsewhere, horizon });
   const series = actualSeries(input, horizon);
+  const lowSeries = cashSeries({
+    merchant: { ...merchant, codReturnRate: actual.codReturnRate },
+    scenario: "low",
+    salesDropPercent: input.salesDropPercent,
+    salesVsForecast: actual.salesVsForecast,
+    cashElsewhere: input.cashElsewhere,
+    horizon,
+  });
   const inflowBy = (s: { balance: number[] }) => round(s.balance[day] - s.balance[0] + merchant.otherOutflowsPerDay * day);
 
-  // The plan, worked out again for the new cash path: the cheapest safe order for what is now expected.
-  const replan: PlanSim = bestPlan({ series, payDay: plan.payDay, payAmount: plan.payAmount, terms: approved.terms, horizon });
+  const earlyDay = Math.min(invoice.earlyPayWithinDays, invoice.dueInDays);
+  const dueDay = invoice.dueInDays;
+  const earlyAmount = round(invoice.amount * (1 - invoice.earlyPayDiscountPct / 100));
+  const dueAmount = round(invoice.amount);
+  const discount = dueAmount - earlyAmount;
+
+  const planOn = (payDay: number, payAmount: number): { sim: PlanSim; low: PlanSim } => {
+    const sim = bestPlan({ series, payDay, payAmount, terms: approved.terms, horizon });
+    const low = simulate({ series: lowSeries, payDay, payAmount, order: sim.order, terms: approved.terms, horizon });
+    return { sim, low };
+  };
+  const earlyRun = planOn(earlyDay, earlyAmount);
+  const dueRun = planOn(dueDay, dueAmount);
+  // The usual way on the new cash path: the basis every saving is measured against.
+  const usual = simulate({ series, payDay: dueDay, payAmount: dueAmount, order: ["credit_line"], terms: approved.terms, horizon });
+
+  const earlyCost = round(earlyRun.sim.totalCost);
+  const dueCost = round(dueRun.sim.totalCost);
+  const usualCost = round(usual.totalCost);
+  const earlyFeasible = earlyRun.sim.feasible;
+  const lowCovered = earlyRun.low.feasible;
+  const stillWorthIt = earlyFeasible && lowCovered && discount - (earlyCost - dueCost) > 0;
+  const earlySaving = usualCost - (earlyCost - discount);
+  const dueSaving = usualCost - dueCost;
+
+  // The plan that would be followed now, compared with the one approved.
+  const next = stillWorthIt ? earlyRun.sim : dueRun.sim;
   const before = plan.sim;
   const changes: MidSeasonChange[] = [];
-
-  const more = (id: "credit_line" | "bank_overdraft") => round(replan.stats[id].peak - before.stats[id].peak);
+  if (!stillWorthIt) changes.push({ kind: "pay_on_due_date", from: earlyDay, to: dueDay });
+  const more = (id: "credit_line" | "bank_overdraft") => round(next.stats[id].peak - before.stats[id].peak);
   const moreCredit = more("credit_line");
   const moreOverdraft = more("bank_overdraft");
-  if (moreCredit > 0) {
-    changes.push({ kind: "withdraw_credit", amount: moreCredit, day: firstDayAbove(replan.debtByDay, before.peakBorrowed) ?? replan.stats.credit_line.firstDay ?? undefined });
+  if (stillWorthIt && moreCredit > 0) {
+    const found = firstDayAbove(next.debtByDay, before.peakBorrowed) ?? next.stats.credit_line.firstDay ?? day;
+    changes.push({ kind: "withdraw_credit", amount: moreCredit, day: Math.max(day, found) });
     const unused = Math.max(0, approved.terms.creditLine.limit - before.stats.credit_line.peak);
     changes.push({ kind: "backup_used", amount: Math.min(moreCredit, round(unused)) });
   }
-  if (moreOverdraft > 0) changes.push({ kind: "draw_overdraft", amount: moreOverdraft });
-  if (before.closedDay !== null && replan.closedDay !== null && replan.closedDay !== before.closedDay) {
-    changes.push({ kind: replan.closedDay > before.closedDay ? "repay_later" : "repay_earlier", from: before.closedDay, to: replan.closedDay });
+  if (stillWorthIt && moreOverdraft > 0) changes.push({ kind: "draw_overdraft", amount: moreOverdraft });
+  if (stillWorthIt && before.closedDay !== null && next.closedDay !== null && next.closedDay !== before.closedDay) {
+    changes.push({ kind: next.closedDay > before.closedDay ? "repay_later" : "repay_earlier", from: before.closedDay, to: next.closedDay });
   }
-  if (!replan.feasible) changes.push({ kind: "uncovered", amount: replan.uncoveredPeak });
+  if (!next.feasible) changes.push({ kind: "uncovered", amount: next.uncoveredPeak });
 
   const updatedGap = computeGap({
     merchant: { ...merchant, codReturnRate: actual.codReturnRate },
-    invoice: approved.invoice,
+    invoice,
     salesDropPercent: input.salesDropPercent,
     salesVsForecast: actual.salesVsForecast,
-    byDay: plan.payDay,
+    byDay: earlyDay,
     cashElsewhere: input.cashElsewhere,
   }).scenarios.expected.gap;
 
@@ -298,6 +345,11 @@ export function midSeasonCheck(input: OutcomeInput, day = 15): MidSeason {
     cashInActual: inflowBy(series),
     forecastGap: plan.gap,
     updatedGap,
+    early: { payDay: earlyDay, cost: earlyCost, saving: earlySaving, feasible: earlyFeasible, lowSalesCovered: lowCovered },
+    due: { payDay: dueDay, cost: dueCost, saving: dueSaving },
+    stillWorthIt,
+    recommended: stillWorthIt ? "pay_early" : "pay_on_due_date",
+    updatedSaving: stillWorthIt ? earlySaving : dueSaving,
     changes,
     nothingChanges: changes.length === 0,
   };

@@ -87,20 +87,25 @@ describe("the mid-season check", () => {
   it("is null until a plan is chosen", () => {
     expect(midSeasonForState(run(), state(0, null))).toBeNull();
   });
-  it("has the headline as written", () => {
-    expect(view.headline).toBe("Day 15: sales are 15% below forecast.");
+  it("has the headline as written, on day 5 before the payment", () => {
+    expect(view.headline).toBe("Day 5 check: sales are 15% below forecast.");
+    expect(date(5)).toBe("16 Oct");
   });
-  it("shows the forecast against actual cash in, and the updated gap", () => {
-    expect(view.rows.map((r) => r.label)).toEqual(["Cash in so far, forecast", "Cash in so far, actual", "Likely gap, forecast", "Likely gap, updated"]);
+  it("shows the forecast against actual cash in, and the updated gap for paying on 21 Oct", () => {
+    expect(view.rows.map((r) => r.label)).toEqual(["Cash in so far, forecast", "Cash in so far, actual", "Likely gap for 21 Oct, forecast", "Likely gap for 21 Oct, updated"]);
     expect(view.rows[2].value).toBe("₹2,30,900");
     expect(view.rows[3].value).toBe("₹3,47,830");
   });
-  it("says exactly what changes, with dates", () => {
-    expect(view.changes).toEqual([
-      "Withdraw ₹1,16,930 more credit on 21 Oct",
-      "Backup used: ₹1,16,930 of your unused credit",
-      "Repayment moves from 29 Oct to 20 Nov",
+  it("shows the updated cost and saving of both ways to pay, and says plainly what to do", () => {
+    expect(view.plans).toEqual([
+      { label: "Pay on 21 Oct", cost: "₹2,253", saving: "₹8,119" },
+      { label: "Pay on 10 Nov", cost: "₹237", saving: "₹135" },
     ]);
+    expect(view.verdict).toBe("Paying early is no longer worth it. Pay on 10 Nov instead.");
+    expect(view.verdictWhy).toBe("Slow sales would leave you short.");
+  });
+  it("says exactly what changes", () => {
+    expect(view.changes).toEqual(["Pay on 10 Nov instead of 21 Oct"]);
     expect(view.nothingChanges).toBeNull();
   });
   it("has the captions as written", () => {

@@ -67,25 +67,42 @@ describe("outcome: what the system learns", () => {
   });
 });
 
-describe("mid-season check (day 15, sales 15% below forecast)", () => {
+describe("mid-season check (day 5, before the payment, sales 15% below forecast)", () => {
   const m = midSeasonCheck({ ...input(), actual: SIMULATED_OUTCOMES.lower_15 });
-  it("reports sales 15% below, and the updated gap", () => {
-    expect(m.day).toBe(15);
+  it("is on day 5, before the payment day", () => {
+    expect(m.day).toBe(5);
+    expect(m.day).toBeLessThan(10);
+  });
+  it("reports sales 15% below, and the updated gap for paying early", () => {
     expect(m.vsForecastPercent).toBe(-15);
     expect(m.forecastGap).toBe(230_900);
     expect(m.updatedGap).toBe(347_830);
     expect(m.cashInActual).toBeLessThan(m.cashInForecast);
   });
-  it("says exactly what changes: more credit on day 10, the backup used, repayment moved from day 18 to day 40", () => {
-    expect(m.nothingChanges).toBe(false);
-    expect(m.changes).toEqual([
-      { kind: "withdraw_credit", amount: 116_930, day: 10 },
-      { kind: "backup_used", amount: 116_930 },
-      { kind: "repay_later", from: 18, to: 40 },
-    ]);
+  it("re-runs both ways to pay: early costs ₹2,253 and still saves ₹8,119, but the slow-sales case is no longer covered", () => {
+    expect(m.early).toEqual({ payDay: 10, cost: 2_253, saving: 8_119, feasible: true, lowSalesCovered: false });
+    expect(m.due).toEqual({ payDay: 30, cost: 237, saving: 135 });
+  });
+  it("says paying early is no longer worth it and recommends the due date", () => {
+    expect(m.stillWorthIt).toBe(false);
+    expect(m.recommended).toBe("pay_on_due_date");
+    expect(m.updatedSaving).toBe(135);
+    expect(m.changes).toEqual([{ kind: "pay_on_due_date", from: 10, to: 30 }]);
+  });
+  it("keeps paying early when sales are only a little lower and the slow case is still covered", () => {
+    const mild = midSeasonCheck({ ...input(), actual: { ...SIMULATED_OUTCOMES.as_forecast, salesVsForecast: 0.97 } });
+    expect(mild.stillWorthIt).toBe(true);
+    expect(mild.recommended).toBe("pay_early");
+  });
+  it("never dates a withdrawal before the check day", () => {
+    for (const v of [0.8, 0.9, 0.95, 0.97, 1, 1.1]) {
+      const c = midSeasonCheck({ ...input(), actual: { ...SIMULATED_OUTCOMES.as_forecast, salesVsForecast: v } });
+      for (const ch of c.changes) if (ch.day !== undefined) expect(ch.day, `x${v}`).toBeGreaterThanOrEqual(c.day);
+    }
   });
   it("changes nothing when sales are on forecast", () => {
     const same = midSeasonCheck({ ...input(), actual: SIMULATED_OUTCOMES.as_forecast });
+    expect(same.stillWorthIt).toBe(true);
     expect(same.nothingChanges).toBe(true);
     expect(same.changes).toEqual([]);
   });

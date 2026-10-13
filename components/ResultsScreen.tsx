@@ -57,8 +57,30 @@ function ResultsBody({ state, result, update, reset }: ShellContext) {
             </div>
           ))}
         </dl>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[22rem] text-sm">
+            <thead>
+              <tr className="border-b border-line text-xs text-muted">
+                <th className="py-2 text-left font-medium">Updated plan</th>
+                <th className="px-3 py-2 text-right font-medium">Cost</th>
+                <th className="py-2 text-right font-medium">Saving</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {view.plans.map((p) => (
+                <tr key={p.label}>
+                  <td className="py-2">{p.label}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{p.cost}</td>
+                  <td className="py-2 text-right tabular-nums">{p.saving}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-4 text-sm font-semibold">{view.verdict}</p>
+        {view.verdictWhy && <p className="text-sm text-muted">{view.verdictWhy}</p>}
         {view.nothingChanges ? (
-          <p className="mt-4 text-sm font-medium">{view.nothingChanges}</p>
+          <p className="mt-2 text-sm font-medium">{view.nothingChanges}</p>
         ) : (
           <>
             <h3 className="mt-4 text-sm font-semibold">What changes</h3>

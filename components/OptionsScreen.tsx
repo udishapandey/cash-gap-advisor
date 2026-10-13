@@ -7,7 +7,7 @@ import { CONFIG } from "@/lib/engine/config";
 import { formatINR } from "@/lib/format";
 import { SALES_DROPS, type JourneyState } from "@/lib/journey";
 import type { Language } from "@/lib/language";
-import { buildHeroPlan, compareRows, forecastSaving, type HeroPlan } from "@/lib/plain";
+import { buildHeroPlan, compareRows, dayByDay, forecastSaving, type HeroPlan } from "@/lib/plain";
 import type { AppliedWhatIf } from "@/lib/whatif";
 import AiExplanation from "./AiExplanation";
 import CallScriptPanel from "./CallScriptPanel";
@@ -137,7 +137,7 @@ function HeroCard({
             <tr className="border-b border-line text-xs text-muted">
               <th className="py-2 text-left font-medium">Source</th>
               <th className="px-3 py-2 text-right font-medium">Amount</th>
-              <th className="px-3 py-2 text-right font-medium">Days</th>
+              <th className="px-3 py-2 text-right font-medium">Repaid by</th>
               <th className="py-2 text-right font-medium">Cost</th>
             </tr>
           </thead>
@@ -151,7 +151,7 @@ function HeroCard({
                   </span>
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatINR(x.amount)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{x.days ?? "-"}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{x.repaidBy ?? "-"}</td>
                 <td className="py-2 text-right tabular-nums">{formatINR(x.cost)}</td>
               </tr>
             ))}
@@ -213,6 +213,43 @@ function AskCard({
       </button>
       {showScript && script(true)}
     </Card>
+  );
+}
+
+// ---------- How we worked this out ----------
+
+function DayTable({ result, viewId }: { result: EngineResult; viewId: ViewId }) {
+  const { rows, total } = dayByDay(result, viewId);
+  if (rows.length === 0) return <p className="text-sm text-muted">Nothing is borrowed, so there is no interest.</p>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[26rem] text-sm">
+        <thead>
+          <tr className="border-b border-line text-xs text-muted">
+            <th className="py-2 text-left font-medium">Date</th>
+            <th className="px-3 py-2 text-right font-medium">Overdraft</th>
+            <th className="px-3 py-2 text-right font-medium">Credit line</th>
+            <th className="py-2 text-right font-medium">Interest that day</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {rows.map((r) => (
+            <tr key={r.date}>
+              <td className="py-2">{r.date}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{formatINR(r.overdraft)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{formatINR(r.credit)}</td>
+              <td className="py-2 text-right tabular-nums">{r.interest}</td>
+            </tr>
+          ))}
+          <tr className="font-semibold">
+            <td className="py-2">Total interest</td>
+            <td />
+            <td />
+            <td className="py-2 text-right tabular-nums">{total}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -337,21 +374,28 @@ function PlanBody({
         </Disclosure>
       )}
 
-      <AskCard
-        days={extensionDays}
-        removed={ask.views[recId === "right_sized" ? "rightSized" : "keepFull"].askFirst.borrowingRemoved}
-        script={(open) => (
-          <CallScriptPanel
-            state={state}
-            view={scriptView}
-            viewId={scriptViewId}
-            extensionDays={extensionDays}
-            language={state.language}
-            onLanguage={setLanguage}
-            autoStart={open}
-          />
-        )}
-      />
+      <Disclosure title="How we worked this out" lazy>
+        <DayTable result={result} viewId={recId} />
+      </Disclosure>
+
+      {/* Only when paying on the due date would need borrowing: otherwise there is nothing to ask for. */}
+      {recView.gap.gapExpected > 0 && (
+        <AskCard
+          days={extensionDays}
+          removed={ask.views[recId === "right_sized" ? "rightSized" : "keepFull"].askFirst.borrowingRemoved}
+          script={(open) => (
+            <CallScriptPanel
+              state={state}
+              view={scriptView}
+              viewId={scriptViewId}
+              extensionDays={extensionDays}
+              language={state.language}
+              onLanguage={setLanguage}
+              autoStart={open}
+            />
+          )}
+        />
+      )}
 
       <Card>
         <Tabs

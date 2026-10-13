@@ -69,6 +69,8 @@ export interface PlanSim {
   /** Balance and loans outstanding at the end of each day simulated. */
   balanceByDay: number[];
   debtByDay: number[];
+  /** Each loan's balance at the end of each day, and the interest it added that day. These sum to the loan's cost. */
+  loanByDay: Record<LoanId, { balance: number[]; interest: number[] }>;
 }
 
 export interface SimInput {
@@ -109,6 +111,10 @@ export function simulate(input: SimInput): PlanSim {
   let everBorrowed = false;
   const balanceByDay: number[] = [];
   const debtByDay: number[] = [];
+  const loanByDay: Record<LoanId, { balance: number[]; interest: number[] }> = {
+    bank_overdraft: { balance: [], interest: [] },
+    credit_line: { balance: [], interest: [] },
+  };
 
   for (let t = 0; t <= horizon; t++) {
     cash += t === 0 ? series.balance[0] : series.balance[t] - series.balance[t - 1];
@@ -172,8 +178,11 @@ export function simulate(input: SimInput): PlanSim {
 
     // End of the day: interest accrues on what is still owed, and the day is counted.
     for (const id of LOANS) {
+      const dayInterest = debt[id] > 1e-9 ? (debt[id] * rate[id]) / 100 / CONFIG.daysPerYear : 0;
+      loanByDay[id].balance.push(debt[id]);
+      loanByDay[id].interest.push(dayInterest);
       if (debt[id] > 1e-9) {
-        accrued[id] += (debt[id] * rate[id]) / 100 / CONFIG.daysPerYear;
+        accrued[id] += dayInterest;
         stats[id].days += 1;
         stats[id].peak = Math.max(stats[id].peak, debt[id]);
         lastOwed[id] = t;
@@ -214,6 +223,7 @@ export function simulate(input: SimInput): PlanSim {
     closedDay: everBorrowed ? closedDay : null,
     balanceByDay,
     debtByDay,
+    loanByDay,
   };
 }
 

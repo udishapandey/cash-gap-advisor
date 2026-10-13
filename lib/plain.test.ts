@@ -4,7 +4,7 @@ import { merchant } from "./data/merchant";
 import { runEngine, type ViewId } from "./engine";
 import { formatCompactINR, formatDayMonth, formatINR } from "./format";
 import { DEFAULT_JOURNEY } from "./journey";
-import { BILL_PRIVACY, LATE_FEE_LAW, OPTION_LABEL, SOURCE_ROW, backupLine, billHero, buildHeroPlan, compareRows, dayLabel, fewerPairsSameAsFull, forecastSaving, gapView, homeAlert, tidyName } from "./plain";
+import { BILL_PRIVACY, LATE_FEE_LAW, OPTION_LABEL, SOURCE_ROW, backupLine, billHero, buildHeroPlan, compareRows, dayLabel, fewerPairsSameAsFull, forecastSaving, gapView, homeAlert, tidyName, aboutHowLong, dayByDay } from "./plain";
 import { outcomeForState } from "./results";
 
 const run = (drop = 0, extra = {}) => runEngine({ merchant, invoice: defaultInvoice, salesDropPercent: drop, ...extra });
@@ -46,9 +46,10 @@ describe("the default scenario is the pre-read sample bill", () => {
   });
   it("gives the Cash gap numbers: cash in ₹12,09,100, cash out ₹13,90,000, likely short ₹2,30,900", () => {
     const v = gapView(runDefault());
-    expect(v.headline).toBe("You're likely ₹2,30,900 short");
+    expect(v.headline).toBe("To pay early, you'd be ₹2.3L short for about a week.");
+    expect(v.dueLine).toBe("Paying on 10 Nov needs no borrowing.");
     expect(v.hero).toBe("₹2,30,900");
-    expect(v.caption).toBe("Likely range ₹96,500 to ₹3,65,300");
+    expect(v.caption).toBe("Range for paying early ₹96,500 to ₹3,65,300");
     expect(v.summary.map((c) => c.value)).toEqual(["₹12,09,100", "₹13,90,000", "Discount ends 21 Oct"]);
     expect(v.summary[2].caption).toBe("Bill due 10 Nov");
   });
@@ -70,8 +71,8 @@ describe("Home alert", () => {
   const r = runDefault();
   const a = homeAlert(r, forecastSaving(r, r.recommendedView, state()));
   it("has the title, the line and the mini plan as written", () => {
-    expect(a.title).toBe("Supplier bill due 10 Nov");
-    expect(a.line).toBe("Pay by 21 Oct for ₹10,000 off. You're likely short ₹2,30,900 that week.");
+    expect(a.title).toBe("Save ₹10,000 on your supplier bill");
+    expect(a.line).toBe("Pay by 21 Oct instead of 10 Nov. You'd need ₹2.3L for about a week.");
     expect(a.mini).toEqual([
       { label: "Your cash", value: 259_100 },
       { label: "Overdraft", value: 100_000 },
@@ -79,6 +80,61 @@ describe("Home alert", () => {
       { label: "Safety buffer kept", value: 50_000 },
     ]);
     expect(a.caption).toBe("₹9,583 better off");
+  });
+});
+
+describe("when paying early is not recommended", () => {
+  it("Home and Cash gap say what is short on the due date, never 'to pay early'", () => {
+    const r = runDefault(20);
+    expect(r.recommended.recommended.timing).toBe("on_due_date");
+    expect(homeAlert(r, 0).title).toBe("Supplier bill due 10 Nov");
+    expect(homeAlert(r, 0).line).toMatch(/^You'd need ₹2L for about 3 weeks\.$/);
+    const g = gapView(r);
+    expect(g.headline).toBe("You're likely ₹2L short on 10 Nov.");
+    expect(g.dueLine).toBeNull();
+  });
+  it("says there is enough cash when nothing is short", () => {
+    expect(gapView(runDefault(10)).headline).toBe("You have enough cash");
+  });
+});
+
+describe("at -30% sales the plan cannot cover the bill", () => {
+  const r = runDefault(30);
+  const hero = buildHeroPlan(r, r.recommendedView, forecastSaving(r, r.recommendedView, state(30)));
+  it("recommends paying on the due date, says the limits do not cover it, and has no 'repaid' promise", () => {
+    expect(r.recommended.recommended.timing).toBe("on_due_date");
+    expect(hero.title).toBe("Pay on 10 Nov");
+    expect(hero.caption).toBe("Your limits do not cover this bill.");
+    expect(hero.closingLine).toBeNull();
+    expect(r.recommended.recommended.plan.uncovered).toBeGreaterThan(0);
+  });
+  it("uses instant settlement only because the other limits are used up", () => {
+    expect(hero.rows.map((x) => x.id)).toEqual(["bank_overdraft", "credit_line", "early_settlement"]);
+  });
+});
+
+describe("how long the money is out", () => {
+  it("is about a week in the demo: borrowed on 21 Oct, repaid by 29 Oct", () => {
+    expect(aboutHowLong(runDefault().recommended)).toBe("about a week");
+  });
+});
+
+describe("Repaid by, and the day-by-day table", () => {
+  const r = runDefault();
+  it("the plan rows say the date each loan is repaid, and your own cash has none", () => {
+    const hero = buildHeroPlan(r, "keep_full", 9_583);
+    expect(hero.rows.map((x) => [x.label, x.repaidBy])).toEqual([["Your cash", null], ["Your bank overdraft", "29 Oct"], ["Razorpay credit line", "26 Oct"]]);
+  });
+  it("lists the balances and the interest each day, and the interest adds up to the total cost", () => {
+    const { rows, total } = dayByDay(r, "keep_full");
+    expect(rows[0]).toEqual({ date: "21 Oct", overdraft: 100_000, credit: 130_900, interest: "₹94.69" });
+    expect(rows.at(-1)?.date).toBe("28 Oct");
+    const sum = rows.reduce((t, x) => t + Number(x.interest.slice(1)), 0);
+    expect(Math.round(sum)).toBe(417);
+    expect(total).toBe("₹417");
+  });
+  it("lists nothing when nothing is borrowed", () => {
+    expect(dayByDay(runDefault(0, { cashElsewhere: 5_000_000 }), "keep_full").rows).toEqual([]);
   });
 });
 

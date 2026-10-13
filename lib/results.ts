@@ -108,6 +108,8 @@ export function changeLine(c: MidSeasonChange, date: (day: number) => string): s
       return `Repayment moves from ${date(c.from ?? 0)} to ${date(c.to ?? 0)}`;
     case "repay_earlier":
       return `Repayment moves from ${date(c.from ?? 0)} to ${date(c.to ?? 0)}`;
+    case "pay_on_due_date":
+      return `Pay on ${date(c.to ?? 0)} instead of ${date(c.from ?? 0)}`;
     case "uncovered":
       return `${formatINR(c.amount ?? 0)} is still not covered`;
   }
@@ -116,17 +118,28 @@ export function changeLine(c: MidSeasonChange, date: (day: number) => string): s
 /** The mid-season check as the screen shows it. */
 export function midSeasonView(m: MidSeason, date: (day: number) => string) {
   const miss = Math.round(Math.abs(m.vsForecastPercent));
+  const earlyDate = date(m.early.payDay);
+  const dueDate = date(m.due.payDay);
   return {
     headline:
       miss === 0
-        ? `Day ${m.day}: sales are on forecast.`
-        : `Day ${m.day}: sales are ${miss}% ${m.vsForecastPercent < 0 ? "below" : "above"} forecast.`,
+        ? `Day ${m.day} check: sales are on forecast.`
+        : `Day ${m.day} check: sales are ${miss}% ${m.vsForecastPercent < 0 ? "below" : "above"} forecast.`,
     rows: [
       { label: "Cash in so far, forecast", value: formatINR(m.cashInForecast) },
       { label: "Cash in so far, actual", value: formatINR(m.cashInActual) },
-      { label: "Likely gap, forecast", value: formatINR(m.forecastGap) },
-      { label: "Likely gap, updated", value: formatINR(m.updatedGap) },
+      { label: `Likely gap for ${earlyDate}, forecast`, value: formatINR(m.forecastGap) },
+      { label: `Likely gap for ${earlyDate}, updated`, value: formatINR(m.updatedGap) },
     ],
+    /** The updated plan for paying early, and for paying on the due date. */
+    plans: [
+      { label: `Pay on ${earlyDate}`, cost: formatINR(m.early.cost), saving: formatINR(Math.max(0, m.early.saving)) },
+      { label: `Pay on ${dueDate}`, cost: formatINR(m.due.cost), saving: formatINR(Math.max(0, m.due.saving)) },
+    ],
+    verdict: m.stillWorthIt
+      ? `Paying early on ${earlyDate} is still worth it.`
+      : `Paying early is no longer worth it. Pay on ${dueDate} instead.`,
+    verdictWhy: m.stillWorthIt ? null : m.early.feasible ? "Slow sales would leave you short." : "The credit limits no longer cover it.",
     changes: m.changes.map((c) => changeLine(c, date)),
     nothingChanges: m.nothingChanges ? "Nothing changes." : null,
   };

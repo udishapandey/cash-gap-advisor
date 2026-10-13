@@ -72,11 +72,14 @@ describe("the copy, as written", () => {
     // The sample bill loads the saved reading, with no AI call.
     expect(f).toContain("onClick={usePreReadSample}");
   });
-  it("Bill falls back at once when the AI is busy: saved reading for the sample, manual entry for an upload, within 35 seconds", () => {
+  it("Bill falls back at once when the AI is busy: saved reading for the sample, manual entry for an upload, within 40 seconds", () => {
     const f = read("components/InvoiceFlow.tsx");
-    expect(f).toContain("const CLIENT_TIMEOUT_MS = 35_000");
-    expect(f).toContain('"AI is busy right now. Showing the reading saved earlier."');
-    expect(f).toContain('"AI is busy right now. Please check and fill the fields."');
+    expect(f).toContain("const CLIENT_TIMEOUT_MS = 40_000");
+    expect(f).toContain('"AI is busy. Showing the saved reading."');
+    expect(f).toContain('"AI reading limit reached for today. Showing the saved reading."');
+    expect(f).toContain('"AI is busy. Please enter the details."');
+    expect(f).toContain("Reading your bill… this can take up to 30 seconds");
+    expect(f).toContain("await shrinkImage(file)");
     expect(f).toContain("aiBusy(isSample, hadReading, fileHash)");
     expect(f).toContain("Download sample bills to try:");
     expect(f).toContain('target="_blank"');

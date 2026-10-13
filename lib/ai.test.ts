@@ -381,8 +381,8 @@ describe("rate limits are retried on the other model; bad requests are not", () 
   });
 });
 
-describe("the 45 second budget", () => {
-  it("gives the first try at most 30s and the retry the rest of the 45s", async () => {
+describe("the 30 second budget", () => {
+  it("gives each model at most 15s, so both tries fit in 30s", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     const timeouts: number[] = [];
     const real = AbortSignal.timeout.bind(AbortSignal);
@@ -390,10 +390,10 @@ describe("the 45 second budget", () => {
       timeouts.push(ms);
       return real(ms);
     });
-    // The first try "waits" its full 30s and times out; then the retry succeeds.
+    // The first try "waits" its full 15s and times out; then the retry succeeds.
     const fetchMock = vi.fn(async () => {
       if (fetchMock.mock.calls.length === 1) {
-        vi.setSystemTime(Date.now() + 30_000);
+        vi.setSystemTime(Date.now() + 15_000);
         throw new DOMException("timed out", "TimeoutError");
       }
       return geminiReply(cleanAnswer());
@@ -402,11 +402,11 @@ describe("the 45 second budget", () => {
 
     const r = await extractInvoice(pdf);
     expect(r.ok).toBe(true);
-    expect(timeouts).toEqual([30_000, 15_000]);
-    expect(timeouts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(45_000);
+    expect(timeouts).toEqual([15_000, 15_000]);
+    expect(timeouts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(30_000);
   });
 
-  it("a fast failure leaves the whole remaining budget for the retry", async () => {
+  it("a fast failure still gives the retry its own 15s", async () => {
     const timeouts: number[] = [];
     const real = AbortSignal.timeout.bind(AbortSignal);
     vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => {
@@ -418,9 +418,7 @@ describe("the 45 second budget", () => {
       () => geminiReply(cleanAnswer()),
     );
     await extractInvoice(pdf);
-    expect(timeouts[0]).toBe(30_000);
-    expect(timeouts[1]).toBeLessThanOrEqual(45_000);
-    expect(timeouts[1]).toBeGreaterThan(44_000);
+    expect(timeouts).toEqual([15_000, 15_000]);
   });
 
   it("two timeouts end in a clear 'took too long' message, never a hang", async () => {
@@ -614,7 +612,7 @@ describe("extractInvoice with Claude (AI_PROVIDER=claude)", () => {
     if (!r.ok) expect(r.detail).toMatchObject({ status: 529, providerStatus: "overloaded_error" });
   });
 
-  it("waits at most 45s", async () => {
+  it("waits at most 15s", async () => {
     const timeouts: number[] = [];
     const real = AbortSignal.timeout.bind(AbortSignal);
     vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => {
@@ -623,7 +621,7 @@ describe("extractInvoice with Claude (AI_PROVIDER=claude)", () => {
     });
     mockFetch(() => claudeReply(cleanAnswer()));
     await extractInvoice(pdf);
-    expect(timeouts).toEqual([45_000]);
+    expect(timeouts).toEqual([15_000]);
   });
 
   it("a missing tool answer is a friendly error, and the same rules validate the answer", async () => {

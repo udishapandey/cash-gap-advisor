@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Invoice } from "@/lib/data/invoice";
 import { SAMPLE_BILLS, savedReadingFor } from "@/lib/data/sample-bills";
+import { shrinkImage } from "@/lib/image-resize";
 import { hashBytes, readCached, writeCached } from "@/lib/extraction-cache";
 import {
   FIELDS,
@@ -17,7 +18,7 @@ import {
   type FormValues,
   type InvoiceExtraction,
 } from "@/lib/invoice-extraction";
-import { ACCEPTED_EXTENSIONS, MAX_INVOICE_BYTES } from "@/lib/invoice-upload";
+import { ACCEPTED_EXTENSIONS, MAX_INVOICE_BYTES, TOO_LARGE_MESSAGE } from "@/lib/invoice-upload";
 import { BILL_PRIVACY, billHero, LATE_FEE_LAW } from "@/lib/plain";
 import { Alert, BTN, Badge, Card, Metric, PageHeader, Panel, SectionLabel } from "./ui";
 import Disclosure from "./Disclosure";
@@ -27,9 +28,12 @@ import { useJourney } from "./JourneyProvider";
 const STORAGE_KEY = "cga.confirmedInvoice.v1";
 const SAMPLE_URL = "/samples/invoice-clean.pdf";
 // The server gives up after 45 seconds; the page waits a little longer so it can show the server's message.
-const CLIENT_TIMEOUT_MS = 35_000;
-const BUSY_SAVED = "AI is busy right now. Showing the reading saved earlier.";
-const BUSY_MANUAL = "AI is busy right now. Please check and fill the fields.";
+// Longer than the server's total (two model attempts, 30 seconds), so the server's answer always arrives first.
+const CLIENT_TIMEOUT_MS = 40_000;
+const BUSY_SAVED = "AI is busy. Showing the saved reading.";
+const BUSY_MANUAL = "AI is busy. Please enter the details.";
+const QUOTA_SAVED = "AI reading limit reached for today. Showing the saved reading.";
+const QUOTA_MANUAL = "AI reading limit reached for today. Please enter the details.";
 const SLOW_AFTER_S = 15;
 
 type Phase = "idle" | "reading" | "review";
@@ -172,19 +176,20 @@ export default function InvoiceFlow() {
    * The AI could not read the bill (busy, rate-limited, timed out, or no answer). Stop the spinner and carry on:
    * the sample bill shows its saved reading; an uploaded bill opens as manual entry; a bill that already has a reading keeps it.
    */
-  function aiBusy(isSample: boolean, hadReading: boolean, fileHash: string | null = null) {
+  function aiBusy(isSample: boolean, hadReading: boolean, fileHash: string | null = null, quota = false) {
+    const [saved, manual] = quota ? [QUOTA_SAVED, QUOTA_MANUAL] : [BUSY_SAVED, BUSY_MANUAL];
     // An unchanged sample file (found by its hash), or the sample button, shows its saved reading.
     const known = savedReadingFor(fileHash) ?? (isSample ? SAMPLE_BILLS[0] : null);
     if (known) {
       showExtraction(known.extraction, "pre-read");
       setSavedBadge(known.badge);
-      setNotice(BUSY_SAVED);
+      setNotice(saved);
     } else if (hadReading) {
       setPhase("review");
-      setNotice(BUSY_SAVED);
+      setNotice(saved);
     } else {
       showExtraction(emptyExtraction(), "manual");
-      setNotice(BUSY_MANUAL);
+      setNotice(manual);
     }
   }
 
@@ -197,8 +202,10 @@ export default function InvoiceFlow() {
       setError("Upload a PDF, PNG or JPG.");
       return;
     }
-    if (file.size > MAX_INVOICE_BYTES) {
-      setError("File too large. Maximum 5 MB.");
+    // A phone photo is shrunk first so it stays under the hosting limit. A PDF cannot be shrunk.
+    const upload = await shrinkImage(file);
+    if (upload.size > MAX_INVOICE_BYTES) {
+      setError(TOO_LARGE_MESSAGE);
       return;
     }
     setLastFile(file);
@@ -227,7 +234,7 @@ export default function InvoiceFlow() {
     unconfirm();
     try {
       const body = new FormData();
-      body.append("file", file);
+      body.append("file", upload);
       if (isSample) body.append("sample", "1");
       const res = await fetch("/api/parse-invoice", {
         method: "POST",
@@ -238,7 +245,7 @@ export default function InvoiceFlow() {
       if (!res.ok || !data?.ok) {
         // An AI failure (the server says which kind) falls back at once. A wrong file type or size is the founder's to fix.
         if (data?.kind || res.status >= 500) {
-          aiBusy(isSample, hadReading, fileHash);
+          aiBusy(isSample, hadReading, fileHash, data?.kind === "rate_limit");
         } else {
           setError(data?.error ?? "Couldn't read this bill. Try again.");
           setPhase(hadReading ? "review" : "idle");
@@ -251,9 +258,9 @@ export default function InvoiceFlow() {
         if (saved.ok) {
           showExtraction(saved.data, "pre-read");
           setSavedBadge(typeof data.badge === "string" ? data.badge : "Saved reading");
-          setNotice(BUSY_SAVED);
+          setNotice(data.reason === "rate_limit" ? QUOTA_SAVED : BUSY_SAVED);
         } else {
-          aiBusy(isSample, hadReading, fileHash);
+          aiBusy(isSample, hadReading, fileHash, data.reason === "rate_limit");
         }
         return;
       }
@@ -426,7 +433,7 @@ export default function InvoiceFlow() {
       <PageHeader
         title={phase === "review" ? (billHeroView ? "We found an early-payment opportunity" : "Review bill") : "Upload supplier bill"}
         crumbs={["Supplier bills"]}
-        subtitle={phase === "review" ? undefined : "PDF, PNG or JPG, up to 5 MB"}
+        subtitle={phase === "review" ? undefined : "PDF, PNG or JPG, up to 4 MB"}
         actions={
           <>
             {mockAi && (
@@ -499,7 +506,7 @@ export default function InvoiceFlow() {
         {reading && (
           <Alert tone="information">
             <span className="flex items-center gap-2">
-              <Spinner /> Reading bill… {elapsed}s
+              <Spinner /> Reading your bill… this can take up to 30 seconds
               {elapsed >= SLOW_AFTER_S && <span className="text-amber-800">Taking longer than usual.</span>}
             </span>
           </Alert>

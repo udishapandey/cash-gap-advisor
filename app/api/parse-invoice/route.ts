@@ -1,7 +1,7 @@
 import { describeFailure, extractInvoice, type ExtractInvoiceFailure } from "@/lib/ai";
 import { SAMPLE_BILLS, savedReadingFor } from "@/lib/data/sample-bills";
 import { hashBytes } from "@/lib/extraction-cache";
-import { MAX_INVOICE_BYTES, sniffMimeType } from "@/lib/invoice-upload";
+import { MAX_INVOICE_BYTES, TOO_LARGE_MESSAGE, sniffMimeType } from "@/lib/invoice-upload";
 
 // Privacy: the uploaded invoice is processed in memory only. It is never written to disk,
 // and neither its contents nor its filename are ever logged.
@@ -22,11 +22,17 @@ function json(body: Record<string, unknown>, status: number, headers: Record<str
   return Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
 }
 
+/** One log line, then the size message. The file's contents and name are never logged. */
+function tooLarge() {
+  console.error('[parse-invoice] reason="413 too large" kind=too_large http=413');
+  return json({ ok: false, error: TOO_LARGE_MESSAGE }, 413);
+}
+
 export async function POST(request: Request) {
   // Refuse oversized uploads before reading the body.
   const declared = Number(request.headers.get("content-length"));
   if (declared > MAX_INVOICE_BYTES + MULTIPART_OVERHEAD) {
-    return json({ ok: false, error: "File too large. Maximum 5 MB." }, 413);
+    return tooLarge();
   }
 
   let file: FormDataEntryValue | null;
@@ -42,7 +48,7 @@ export async function POST(request: Request) {
     return json({ ok: false, error: "No file received. Choose a PDF, PNG or JPG." }, 400);
   }
   if (file.size > MAX_INVOICE_BYTES) {
-    return json({ ok: false, error: "File too large. Maximum 5 MB." }, 413);
+    return tooLarge();
   }
 
   const data = new Uint8Array(await file.arrayBuffer());

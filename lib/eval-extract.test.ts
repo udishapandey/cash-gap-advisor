@@ -172,11 +172,11 @@ describe("the ground truth and the sample files", () => {
     for (const k of FIELD_KEYS) expect(["string", "number", "object"]).toContain(typeof t.fields[k]);
   });
 
-  it.each(NAMES)("%s: the real file is a PDF or PNG, under the 5 MB upload limit", (name) => {
+  it.each(NAMES)("%s: the real file is a PDF or PNG, under the 4 MB upload limit", (name) => {
     const t = truthOf(name);
     const bytes = new Uint8Array(readFileSync(t.file));
     expect(sniffMimeType(bytes)).toBe(t.file.endsWith(".pdf") ? "application/pdf" : "image/png");
-    expect(statSync(t.file).size).toBeLessThan(5 * 1024 * 1024);
+    expect(statSync(t.file).size).toBeLessThan(4 * 1024 * 1024);
   });
 
   it.each(NAMES)("%s: the answers agree with what is printed", (name) => {

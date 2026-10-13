@@ -77,13 +77,13 @@ describe("file checks", () => {
     expect((await POST(upload(bytes(PDF_HEADER), "invoice.pdf", "application/octet-stream"))).status).toBe(200);
   });
 
-  it("allows exactly 5 MB and rejects anything bigger", async () => {
-    const limit = 5 * 1024 * 1024;
+  it("allows exactly 4 MB and rejects anything bigger, with the size message", async () => {
+    const limit = 4 * 1024 * 1024;
     expect((await POST(upload(bytes(PDF_HEADER, limit)))).status).toBe(200);
     mocked.mockClear();
     const res = await POST(upload(bytes(PDF_HEADER, limit + 1)));
     expect(res.status).toBe(413);
-    expect((await res.json()).error).toContain("5 MB");
+    expect((await res.json()).error).toBe("This file is too large. Try a photo or a smaller PDF.");
     expect(mocked).not.toHaveBeenCalled();
   });
 
@@ -218,6 +218,7 @@ describe("privacy: nothing from the invoice is kept or logged", () => {
     expect(logged).not.toContain(SECRET);
     expect(logged).not.toContain(NAME);
     // What helps debugging: kind, HTTP status, the provider's error type and message, each attempt.
+    expect(logged).toContain('reason="503 overload"');
     expect(logged).toContain("kind=provider_error");
     expect(logged).toContain("http=503");
     expect(logged).toContain("type=UNAVAILABLE");

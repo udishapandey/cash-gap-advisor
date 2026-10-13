@@ -1,6 +1,8 @@
 import type { InvoiceMimeType } from "./ai";
 
-export const MAX_INVOICE_BYTES = 5 * 1024 * 1024; // 5 MB
+// Vercel rejects request bodies over about 4.5 MB, so the limit is 4 MB, leaving room for the form around the file.
+export const MAX_INVOICE_BYTES = 4 * 1024 * 1024; // 4 MB
+export const TOO_LARGE_MESSAGE = "This file is too large. Try a photo or a smaller PDF.";
 export const ACCEPTED_EXTENSIONS = ".pdf,.png,.jpg,.jpeg";
 
 /** Work out the real file type from its first bytes, not from the name or the declared type. */

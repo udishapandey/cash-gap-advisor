@@ -174,8 +174,8 @@ const INVOICE_USER_PROMPT = "Extract the invoice fields from the attached file."
 
 // Time budget. One upload never makes the founder wait longer than INVOICE_DEADLINE_MS in total,
 // with at most one retry (on the fallback model) inside that budget.
-const INVOICE_DEADLINE_MS = 45_000;
-const FIRST_ATTEMPT_MS = 30_000; // leaves at least 15s for the retry
+const INVOICE_DEADLINE_MS = 30_000;
+const FIRST_ATTEMPT_MS = 15_000; // each model gets at most 15s, so both attempts fit in the 30s deadline
 const MIN_RETRY_MS = 5_000;
 
 
@@ -488,7 +488,7 @@ async function runAttempts(
   for (let i = 0; i < models.length; i++) {
     const remaining = budget.deadlineMs - (Date.now() - started);
     if (i > 0 && remaining < MIN_RETRY_MS) break;
-    const timeoutMs = i < models.length - 1 ? Math.min(budget.firstAttemptMs, remaining) : remaining;
+    const timeoutMs = Math.min(budget.firstAttemptMs, remaining);
 
     const t0 = Date.now();
     const result = await attempt(models[i], timeoutMs);
@@ -580,9 +580,19 @@ export async function extractInvoice(file: InvoiceFile): Promise<ExtractInvoiceR
  * One line describing why a read failed, for server logs and the test script: kind, HTTP status,
  * the provider's error type and message, and each attempt. It never contains the invoice.
  */
+export function failureReason(failure: ExtractInvoiceFailure): string {
+  const d = failure.detail;
+  if (d?.providerStatus === "TIMEOUT") return "timeout";
+  if (d?.status === 429) return "429 quota";
+  if (d?.status === 503) return "503 overload";
+  if (d?.status === 413) return "413 too large";
+  if (d?.status === 400) return "400 bad request";
+  return failure.kind;
+}
+
 export function describeFailure(failure: ExtractInvoiceFailure): string {
   const d = failure.detail;
-  const parts = [`kind=${failure.kind}`];
+  const parts = [`reason="${failureReason(failure)}"`, `kind=${failure.kind}`];
   if (d?.status !== undefined) parts.push(`http=${d.status}`);
   if (d?.providerStatus) parts.push(`type=${d.providerStatus}`);
   if (d?.quotaId) parts.push(`quota=${d.quotaId}`);

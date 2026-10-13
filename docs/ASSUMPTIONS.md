@@ -8,6 +8,36 @@ Everything the Phase 1 engine takes as given. **All merchant and invoice data is
 
 Where each value lives in code: `lib/engine/config.ts` (rates and multipliers), `lib/data/merchant.ts`, `lib/data/invoice.ts`.
 
+## Fact-checked values (final revision, supersede any older row below)
+
+Every value below was checked against a public source. **Illustrative** means a typical figure, not a quote. All merchant data stays simulated. Values live in `lib/engine/config.ts`, `lib/data/merchant.ts` and `lib/data/invoice.ts`.
+
+| Assumption | Value | Status | Source |
+|---|---|---|---|
+| Supplier terms | 2/10 net 30: 2% off if paid within 10 days, otherwise full amount in 30 days. Invoice 11 Oct, discount deadline 21 Oct, due 10 Nov | Sourced | Mynd Solution (2/10 net 30, 1 to 2% discounts) |
+| Late fee on the bill | 1.5% a month (the bill's own term). If the supplier is a registered micro or small enterprise, the law sets late interest at 3x the RBI bank rate, compounded monthly. The app never recommends paying late | Sourced | LiveLaw (MSMED Act late interest) |
+| Bank overdraft | 11% a year, limit ₹1,00,000, interest per day on the amount used, repayable any time. Illustrative: a typical secured MSME overdraft | Illustrative | Union Bank MSME rate card |
+| Razorpay credit line | 18% a year, limit ₹3,00,000, zero pre-closure charges. Illustrative: Razorpay quotes 18 to 32% APR, from 1.5% a month, up to ₹25L, ₹20L turnover, one year in business | Illustrative | Razorpay credit-line docs (zero pre-closure, from 1.5% a month); Razorpay Learn (18 to 32% APR, up to ₹25L, ₹20L turnover, 1 year vintage) |
+| Interest on credit-line withdrawals | Per day on the amount withdrawn. **Unverified**: to confirm in your Key Fact Statement | Unverified | none yet |
+| Instant settlement | Flat 0.30% of the amount settled plus 18% GST on the fee (0.354% in all), once per settlement, not per day. Capped by earned-but-unsettled sales and an illustrative ₹2,00,000 daily limit | Sourced (fee), illustrative (limit) | Razorpay blog (0.30% + GST); Razorpay Instant Settlements page (0.20 to 0.30%) |
+| Standard settlement | T+2. Varies by merchant | Sourced | Razorpay |
+| COD share | 45% of orders (was 40%) | Sourced | Base (COD about 45%, 30 to 50% advances, 60 to 120 day cash cycle) |
+| Returns (RTO) on COD, footwear | 30% (was 20%) | Sourced | GoKwik via eGrow (RTO 20 to 25% national, 25 to 40% fashion and footwear) |
+| COD cash arrives | 12 to 13 days after the order: about 4 days delivery plus 8 to 9 days courier remittance (was 5 to 9) | Sourced | Shiprocket support (COD remitted 8 to 9 days after delivery) |
+| Festive multipliers | 1.1 / 1.4 / 1.7 times normal sales for low / expected / high | **Unverified**: illustrative assumption, unsourced | none |
+| Safety buffer | The account never goes below ₹50,000 on any day, and the low-sales case must be covered by unused credit | **Unverified**: size is a design choice | none |
+| Founder behaviour | The founder approves each step and draws the overdraft themselves | **Unverified** | none |
+| Other outflows | ₹90,000 a day (was ₹1,05,000). Calibrated so the expected gap on the discount deadline is about ₹2.3L over a 30-day window | Calibrated, not observed | none |
+| Margin and price | Unchanged | As before | Brief |
+
+**What the engine does with them.** Each loan is repaid as soon as incoming cash allows, day by day, most expensive first, and interest is only for the days it was used. Funding goes in order of real rupee cost: your own spare cash first (keeping the safety buffer), then the overdraft, then the credit line. Instant settlement is used only if the limits run out or it is cheaper. Paying early happens only if the discount is bigger than the extra interest and the low-sales case stays covered. The one default every saving is measured against: pay on the due date, no discount, any shortfall on the credit line, repaid as cash arrives. Saving = default cost less plan cost, where the discount counts in the plan.
+
+**Why the old insight was dropped.** The earlier hero ("instant settlement beats a loan, compare rupees not yearly rates") was wrong: Razorpay's credit line has zero pre-closure charges, so a loan repaid in days costs only those days of interest.
+
+**Demo result (simulated).** Plan pays ₹4,90,000 on 21 Oct. Your cash ₹2,59,100, overdraft ₹1,00,000 for 8 days (₹208), Razorpay credit ₹1,30,900 for 5 days (₹209). Total interest and fees ₹417. Better off by ₹9,583 than paying on the due date.
+
+---
+
 ## ⚠️ The one to review first: other outflows
 
 | # | Assumption | Value | Source | How we'd verify with real data |

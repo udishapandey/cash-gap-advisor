@@ -8,21 +8,31 @@
 | **Demo video** | *Coming Tuesday* |
 | **Status** | Concept prototype for the Razorpay x ISB AI PM challenge. Not affiliated with Razorpay. |
 
-> Everything about the merchant (sales, COD cash, bank balance, loan approval, the Touch ID tap, the post-season result) is **simulated and labelled "Simulated" on screen**. The invoice reading, the cost calculator, the what-if, the explanation and the call script are real.
+> **AI interprets and predicts. Code calculates and constrains. The merchant decides.**
+>
+> Everything about the merchant (sales, COD cash, bank balance, loan approval, the Touch ID tap, the post-season result, the cash forecast) is **simulated; a banner on every page says so**. The invoice reading, the cost calculator, the what-if, the explanation and the call script are real.
+
+## Positioning
+
+A decision layer inside RazorpayX Vendor Payments, between "invoice due" and "pay vendor". Razorpay's Cashflow Forecaster and Insights Agent warn about shortfalls and prioritise payments; Cash Gap Advisor decides how to fund the payment and re-plans as cash arrives.
+
+## Why this matters
+
+Large companies use treasury software (e.g. SAP Taulia) to decide when to pay suppliers and with whose money. Growing merchants have no treasury team; Razorpay already holds the data and money tools to give them that decision.
 
 ## The problem
 
-A small D2C founder (₹10–50L a month on Razorpay, no finance team) gets a ₹5L festive-stock invoice due in 10 days and is about ₹2–2.5L short. Their instinct is to draw the whole gap on a credit line. But the cheapest answer depends on **how many days the money is needed**, which loans, early settlement, ordering fewer pairs and an early-payment discount all price differently, and the founder has no one to run the numbers. Often the best plan borrows less than they think, or not at all.
+A small D2C founder (₹10–50L a month on Razorpay, no finance team) gets a ₹5L festive-stock invoice on 2/10 net 30 terms: 2% off if paid within 10 days, otherwise the full amount in 30. Paying early saves ₹10,000, but about ₹2.3L of cash will not have arrived yet. Their instinct is to draw the whole gap on a credit line. The cheapest answer depends on **how many days each rupee is borrowed**, and the founder has no one to run the numbers.
 
 ## The journey: five screens
 
-**Bill → Cash gap → Plan → Approve → Results**
+**Bill → Cash gap → Plan → Approve → Results**, started from an alert on Home (inside "Supplier bills", part of Vendor Payments).
 
-1. **Bill.** Upload a PDF or photo. The AI reads it; the founder confirms or edits every field.
-2. **Cash gap.** The gap as a *range* (low, expected and high sales), including COD cash still in transit and expected returns, with a "low confidence" label when the forecast is wide.
-3. **Plan.** Every way to cover the gap, compared by true rupee cost with no fixed ranking. A what-if slider (sales -10/-20/-30%) and a typed question ("What if sales drop 25%?"). A plain-language explanation, and a call script for "ask the supplier for more time". A **Standby** line shows the extra cash that could be needed at low sales.
-4. **Approve.** One screen. Credit is kept apart from non-credit actions; the RBI Key Fact Statement is shown before any credit; nothing is pre-selected.
-5. **Results.** After the season (simulated): money saved against the founder's default, sales against the forecast, stock sold and left over, unnecessary borrowing, and what the system learned.
+1. **Bill.** Upload a PDF or photo. The AI reads it; the founder confirms or edits. Headline: "We found an early-payment opportunity", with the discount as the hero.
+2. **Cash gap.** The AI forecast made visible: "You're likely ₹2,30,900 short", as a range, with a "Forecast" label and its confidence. "How we estimated this" lists festive uplift, COD share, COD timing, returns and settlement timing, each with its data source.
+3. **Plan.** The cheapest safe plan: your own cash first (keeping a ₹50,000 safety buffer), then the overdraft, then the credit line. Each loan is repaid the day the sales money arrives. Tabs: Compare options, and What if sales change (slider and a typed question). A plain-language explanation and a call script for "ask for more days".
+4. **Approve.** "Your money" and "Borrowed" kept apart; the illustrative Key Fact Statement before any credit; consent unticked; nothing pre-selected.
+5. **Results.** Predict, re-plan, learn: a mid-season check (day 15, sales 15% below forecast) that says exactly what changes and asks to approve the updated plan; then the outcome, what the plan saved, and what the estimate learns for next time.
 
 ## Architecture
 
@@ -62,6 +72,8 @@ The server never trusts numbers from the browser: each AI route receives the con
 
 ## AI writes words, never numbers
 
+The AI's core job is predicting cash inflows (sales, COD timing, returns) and re-planning; in this prototype the forecast is simulated. The LLM reads bills, explains plans and drafts supplier messages. Only synthetic invoices were used; the Gemini free tier must not receive real merchant data.
+
 This is the central design rule. A money product can't have a language model inventing a rupee amount.
 
 - The AI is given **only the engine's numbers**, as JSON with plain-word labels and ready-formatted values ("₹2,88,151", "55%"). It is told to copy them exactly.
@@ -77,8 +89,9 @@ It was tested the hard way. The first live explanation passed every automated ch
 |---|---|---|
 | Reads the invoice (PDF or photo) into fields, quoting its evidence | ✅ | |
 | Founder confirms every field | | ✅ |
-| Cash gap, COD arrival and returns, the sales range | | ✅ |
-| Cost of every option, interest, annualised rates | | ✅ |
+| Cash forecast: sales range, COD arrival and returns (simulated here, predicted by AI in production) | | ✅ |
+| Re-plan as real sales arrive | | ✅ |
+| Cost of every option and the interest, day by day | | ✅ |
 | Which plan is cheapest, how much to draw, the standby | | ✅ |
 | Sizing every plan to the peak shortfall over the whole window | | ✅ |
 | Explains the plan in plain words (English / Hindi) | ✅ | |
@@ -93,10 +106,10 @@ It was tested the hard way. The first live explanation passed every automated ch
 
 - **The founder approves every credit action.** No automatic drawdowns. No plan, consent box or approval is ever pre-chosen.
 - **Key Fact Statement first.** Credit is shown separately, with the RBI-style Key Fact Statement and an explicit consent, before anything is drawn. *(The lender, fees and contacts in it are labelled "Illustrative values": it is a prototype.)*
-- **Loan to the founder's own account, then a separate supplier payment** (as the RBI Digital Lending Directions require). The bank overdraft is drawn by the founder at their own bank, outside the approval.
+- **Loan to the founder's own account, then a separate supplier payment.** Prototype disburses credit to the merchant's account before paying the supplier; production would follow the lending partner's RBI-compliant disbursal structure. The bank overdraft is drawn by the founder at their own bank, outside the approval.
 - **The invoice is never stored.** It is read in memory, never saved to disk, and its contents and file name are never logged.
-- **No dark patterns.** No pre-selected loan, no countdown timers, every cost shown side by side. The plan compares Razorpay and non-Razorpay sources on equal terms and uses whichever is cheaper: in the demo, the founder's own bank overdraft (₹1,00,000 at 14%) is used before Razorpay's credit line because it costs less for the days needed. Every funding step is tagged with who provides it, and the overdraft is marked "Your own bank, not Razorpay" on the Options and Approve screens.
-- **Standby instead of over-borrowing.** The plan is sized to *expected* sales, so the founder never borrows for a case that may not happen. The extra cash that *could* be needed at low sales is shown as **Standby**: covered by unused credit-line headroom, **₹0 cost unless drawn**, never drawn automatically, with a warning if the headroom can't cover it.
+- **No dark patterns.** No pre-selected loan, no countdown timers, every cost shown side by side. The plan compares Razorpay and non-Razorpay sources on equal terms and uses whichever is cheaper: in the demo, the founder's own bank overdraft (₹1,00,000 at 11%) is used before Razorpay's credit line because it costs less for the days needed. Every funding step is tagged with who provides it, and the overdraft is marked "Your own bank, not Razorpay" on the Options and Approve screens.
+- **Backup instead of over-borrowing.** The plan is sized to *expected* sales, so the founder never borrows for a case that may not happen. The extra cash that *could* be needed at low sales is shown as **Backup**: covered by unused credit-line headroom, **₹0 cost unless drawn**, never drawn automatically, with a warning if the headroom can't cover it.
 - **A supplier extension is a request, never funding.** It appears as "Ask first" with a call script, and no plan ever depends on it.
 - **A money product must never under-borrow.** Every plan is sized to the *peak* cumulative shortfall across every day up to the due date, not one day's snapshot. A test checks that no plan, slider value or scenario ever leaves the balance negative on any day.
 
@@ -113,18 +126,20 @@ It was tested the hard way. The first live explanation passed every automated ch
 | Post-season results (three made-up seasons) | | ✅ |
 | Razorpay test-mode API call | not built | |
 
-## The key insight
+## The key finding
 
-> **Don't judge money by its yearly rate. Compare the rupee cost for the days you need it.**
+> **Compare rupees for the days you need the money, and repay each loan the day the cash arrives.**
 
-Early settlement (getting your own prepaid sales money 2 days sooner) charges 0.30%, which is **55% a year**. A bank overdraft is 14%. Pick by yearly rate and you'd take the overdraft. But look at the days, for the same ₹1,70,987:
+I fact-checked the engine's assumptions against public sources. Razorpay's credit line has zero pre-closure charges, so an early version's hero ("instant settlement beats a loan") was wrong: a loan repaid in days costs only those days of interest. The engine now repays each loan as cash allows and picks the cheapest funding order. In the demo (illustrative rates):
 
-| | Yearly rate | Days needed | Cost |
+| Source | Amount | Days | Cost |
 |---|---|---|---|
-| Early settlement | 54.75% | 2 | **₹513** |
-| Bank overdraft | 14% | 33 | ₹2,164 |
+| Your cash | ₹2,59,100 | | ₹0 |
+| Your bank overdraft | ₹1,00,000 | 8 | ₹208 |
+| Razorpay credit line | ₹1,30,900 | 5 | ₹209 |
+| **Total** | | | **₹417** |
 
-The money is only needed for 2 days, while a loan runs 33 (30, plus 3 more because paying early for the discount brings the payment forward). The "expensive" option is about four times cheaper. The Plan screen shows each source's days and rupee cost, and the All options table shows the yearly rate beside the cost.
+Paying ₹4,90,000 on 21 Oct instead of ₹5,00,000 on 10 Nov leaves the founder **₹9,583 better off** (₹10,000 discount less ₹417). Instant settlement is not used because the overdraft is cheaper.
 
 ## How to run
 

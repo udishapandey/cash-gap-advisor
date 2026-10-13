@@ -7,7 +7,7 @@ Forward a supplier bill you can't fully pay, and get the cheapest way to pay it,
 Founders of small D2C brands selling ₹10–50L a month on Razorpay, with no finance team.
 
 ## The moment (demo)
-Weeks before Diwali, the founder gets a ₹5L manufacturer invoice for festive stock, due in 10 days, and is about ₹2–2.5L short.
+Weeks before Diwali, the founder gets a ₹5L manufacturer invoice for festive stock, on 2/10 net 30 terms (2% off if paid within 10 days, otherwise due in 30 days). Paying early needs about ₹2–2.5L more cash than has arrived.
 Diwali is the demo, not the product: any large supplier bill the founder can't fully cover (e.g. a monthly restock) triggers the same decision.
 
 ## The journey (8 steps)
@@ -54,3 +54,9 @@ Diwali is the demo, not the product: any large supplier bill the founder can't f
 
 ## Stack
 Next.js + TypeScript on Vercel, built with Claude Code, code on GitHub, all AI calls through one switchable gateway (lib/ai.ts, Gemini default).
+
+## Final revision (fact-checked terms)
+- Framing: AI predicts how much cash will actually come in and when; the engine picks the cheapest safe plan; the system re-plans as real sales arrive; the merchant approves. "AI interprets and predicts. Code calculates and constrains. The merchant decides."
+- Real-world terms are in `docs/ASSUMPTIONS.md` with sources. Razorpay's credit line has zero pre-closure charges, so loans are repaid as cash arrives and interest is per day used.
+- RBI: Prototype disburses credit to the merchant's account before paying the supplier; production would follow the lending partner's RBI-compliant disbursal structure.
+- "Order fewer pairs" is only a row in "All options", not part of the plan: the product stays focused on paying the supplier.

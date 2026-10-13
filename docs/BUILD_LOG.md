@@ -42,3 +42,7 @@
 
 **What I decided:** One label, one number and one short caption per card; no paragraph on a default view; the reasoning only in tabs, tables or "Why this plan"; one peach banner instead of per-item badges.
 
+
+## Day 4 — Tue 13 Oct: Fact-check and final revision
+
+Fact-checked all assumptions against real sources. Razorpay's credit line has zero pre-closure charges, so the 'instant settlement beats a loan' insight was wrong; switched to daily repayment as cash arrives. Updated supplier terms (2/10 net 30), overdraft rate, COD timing and returns to sourced values. Reframed AI as prediction plus re-planning; added mid-season re-plan and a visible forecast. External reviews (ChatGPT) confirmed direction and surfaced enterprise precedents (SAP Taulia, Fynex). Decisions mine: dropped the old hero insight, kept the engine deterministic, hid order optimisation to stay on supplier payment, added a safety buffer.

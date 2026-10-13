@@ -62,6 +62,9 @@ const SOURCE_NOTICE: Record<Exclude<Source, "live">, { title: string; text: stri
   },
 };
 
+/** The AI converted a yearly late charge to a monthly one and said so in its evidence: "Printed as 18% per annum, converted to 1.5% per month". */
+const convertedNote = (evidence: string | null) => evidence !== null && /^Printed as .+, converted to .+/.test(evidence);
+
 function Spinner() {
   return (
     <span
@@ -406,6 +409,7 @@ export default function InvoiceFlow() {
           }`}
         />
         {err && <p className="mt-1 text-xs text-red-700">{err}</p>}
+        {convertedNote(f.evidence) && !isEdited && <p className="mt-1 text-xs text-muted">{f.evidence}</p>}
       </div>
     );
   };

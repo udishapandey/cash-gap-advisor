@@ -35,24 +35,29 @@ describe("bill 2: Kaveri Soles & Uppers", () => {
   it("the saved reading says what the ground truth says, field by field", () => {
     for (const k of FIELD_KEYS) expect(fieldCorrect(k, bill2.extraction[k].value, truth), k).toBe(true);
   });
-  it("every quote in the saved reading is in the printed text", () => {
+  it("every quote in the saved reading is in the printed text, except the late-charge note, which quotes it", () => {
     for (const k of FIELD_KEYS) {
       const e = bill2.extraction[k].evidence;
-      if (e !== null) expect(evidenceExact(e, printed), `${k}: ${e}`).toBe(true);
+      if (e === null) continue;
+      if (k === "lateFeePercentPerMonth") continue;
+      expect(evidenceExact(e, printed), `${k}: ${e}`).toBe(true);
     }
   });
-  it("leaves the late charge empty: it is printed per year and the reader never converts units", () => {
-    expect(bill2.extraction.lateFeePercentPerMonth.value).toBeNull();
+  it("18% per annum becomes 1.5% a month, with the conversion note as its evidence", () => {
     expect(printed).toContain("18% per annum");
+    const late = bill2.extraction.lateFeePercentPerMonth;
+    expect(late.value).toBe(1.5);
+    expect(late.value).toBe(Math.round((18 / 12) * 100) / 100);
+    expect(late.evidence).toBe("Printed as 18% per annum, converted to 1.5% per month");
+    expect(late.confidence).toBe("high");
   });
-
   const form = parseConfirmed(toFormValues(bill2.extraction));
   const mapped = form.ok ? toEngineInvoice(form.data) : null;
   it("goes through the form and into the engine: ₹2,70,000, due in 45 days, 1.5% off within 15", () => {
     expect(form.ok).toBe(true);
     expect(mapped?.ok).toBe(true);
     if (!mapped?.ok) return;
-    expect(mapped.invoice).toMatchObject({ amount: 270_000, units: 300, unitPrice: 900, dueInDays: 45, earlyPayDiscountPct: 1.5, earlyPayWithinDays: 15, startDate: "2026-10-14" });
+    expect(mapped.invoice).toMatchObject({ amount: 270_000, units: 300, unitPrice: 900, dueInDays: 45, earlyPayDiscountPct: 1.5, earlyPayWithinDays: 15, lateFeePctPerMonth: 1.5, startDate: "2026-10-14" });
   });
 
   it("plans sensibly: pay ₹2,65,950 on 29 Oct from cash alone, no borrowing, ₹4,050 saved", () => {

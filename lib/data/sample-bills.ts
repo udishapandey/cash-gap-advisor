@@ -26,7 +26,7 @@ const q = (value: string | number | null, evidence: string | null, confidence: "
 
 /**
  * Bill 2: Kaveri Soles & Uppers, written from the invoice's printed text (each quote is checked against it in a test), not
- * captured from a live read. The late charge is printed per year, so the per-month field is empty, as the AI would leave it.
+ * captured from a live read. The late charge is printed as 18% per annum, so the monthly field holds 1.5 with the conversion note.
  */
 const bill2Extraction: InvoiceExtraction = {
   supplierName: q("Kaveri Soles & Uppers", "Kaveri Soles & Uppers"),
@@ -38,7 +38,7 @@ const bill2Extraction: InvoiceExtraction = {
   unitPrice: q(900, "900.00"),
   earlyPaymentDiscountPercent: q(1.5, "1.5%"),
   earlyPaymentDiscountDays: q(15, "within 15 days of invoice date"),
-  lateFeePercentPerMonth: q(null, null),
+  lateFeePercentPerMonth: q(1.5, "Printed as 18% per annum, converted to 1.5% per month"),
 } as InvoiceExtraction;
 
 export const SAMPLE_BILLS: SampleBill[] = [

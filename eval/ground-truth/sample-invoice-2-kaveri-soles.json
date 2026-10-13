@@ -2,7 +2,7 @@
   "file": "public/samples/sample-invoice-2-kaveri-soles.pdf",
   "printedText": "eval/printed-text/sample-invoice-2-kaveri-soles.txt",
   "layout": "Clean tax invoice with two line items at the same rate, a printed total quantity, a due date printed beside 'Net 45 days', and the discount and interest in a numbered terms list.",
-  "notes": "Second demo bill, longer terms than the first: 1.5% discount within 15 days, net 45 days. The late charge is printed per YEAR (18% per annum), not per month, and the product rule is never to convert units, so lateFeePercentPerMonth is null. A founder who knows it is 1.5% a month can type it in.",
+  "notes": "Second demo bill, longer terms than the first: 1.5% discount within 15 days, net 45 days. The late charge is printed per YEAR (18% per annum). The one conversion the reader may do is yearly to monthly (divide by 12), so lateFeePercentPerMonth is 1.5 and the evidence is the note 'Printed as 18% per annum, converted to 1.5% per month'.",
   "fields": {
     "supplierName": "Kaveri Soles & Uppers",
     "invoiceNumber": "KSU/26-27/0387",
@@ -13,6 +13,6 @@
     "unitPrice": 900,
     "earlyPaymentDiscountPercent": 1.5,
     "earlyPaymentDiscountDays": 15,
-    "lateFeePercentPerMonth": null
+    "lateFeePercentPerMonth": 1.5
   }
 }

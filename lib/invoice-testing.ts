@@ -14,12 +14,12 @@ export function cleanAnswer(): Record<string, ReturnType<typeof field>> {
     supplierName: field("Shree Ganesh Footwear Pvt Ltd", "Shree Ganesh Footwear Pvt Ltd"),
     invoiceNumber: field("SGF/26-27/0142", "SGF/26-27/0142"),
     invoiceDate: field("2026-10-11", "11 Oct 2026"),
-    dueDate: field("2026-10-21", "21 Oct 2026"),
+    dueDate: field("2026-11-10", "10 Nov 2026"),
     totalAmount: field(500000, "5,00,000.00"),
     quantity: field(500, "500 pairs"),
     unitPrice: field(1000, "1,000.00"),
     earlyPaymentDiscountPercent: field(2, "2%"),
-    earlyPaymentDiscountDays: field(7, "7 days"),
+    earlyPaymentDiscountDays: field(10, "10 days"),
     lateFeePercentPerMonth: field(1.5, "1.5% per month"),
   };
 }

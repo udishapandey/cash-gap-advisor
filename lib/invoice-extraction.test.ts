@@ -25,7 +25,7 @@ describe("validating the AI's answer (zod)", () => {
   it("accepts a complete, well-formed answer", () => {
     const data = parseOk(cleanAnswer());
     expect(data.totalAmount.value).toBe(500000);
-    expect(data.dueDate.value).toBe("2026-10-21");
+    expect(data.dueDate.value).toBe("2026-11-10");
     expect(data.lateFeePercentPerMonth.evidence).toBe("1.5% per month");
   });
 
@@ -52,7 +52,7 @@ describe("validating the AI's answer (zod)", () => {
   });
 
   it("rejects an unknown confidence level and out-of-range numbers", () => {
-    expect(parseExtraction({ ...cleanAnswer(), dueDate: field("2026-10-21", "x", "certain" as never) }).ok).toBe(false);
+    expect(parseExtraction({ ...cleanAnswer(), dueDate: field("2026-11-10", "x", "certain" as never) }).ok).toBe(false);
     expect(parseExtraction({ ...cleanAnswer(), totalAmount: field(-5, "-5") }).ok).toBe(false);
     expect(parseExtraction({ ...cleanAnswer(), earlyPaymentDiscountPercent: field(250, "250%") }).ok).toBe(false);
   });
@@ -116,7 +116,7 @@ describe("the form the founder confirms", () => {
     if (r.ok) {
       expect(r.data.totalAmount).toBe(500000);
       expect(r.data.quantity).toBe(500);
-      expect(r.data.earlyPaymentDiscountDays).toBe(7);
+      expect(r.data.earlyPaymentDiscountDays).toBe(10);
     }
   });
 
@@ -185,12 +185,12 @@ describe("mapping the confirmed invoice into the engine", () => {
     supplierName: "Shree Ganesh Footwear Pvt Ltd",
     invoiceNumber: "SGF/26-27/0142",
     invoiceDate: "2026-10-11",
-    dueDate: "2026-10-21",
+    dueDate: "2026-11-10",
     totalAmount: 500000,
     quantity: 500,
     unitPrice: 1000,
     earlyPaymentDiscountPercent: 2,
-    earlyPaymentDiscountDays: 7,
+    earlyPaymentDiscountDays: 10,
     lateFeePercentPerMonth: 1.5,
   };
   const map = (c: Partial<ConfirmedInvoice> = {}, today?: string) => toEngineInvoice({ ...base, ...c }, { today });
@@ -201,7 +201,7 @@ describe("mapping the confirmed invoice into the engine", () => {
   };
 
   it("counts whole days between dates", () => {
-    expect(daysBetween("2026-10-11", "2026-10-21")).toBe(10);
+    expect(daysBetween("2026-10-11", "2026-11-10")).toBe(30);
     expect(daysBetween("2026-10-31", "2026-11-02")).toBe(2);
   });
 
@@ -213,9 +213,9 @@ describe("mapping the confirmed invoice into the engine", () => {
       units: 500,
       unitPrice: 1000,
       amount: 500000,
-      dueInDays: 10,
+      dueInDays: 30,
       earlyPayDiscountPct: 2,
-      earlyPayWithinDays: 7,
+      earlyPayWithinDays: 10,
       lateFeePctPerMonth: 1.5,
       simulated: false,
     });
@@ -229,28 +229,28 @@ describe("mapping the confirmed invoice into the engine", () => {
 
     const fromUpload = runEngine({ merchant, invoice }).views.keepFull;
     const builtIn = runEngine({ merchant, invoice: sampleInvoice }).views.keepFull;
-    expect(fromUpload.gap.gapMin).toBe(builtIn.gap.gapMin);
-    expect(fromUpload.gap.gapExpected).toBe(builtIn.gap.gapExpected);
-    expect(fromUpload.gap.gapMax).toBe(builtIn.gap.gapMax);
-    expect(fromUpload.gap.lowConfidence).toBe(builtIn.gap.lowConfidence);
-    expect(fromUpload.gap.gapExpected).toBe(227_621);
+    expect(fromUpload.focusGap.gapMin).toBe(builtIn.focusGap.gapMin);
+    expect(fromUpload.focusGap.gapExpected).toBe(builtIn.focusGap.gapExpected);
+    expect(fromUpload.focusGap.gapMax).toBe(builtIn.focusGap.gapMax);
+    expect(fromUpload.focusGap.lowConfidence).toBe(builtIn.focusGap.lowConfidence);
+    expect(fromUpload.focusGap.gapExpected).toBe(230_900);
   });
 
   it("a bigger invoice gives a bigger gap", () => {
-    const small = runEngine({ merchant, invoice: mapOk().invoice }).views.keepFull.gap.gapExpected;
-    const big = runEngine({ merchant, invoice: mapOk({ totalAmount: 800000, unitPrice: 1600 }).invoice }).views.keepFull.gap.gapExpected;
+    const small = runEngine({ merchant, invoice: mapOk().invoice }).views.keepFull.earlyGap.gapExpected;
+    const big = runEngine({ merchant, invoice: mapOk({ totalAmount: 800000, unitPrice: 1600 }).invoice }).views.keepFull.earlyGap.gapExpected;
     expect(big).toBeGreaterThan(small);
   });
 
   it("uses the invoice date as today by default, and counts a later today from it", () => {
-    expect(mapOk().invoice.dueInDays).toBe(10);
+    expect(mapOk().invoice.dueInDays).toBe(30);
     const later = mapOk({}, "2026-10-14").invoice;
-    expect(later.dueInDays).toBe(7); // 3 days gone
-    expect(later.earlyPayWithinDays).toBe(4); // the 7-day discount window has 4 left
+    expect(later.dueInDays).toBe(27); // 3 days gone
+    expect(later.earlyPayWithinDays).toBe(7); // the 10-day discount window has 7 left
   });
 
   it("drops the discount once its window has passed, and says so", () => {
-    const r = mapOk({}, "2026-10-19");
+    const r = mapOk({}, "2026-10-23");
     expect(r.invoice.earlyPayDiscountPct).toBe(0);
     expect(r.notes.join(" ")).toContain("discount window has already passed");
   });
@@ -281,7 +281,7 @@ describe("mapping the confirmed invoice into the engine", () => {
   });
 
   it("refuses a due date that is not after today", () => {
-    const r = map({}, "2026-10-21");
+    const r = map({}, "2026-11-10");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toContain("no cash gap left to plan");
   });
@@ -307,8 +307,8 @@ describe("the pre-read sample (fallback when the AI is slow or down)", () => {
     if (!confirmed.ok) throw new Error("the pre-read sample should be a valid form");
     const mapped = toEngineInvoice(confirmed.data);
     if (!mapped.ok) throw new Error(mapped.error);
-    const gap = runEngine({ merchant, invoice: mapped.invoice }).views.keepFull.gap;
-    expect(gap.gapExpected).toBe(227_621);
+    const gap = runEngine({ merchant, invoice: mapped.invoice }).views.keepFull.focusGap;
+    expect(gap.gapExpected).toBe(230_900);
     expect(mapped.notes).toEqual([]);
   });
 });
@@ -335,7 +335,7 @@ describe("manual entry (an empty form)", () => {
     const form = {
       ...toFormValues(emptyExtraction()),
       invoiceDate: "2026-10-11",
-      dueDate: "2026-10-21",
+      dueDate: "2026-11-10",
       totalAmount: "5,00,000",
       quantity: "500",
     };
@@ -343,7 +343,8 @@ describe("manual entry (an empty form)", () => {
     if (!confirmed.ok) throw new Error("should be valid");
     const mapped = toEngineInvoice(confirmed.data);
     if (!mapped.ok) throw new Error(mapped.error);
-    expect(mapped.invoice).toMatchObject({ amount: 500000, units: 500, unitPrice: 1000, dueInDays: 10 });
-    expect(runEngine({ merchant, invoice: mapped.invoice }).views.keepFull.gap.gapExpected).toBe(227_621);
+    expect(mapped.invoice).toMatchObject({ amount: 500000, units: 500, unitPrice: 1000, dueInDays: 30 });
+    // No discount was typed in, so the bill is paid on the due date and no borrowing is needed.
+    expect(runEngine({ merchant, invoice: mapped.invoice }).views.keepFull.focusGap.gapExpected).toBe(0);
   });
 });

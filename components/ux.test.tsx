@@ -77,7 +77,7 @@ describe("the copy, as written", () => {
     expect(f).toContain("border-amber-300");
     expect(f).not.toMatch(/Needs review|>Missing</);
     // The sample bill loads the saved reading, with no AI call.
-    expect(f).toContain("onClick={usePreReadSample}");
+    expect(f).toContain("onClick={() => loadSavedSample(b)}");
   });
   it("Bill falls back at once when the AI is busy: saved reading for the sample, manual entry for an upload, within 40 seconds", () => {
     const f = read("components/InvoiceFlow.tsx");
@@ -88,7 +88,9 @@ describe("the copy, as written", () => {
     expect(f).toContain("Reading your bill… this can take up to 30 seconds");
     expect(f).toContain("await shrinkImage(file)");
     expect(f).toContain("aiBusy(isSample, hadReading, fileHash)");
-    expect(f).toContain("Download sample bills to try:");
+    expect(f).toContain("Or try a sample bill");
+    expect(f).toContain("Use this bill");
+    expect(f).toContain("Download PDF");
     expect(f).toContain('target="_blank"');
     expect(f).toContain('showExtraction(emptyExtraction(), "manual")');
   });

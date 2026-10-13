@@ -20,14 +20,51 @@ describe("the two sample bills", () => {
     expect(savedReadingFor("0".repeat(64))).toBeNull();
     expect(savedReadingFor(null)).toBeNull();
   });
-  it("the download links are both PDFs under /samples, in the order Bill 1, Bill 2", () => {
-    expect(SAMPLE_BILLS.map((b) => [b.label, b.href])).toEqual([
-      ["Bill 1", "/samples/invoice-clean.pdf"],
-      ["Bill 2", "/samples/sample-invoice-2-kaveri-soles.pdf"],
+  it("each bill is named by its merchant and its scenario, in this order", () => {
+    expect(SAMPLE_BILLS.map((b) => b.label)).toEqual([
+      "Shree Ganesh Footwear · Borrow to pay early",
+      "Kaveri Soles & Uppers · Pay early from cash",
+      "Mehta Leather Works · Tight deadline",
+    ]);
+    for (const b of SAMPLE_BILLS) expect(b.label).toBe(`${b.merchant} · ${b.scenario}`);
+  });
+  it("the download links are PDFs under /samples", () => {
+    expect(SAMPLE_BILLS.map((b) => b.href)).toEqual([
+      "/samples/invoice-clean.pdf",
+      "/samples/sample-invoice-2-kaveri-soles.pdf",
+      "/samples/invoice-hidden-discount.pdf",
     ]);
   });
   it("both saved readings are valid extractions", () => {
     for (const b of SAMPLE_BILLS) expect(parseExtraction(b.extraction).ok, b.id).toBe(true);
+  });
+});
+
+describe("bill 3: Mehta Leather Works, tight deadline", () => {
+  const bill3 = SAMPLE_BILLS[2];
+  const truth3 = JSON.parse(readFileSync("eval/ground-truth/invoice-hidden-discount.json", "utf8")) as GroundTruth & { printedText: string };
+  const printed3 = readFileSync(truth3.printedText, "utf8");
+  it("the saved reading says what the ground truth says, and every quote is in the printed text", () => {
+    for (const k of FIELD_KEYS) {
+      expect(fieldCorrect(k, bill3.extraction[k].value, truth3), k).toBe(true);
+      const e = bill3.extraction[k].evidence;
+      if (e !== null) expect(evidenceExact(e, printed3), `${k}: ${e}`).toBe(true);
+    }
+  });
+  it("needs borrowing either way, so the plan, the due-date gap and 'Ask for more days' all have something to show", () => {
+    const form = parseConfirmed(toFormValues(bill3.extraction));
+    if (!form.ok) throw new Error("form should be valid");
+    const mapped = toEngineInvoice(form.data);
+    if (!mapped.ok) throw new Error(mapped.error);
+    const r = runEngine({ merchant, invoice: mapped.invoice });
+    const v = r.recommended;
+    expect(mapped.invoice).toMatchObject({ amount: 500_000, dueInDays: 10, earlyPayDiscountPct: 2.5, earlyPayWithinDays: 5 });
+    expect(v.recommended.timing).toBe("pay_early_for_discount");
+    expect(v.discount.discountAmount).toBe(12_500);
+    expect(v.gap.gapExpected).toBeGreaterThan(0); // borrowing is needed even on the due date
+    expect(v.recommended.plan.fullyCovered).toBe(true);
+    expect(v.recommended.plan.steps.map((s) => s.optionId)).toEqual(["own_cash", "bank_overdraft", "credit_line"]);
+    expect(forecastSaving(r, r.recommendedView, { salesDropPercent: 0, cashElsewhere: 0 })).toBe(12_061);
   });
 });
 

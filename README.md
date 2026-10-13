@@ -144,12 +144,13 @@ Paying ₹4,90,000 on 21 Oct instead of ₹5,00,000 on 10 Nov leaves the founder
 
 ## Try it
 
-Open the live demo and choose **Use sample bill** on the Bill screen, or download a synthetic bill and upload it:
+Open the live demo and, on the Bill screen, pick a sample bill. Each is named by its merchant and the scenario it shows, and loads its saved reading at once. You can also download the PDF and upload it.
 
-- [Bill 1: Shree Ganesh Footwear](public/samples/invoice-clean.pdf) (₹5,00,000, 2% off within 10 days, due in 30 days). The demo plan funds it with cash, an overdraft and Razorpay credit.
-- [Bill 2: Kaveri Soles & Uppers](public/samples/sample-invoice-2-kaveri-soles.pdf) (₹2,70,000, 1.5% off within 15 days, net 45 days). Paying early needs no borrowing, so the plan uses cash only.
+- **Shree Ganesh Footwear · Borrow to pay early** ([PDF](public/samples/invoice-clean.pdf)): ₹5,00,000, 2% off within 10 days, due in 30. Paying early uses cash, an overdraft and Razorpay credit.
+- **Kaveri Soles & Uppers · Pay early from cash** ([PDF](public/samples/sample-invoice-2-kaveri-soles.pdf)): ₹2,70,000, 1.5% off within 15 days, net 45. Paying early needs no borrowing, so the plan uses cash only.
+- **Mehta Leather Works · Tight deadline** ([PDF](public/samples/invoice-hidden-discount.pdf)): ₹5,00,000, 2.5% off within 5 days (printed in the fine print), due in 10. Borrowing is needed even on the due date.
 
-Both are made up and carry a "synthetic" notice. If the AI is busy, each loads its saved reading instead of an error.
+All three are made up and carry a "synthetic" notice. If the AI is busy, each loads its saved reading instead of an error.
 
 Note: The 'What if sales are lower?' check is deliberately cautious. It only recommends paying early if your unused credit limits would cover a low-sales case all the way to the due date. For bills with long due dates (e.g. sample bill 2), it may say 'pay on the due date' even when paying early costs very little. A future version would weigh the size of the risk, not just yes or no.
 

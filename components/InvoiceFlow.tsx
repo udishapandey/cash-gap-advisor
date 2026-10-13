@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { Invoice } from "@/lib/data/invoice";
-import { SAMPLE_BILLS, savedReadingFor } from "@/lib/data/sample-bills";
+import { SAMPLE_BILLS, savedReadingFor, type SampleBill } from "@/lib/data/sample-bills";
 import { shrinkImage } from "@/lib/image-resize";
 import { CHECKING_KEY } from "@/lib/journey";
 import { hashBytes, readCached, writeCached } from "@/lib/extraction-cache";
@@ -27,7 +27,6 @@ import Stepper from "./Stepper";
 import { useJourney } from "./JourneyProvider";
 
 const STORAGE_KEY = "cga.confirmedInvoice.v1";
-const SAMPLE_URL = "/samples/invoice-clean.pdf";
 // The server gives up after 45 seconds; the page waits a little longer so it can show the server's message.
 // Longer than the server's total (two model attempts, 30 seconds), so the server's answer always arrives first.
 const CLIENT_TIMEOUT_MS = 40_000;
@@ -98,6 +97,8 @@ export default function InvoiceFlow() {
   const [elapsed, setElapsed] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const lastIsSample = useRef(false);
+  /** The sample bill last chosen, so "Read again with AI" reads that one. */
+  const currentSample = useRef<SampleBill>(SAMPLE_BILLS[0]);
   const router = useRouter();
   /** True for the second after "Confirm bill": a green check, then the Cash gap screen opens by itself. */
   const [advancing, setAdvancing] = useState(false);
@@ -113,6 +114,8 @@ export default function InvoiceFlow() {
   }, [advancing, router]);
   /** The badge for a saved sample reading: "Read by AI earlier" for bill 1, "Saved reading" for bill 2. */
   const [savedBadge, setSavedBadge] = useState<string | null>(null);
+  /** Which sample bill is on screen: "Merchant · Scenario". */
+  const [savedLabel, setSavedLabel] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Is development mock mode on? (AI_MOCK=true on the server.)
@@ -296,20 +299,23 @@ export default function InvoiceFlow() {
   }
 
   /** After an AI failure: values saved from an earlier reading of the synthetic sample invoice. */
-  function usePreReadSample() {
+  function loadSavedSample(bill: SampleBill = SAMPLE_BILLS[0]) {
     abortRef.current?.abort();
-    showExtraction(SAMPLE_BILLS[0].extraction, "pre-read");
-    setSavedBadge(SAMPLE_BILLS[0].badge);
+    currentSample.current = bill;
+    showExtraction(bill.extraction, "pre-read");
+    setSavedBadge(bill.badge);
+    setSavedLabel(bill.label);
   }
 
   /** Read the sample bill with the AI again, from the file (a live call). */
   async function readSampleAgain() {
     setError(null);
+    const bill = currentSample.current;
     try {
-      const res = await fetch(SAMPLE_URL);
+      const res = await fetch(bill.href);
       if (!res.ok) throw new Error();
       const blob = await res.blob();
-      await readFile(new File([blob], "invoice-clean.pdf", { type: "application/pdf" }), { force: true, sample: true });
+      await readFile(new File([blob], bill.href.split("/").pop() ?? "sample.pdf", { type: "application/pdf" }), { force: true, sample: true });
     } catch {
       setError("Couldn't load the sample bill.");
     }
@@ -493,23 +499,35 @@ export default function InvoiceFlow() {
                   }}
                 />
               </label>
-              <button type="button" onClick={usePreReadSample} disabled={reading} className={BTN.secondary}>
-                Use sample bill
-              </button>
             </div>
-            <p className="text-xs text-muted">The samples are synthetic. {BILL_PRIVACY}</p>
-            <p className="text-xs text-muted">
-              Download sample bills to try:{" "}
-              {SAMPLE_BILLS.map((b, i) => (
-                <span key={b.id}>
-                  {i > 0 && " · "}
-                  <a href={b.href} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-text hover:underline">
-                    {b.label}
-                  </a>
-                </span>
-              ))}
-            </p>
+            <p className="text-xs text-muted">{BILL_PRIVACY}</p>
           </div>
+        </Card>
+      )}
+
+      {phase !== "review" && (
+        <Card aria-label="Sample bills">
+          <SectionLabel>Or try a sample bill</SectionLabel>
+          <ul className="mt-3 grid gap-3 md:grid-cols-3">
+            {SAMPLE_BILLS.map((b) => (
+              <li key={b.id} className="flex flex-col rounded-lg border border-line bg-background p-4">
+                <p className="font-medium">{b.merchant}</p>
+                <div className="mt-1">
+                  <Badge tone="information">{b.scenario}</Badge>
+                </div>
+                <p className="mt-2 flex-1 text-xs text-muted">{b.blurb}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button type="button" onClick={() => loadSavedSample(b)} disabled={reading} className={BTN.secondary}>
+                    Use this bill
+                  </button>
+                  <a href={b.href} target="_blank" rel="noopener noreferrer" className={BTN.link}>
+                    Download PDF
+                  </a>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-muted">The samples are synthetic. Download a PDF to try the upload.</p>
         </Card>
       )}
 
@@ -536,6 +554,7 @@ export default function InvoiceFlow() {
                 <Badge tone="notice">{source === "pre-read" && savedBadge ? savedBadge : SOURCE_NOTICE[source].title}</Badge>
               </span>
             )}
+            {source === "pre-read" && savedLabel && <span className="text-xs text-muted">{savedLabel}</span>}
             {(source === "cached" || source === "pre-read") && (
               <button
                 type="button"
